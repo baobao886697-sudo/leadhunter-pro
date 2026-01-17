@@ -39,7 +39,26 @@ function createMockContext(overrides: Partial<TrpcContext["user"]> = {}): TrpcCo
 }
 
 function createAdminContext(): TrpcContext {
-  return createMockContext({ role: "admin" });
+  // 生成测试用的管理员token
+  const jwt = require("jsonwebtoken");
+  const adminToken = jwt.sign(
+    { type: "admin", username: "admin" },
+    process.env.JWT_SECRET || "admin-secret-key",
+    { expiresIn: "24h" }
+  );
+  
+  return {
+    user: null,
+    req: {
+      protocol: "https",
+      headers: {
+        "x-admin-token": adminToken,
+      },
+    } as TrpcContext["req"],
+    res: {
+      clearCookie: vi.fn(),
+    } as unknown as TrpcContext["res"],
+  };
 }
 
 function createUnauthenticatedContext(): TrpcContext {

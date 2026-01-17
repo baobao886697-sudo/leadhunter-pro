@@ -41,12 +41,25 @@ import { executeSearch } from "./services/searchProcessor";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-// 管理员权限检查
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
+// 管理员权限检查 - 使用独立的管理员token验证
+const adminProcedure = publicProcedure.use(({ ctx, next }) => {
+  const adminToken = getAdminTokenFromHeader(ctx.req.headers as Record<string, string | string[] | undefined>);
+  
+  if (!adminToken) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "需要管理员登录" });
   }
-  return next({ ctx });
+  
+  const payload = verifyAdminToken(adminToken);
+  if (!payload) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "管理员Token无效或已过期" });
+  }
+  
+  return next({ 
+    ctx: {
+      ...ctx,
+      adminUser: payload,
+    }
+  });
 });
 
 export const appRouter = router({
@@ -585,7 +598,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
-        await setConfig(input.key, input.value, ctx.user.email || 'admin', input.description);
+        await setConfig(input.key, input.value, (ctx as any).adminUser?.username || 'admin', input.description);
         return { success: true };
       }),
   }),

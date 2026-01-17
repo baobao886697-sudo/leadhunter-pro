@@ -18,7 +18,12 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  window.location.href = getLoginUrl();
+  // 如果在管理员页面，跳转到管理员登录
+  if (window.location.pathname.startsWith("/admin")) {
+    window.location.href = "/admin/login";
+  } else {
+    window.location.href = getLoginUrl();
+  }
 };
 
 queryClient.getQueryCache().subscribe(event => {
@@ -43,8 +48,18 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        // 获取管理员token并添加到请求头
+        const adminToken = localStorage.getItem("adminToken");
+        const headers: Record<string, string> = {
+          ...(init?.headers as Record<string, string> || {}),
+        };
+        if (adminToken) {
+          headers["x-admin-token"] = adminToken;
+        }
+        
         return globalThis.fetch(input, {
           ...(init ?? {}),
+          headers,
           credentials: "include",
         });
       },
