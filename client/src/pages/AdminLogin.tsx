@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,9 @@ import { Shield, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   const loginMutation = trpc.adminAuth.login.useMutation({
     onSuccess: (data) => {
@@ -29,6 +29,11 @@ export default function AdminLogin() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const username = usernameRef.current?.value || "";
+    const password = passwordRef.current?.value || "";
+    
+    console.log("Submitting with:", { username, password: password ? "***" : "" });
+    
     if (!username || !password) {
       toast.error("请输入用户名和密码");
       return;
@@ -80,10 +85,10 @@ export default function AdminLogin() {
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <Input
                   id="username"
+                  name="username"
                   type="text"
                   placeholder="请输入管理员用户名"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  ref={usernameRef}
                   className="pl-10 bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-slate-100 placeholder:text-slate-500"
                 />
               </div>
@@ -97,10 +102,10 @@ export default function AdminLogin() {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="请输入密码"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  ref={passwordRef}
                   className="pl-10 pr-10 bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-slate-100 placeholder:text-slate-500"
                 />
                 <button
