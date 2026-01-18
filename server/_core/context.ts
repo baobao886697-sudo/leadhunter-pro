@@ -3,6 +3,7 @@ import type { User } from "../../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
 import { jwtVerify } from "jose";
+import jwt from "jsonwebtoken";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -60,23 +61,23 @@ async function verifySession(
   }
 }
 
-// 验证管理员Token
-async function verifyAdminToken(
+// 验证管理员Token - 使用与adminAuth.ts相同的方式
+function verifyAdminToken(
   tokenValue: string | undefined | null
-): Promise<{ type: string; username: string } | null> {
+): { type: string; username: string } | null {
   if (!tokenValue) {
     return null;
   }
   try {
-    const secretKey = getSessionSecret();
-    const { payload } = await jwtVerify(tokenValue, secretKey, {
-      algorithms: ["HS256"],
-    });
-    const { type, username } = payload as Record<string, unknown>;
-    if (type !== "admin" || typeof username !== "string") {
+    // 使用jsonwebtoken库验证，与adminAuth.ts保持一致
+    const payload = jwt.verify(tokenValue, ENV.adminJwtSecret) as {
+      type: string;
+      username: string;
+    };
+    if (payload.type !== "admin" || typeof payload.username !== "string") {
       return null;
     }
-    return { type: "admin", username };
+    return { type: "admin", username: payload.username };
   } catch (error) {
     console.warn("[Auth] Admin token verification failed", String(error));
     return null;
@@ -93,7 +94,7 @@ export async function createContext(
     
     // 首先检查管理员token
     const adminToken = cookies.get(ADMIN_COOKIE_NAME);
-    const adminSession = await verifyAdminToken(adminToken);
+    const adminSession = verifyAdminToken(adminToken);
     
     if (adminSession) {
       // 管理员登录，创建一个虚拟的管理员用户对象
