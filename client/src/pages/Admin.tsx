@@ -466,10 +466,10 @@ export default function Admin() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    console.log('测试按钮被点击');
+                    window.alert('测试按钮被点击!');
                     setDetailUserId(1);
                     setUserDetailDialogOpen(true);
-                    console.log('userDetailDialogOpen 已设置为 true');
+                    window.alert('状态已设置: userDetailDialogOpen = true');
                   }}
                   className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
                 >
