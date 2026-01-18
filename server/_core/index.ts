@@ -9,6 +9,8 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startUsdtMonitor } from "../services/usdtMonitor";
 import { startOrderExpirationChecker } from "../services/orderExpiration";
+import { getDbSync } from "../db";
+import { sql } from "drizzle-orm";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -29,7 +31,59 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+async function ensureTables() {
+  try {
+    console.log("[Database] Ensuring tables exist...");
+    const db = getDbSync();
+    if (!db) {
+      console.log("[Database] No database connection, skipping table creation");
+      return;
+    }
+    
+    // 创建公告表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        type ENUM('info', 'warning', 'success', 'error') DEFAULT 'info',
+        priority ENUM('low', 'normal', 'high') DEFAULT 'normal',
+        is_active BOOLEAN DEFAULT TRUE,
+        start_time DATETIME,
+        end_time DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("[Database] Announcements table ready");
+    
+    // 创建用户消息表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS user_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        type ENUM('system', 'support', 'notification', 'promotion') DEFAULT 'system',
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user_id (user_id),
+        INDEX idx_is_read (is_read)
+      )
+    `);
+    console.log("[Database] User messages table ready");
+    
+    console.log("[Database] All tables ensured successfully");
+  } catch (error) {
+    console.error("[Database] Table creation error:", error);
+    // 不阻止服务器启动
+  }
+}
+
 async function startServer() {
+  // 确保数据库表存在
+  await ensureTables();
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads

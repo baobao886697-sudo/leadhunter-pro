@@ -23,6 +23,19 @@ import crypto from 'crypto';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+// 导出数据库实例用于直接SQL操作
+export function getDbSync() {
+  if (!_db && process.env.DATABASE_URL) {
+    try {
+      _db = drizzle(process.env.DATABASE_URL);
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
+  }
+  return _db;
+}
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
