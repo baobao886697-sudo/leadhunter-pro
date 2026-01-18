@@ -1586,10 +1586,9 @@ function WalletMonitorTab() {
       </div>
 
       {/* 用户详情对话框 */}
-      {console.log("Admin render: detailUserId=", detailUserId, "userDetailDialogOpen=", userDetailDialogOpen)}
       <UserDetailDialog
         userId={detailUserId}
-        open={userDetailDialogOpen && detailUserId !== null}
+        open={userDetailDialogOpen}
         onOpenChange={(open) => {
           setUserDetailDialogOpen(open);
           if (!open) setDetailUserId(null);

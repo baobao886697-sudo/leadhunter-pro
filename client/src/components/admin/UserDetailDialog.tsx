@@ -25,7 +25,6 @@ interface UserDetailDialogProps {
 }
 
 export function UserDetailDialog({ userId, open, onOpenChange, onRefresh }: UserDetailDialogProps) {
-  console.log("UserDetailDialog render: userId=", userId, "open=", open);
   const [activeTab, setActiveTab] = useState("info");
   const [creditAmount, setCreditAmount] = useState(0);
   const [creditReason, setCreditReason] = useState("");
