@@ -1312,6 +1312,36 @@ export default function Admin() {
           </div>
         )}
       </div>
+
+      {/* 用户详情对话框 - 暂时禁用
+      <UserDetailDialog
+        userId={detailUserId}
+        open={userDetailDialogOpen}
+        onOpenChange={(open) => {
+          setUserDetailDialogOpen(open);
+          if (!open) setDetailUserId(null);
+        }}
+        onRefresh={() => refetchUsers()}
+      />
+      */}
+
+      {/* 订单详情对话框 */}
+      <OrderDetailDialog
+        order={selectedOrder}
+        open={orderDetailDialogOpen && selectedOrder !== null}
+        onOpenChange={(open) => {
+          setOrderDetailDialogOpen(open);
+          if (!open) setSelectedOrder(null);
+        }}
+        onRefresh={() => refetchOrders()}
+      />
+
+      {/* 批量消息对话框 */}
+      <BulkMessageDialog
+        open={bulkMessageDialogOpen}
+        onOpenChange={setBulkMessageDialogOpen}
+        users={users || []}
+      />
     </div>
   );
 }
@@ -1596,35 +1626,7 @@ function WalletMonitorTab() {
         )}
       </div>
 
-      {/* 用户详情对话框 - 暂时禁用
-      <UserDetailDialog
-        userId={detailUserId}
-        open={userDetailDialogOpen}
-        onOpenChange={(open) => {
-          setUserDetailDialogOpen(open);
-          if (!open) setDetailUserId(null);
-        }}
-        onRefresh={() => refetchUsers()}
-      />
-      */}
 
-      {/* 订单详情对话框 */}
-      <OrderDetailDialog
-        order={selectedOrder}
-        open={orderDetailDialogOpen && selectedOrder !== null}
-        onOpenChange={(open) => {
-          setOrderDetailDialogOpen(open);
-          if (!open) setSelectedOrder(null);
-        }}
-        onRefresh={() => refetchOrders()}
-      />
-
-      {/* 批量消息对话框 */}
-      <BulkMessageDialog
-        open={bulkMessageDialogOpen}
-        onOpenChange={setBulkMessageDialogOpen}
-        users={users || []}
-      />
     </div>
   );
 }
