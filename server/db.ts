@@ -11,7 +11,12 @@ import {
   searchLogs, SearchLog,
   adminLogs, AdminLog,
   loginLogs, LoginLog,
-  apiLogs, ApiLog
+  apiLogs, ApiLog,
+  announcements, Announcement, InsertAnnouncement,
+  userMessages, UserMessage, InsertUserMessage,
+  userActivityLogs, UserActivityLog, InsertUserActivityLog,
+  apiStats, ApiStat,
+  errorLogs, ErrorLog
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import crypto from 'crypto';
@@ -579,4 +584,539 @@ export async function updateUserRole(userId: number, role: "user" | "admin"): Pr
 
 export async function getCreditTransactions(userId: number, page: number = 1, limit: number = 20): Promise<{ transactions: CreditLog[]; total: number }> {
   return getCreditLogs(userId, page, limit).then(r => ({ transactions: r.logs, total: r.total }));
+}
+
+
+// ============ 用户管理增强功能 ============
+
+// 获取用户详情（包含统计信息）
+export async function getUserDetail(userId: number): Promise<{
+  user: User | null;
+  stats: {
+    totalOrders: number;
+    totalSpent: number;
+    totalSearches: number;
+    totalCreditsUsed: number;
+    lastLoginAt: Date | null;
+    loginCount: number;
+  };
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const user = await getUserById(userId);
+  if (!user) return null;
+  
+  // 获取订单统计
+  const orderStats = await db.select({
+    count: sql<number>`count(*)`,
+    total: sql<number>`COALESCE(SUM(CAST(amount AS DECIMAL(10,2))), 0)`
+  }).from(rechargeOrders).where(and(eq(rechargeOrders.userId, userId), eq(rechargeOrders.status, 'paid')));
+  
+  // 获取搜索统计
+  const searchStats = await db.select({
+    count: sql<number>`count(*)`,
+    credits: sql<number>`COALESCE(SUM(creditsUsed), 0)`
+  }).from(searchTasks).where(eq(searchTasks.userId, userId));
+  
+  // 获取登录统计
+  const loginStats = await db.select({
+    count: sql<number>`count(*)`,
+    lastLogin: sql<Date>`MAX(createdAt)`
+  }).from(loginLogs).where(and(eq(loginLogs.userId, userId), eq(loginLogs.success, true)));
+  
+  return {
+    user,
+    stats: {
+      totalOrders: orderStats[0]?.count || 0,
+      totalSpent: orderStats[0]?.total || 0,
+      totalSearches: searchStats[0]?.count || 0,
+      totalCreditsUsed: searchStats[0]?.credits || 0,
+      lastLoginAt: loginStats[0]?.lastLogin || null,
+      loginCount: loginStats[0]?.count || 0
+    }
+  };
+}
+
+// 重置用户密码（管理员操作）
+export async function adminResetPassword(userId: number, newPasswordHash: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const result = await db.update(users)
+    .set({ passwordHash: newPasswordHash, resetToken: null, resetTokenExpires: null })
+    .where(eq(users.id, userId));
+  
+  return true;
+}
+
+// 获取用户搜索历史
+export async function getUserSearchHistory(userId: number, page: number = 1, limit: number = 20): Promise<{
+  searches: SearchTask[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { searches: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [searches, countResult] = await Promise.all([
+    db.select().from(searchTasks).where(eq(searchTasks.userId, userId)).orderBy(desc(searchTasks.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(searchTasks).where(eq(searchTasks.userId, userId))
+  ]);
+  
+  return { searches, total: countResult[0]?.count || 0 };
+}
+
+// 获取用户积分变动记录
+export async function getUserCreditHistory(userId: number, page: number = 1, limit: number = 20): Promise<{
+  logs: CreditLog[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(creditLogs).where(eq(creditLogs.userId, userId)).orderBy(desc(creditLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(creditLogs).where(eq(creditLogs.userId, userId))
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
+}
+
+// 获取用户登录记录
+export async function getUserLoginHistory(userId: number, page: number = 1, limit: number = 20): Promise<{
+  logs: LoginLog[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(loginLogs).where(eq(loginLogs.userId, userId)).orderBy(desc(loginLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(loginLogs).where(eq(loginLogs.userId, userId))
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
+}
+
+// ============ 公告系统 ============
+
+// 创建公告
+export async function createAnnouncement(data: {
+  title: string;
+  content: string;
+  type?: 'info' | 'warning' | 'success' | 'error';
+  isPinned?: boolean;
+  startTime?: Date;
+  endTime?: Date;
+  createdBy?: string;
+}): Promise<Announcement | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(announcements).values({
+    title: data.title,
+    content: data.content,
+    type: data.type || 'info',
+    isPinned: data.isPinned || false,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    createdBy: data.createdBy
+  });
+  
+  const inserted = await db.select().from(announcements).where(eq(announcements.id, Number(result[0].insertId))).limit(1);
+  return inserted[0] || null;
+}
+
+// 更新公告
+export async function updateAnnouncement(id: number, data: Partial<{
+  title: string;
+  content: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  isPinned: boolean;
+  isActive: boolean;
+  startTime: Date | null;
+  endTime: Date | null;
+}>): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(announcements).set(data).where(eq(announcements.id, id));
+  return true;
+}
+
+// 删除公告
+export async function deleteAnnouncement(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(announcements).where(eq(announcements.id, id));
+  return true;
+}
+
+// 获取公告列表（管理员）
+export async function getAnnouncementsAdmin(page: number = 1, limit: number = 20): Promise<{
+  announcements: Announcement[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { announcements: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [list, countResult] = await Promise.all([
+    db.select().from(announcements).orderBy(desc(announcements.isPinned), desc(announcements.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(announcements)
+  ]);
+  
+  return { announcements: list, total: countResult[0]?.count || 0 };
+}
+
+// 获取活跃公告（用户端）
+export async function getActiveAnnouncements(): Promise<Announcement[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  
+  return db.select().from(announcements)
+    .where(and(
+      eq(announcements.isActive, true),
+      or(
+        sql`${announcements.startTime} IS NULL`,
+        lte(announcements.startTime, now)
+      ),
+      or(
+        sql`${announcements.endTime} IS NULL`,
+        gte(announcements.endTime, now)
+      )
+    ))
+    .orderBy(desc(announcements.isPinned), desc(announcements.createdAt))
+    .limit(10);
+}
+
+// ============ 用户消息系统 ============
+
+// 发送消息给用户
+export async function sendMessageToUser(data: {
+  userId: number;
+  title: string;
+  content: string;
+  type?: 'system' | 'support' | 'notification' | 'promotion';
+  createdBy?: string;
+}): Promise<UserMessage | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(userMessages).values({
+    userId: data.userId,
+    title: data.title,
+    content: data.content,
+    type: data.type || 'system',
+    createdBy: data.createdBy
+  });
+  
+  const inserted = await db.select().from(userMessages).where(eq(userMessages.id, Number(result[0].insertId))).limit(1);
+  return inserted[0] || null;
+}
+
+// 批量发送消息
+export async function sendMessageToUsers(userIds: number[], data: {
+  title: string;
+  content: string;
+  type?: 'system' | 'support' | 'notification' | 'promotion';
+  createdBy?: string;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const values = userIds.map(userId => ({
+    userId,
+    title: data.title,
+    content: data.content,
+    type: data.type || 'system',
+    createdBy: data.createdBy
+  }));
+  
+  await db.insert(userMessages).values(values);
+  return userIds.length;
+}
+
+// 获取用户消息
+export async function getUserMessages(userId: number, page: number = 1, limit: number = 20): Promise<{
+  messages: UserMessage[];
+  total: number;
+  unreadCount: number;
+}> {
+  const db = await getDb();
+  if (!db) return { messages: [], total: 0, unreadCount: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [messages, countResult, unreadResult] = await Promise.all([
+    db.select().from(userMessages).where(eq(userMessages.userId, userId)).orderBy(desc(userMessages.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(userMessages).where(eq(userMessages.userId, userId)),
+    db.select({ count: sql<number>`count(*)` }).from(userMessages).where(and(eq(userMessages.userId, userId), eq(userMessages.isRead, false)))
+  ]);
+  
+  return { 
+    messages, 
+    total: countResult[0]?.count || 0,
+    unreadCount: unreadResult[0]?.count || 0
+  };
+}
+
+// 标记消息已读
+export async function markMessageAsRead(messageId: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(userMessages)
+    .set({ isRead: true })
+    .where(and(eq(userMessages.id, messageId), eq(userMessages.userId, userId)));
+  return true;
+}
+
+// 标记所有消息已读
+export async function markAllMessagesAsRead(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(userMessages)
+    .set({ isRead: true })
+    .where(eq(userMessages.userId, userId));
+  return true;
+}
+
+// ============ 用户活动日志 ============
+
+// 记录用户活动
+export async function logUserActivity(data: {
+  userId: number;
+  action: string;
+  details?: any;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(userActivityLogs).values({
+    userId: data.userId,
+    action: data.action,
+    details: data.details,
+    ipAddress: data.ipAddress,
+    userAgent: data.userAgent
+  });
+}
+
+// 获取用户活动日志
+export async function getUserActivityLogs(userId: number, page: number = 1, limit: number = 50): Promise<{
+  logs: UserActivityLog[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(userActivityLogs).where(eq(userActivityLogs.userId, userId)).orderBy(desc(userActivityLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(userActivityLogs).where(eq(userActivityLogs.userId, userId))
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
+}
+
+// ============ 系统错误日志 ============
+
+// 记录错误日志
+export async function logError(data: {
+  level?: 'error' | 'warn' | 'info';
+  source?: string;
+  message: string;
+  stack?: string;
+  userId?: number;
+  requestPath?: string;
+  requestBody?: any;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(errorLogs).values({
+    level: data.level || 'error',
+    source: data.source,
+    message: data.message,
+    stack: data.stack,
+    userId: data.userId,
+    requestPath: data.requestPath,
+    requestBody: data.requestBody
+  });
+}
+
+// 获取错误日志
+export async function getErrorLogs(page: number = 1, limit: number = 50, level?: string, resolved?: boolean): Promise<{
+  logs: ErrorLog[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  let whereClause = sql`1=1`;
+  if (level) {
+    whereClause = and(whereClause, eq(errorLogs.level, level as any))!;
+  }
+  if (resolved !== undefined) {
+    whereClause = and(whereClause, eq(errorLogs.resolved, resolved))!;
+  }
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(errorLogs).where(whereClause).orderBy(desc(errorLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(errorLogs).where(whereClause)
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
+}
+
+// 标记错误已解决
+export async function resolveError(errorId: number, resolvedBy: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(errorLogs)
+    .set({ resolved: true, resolvedBy, resolvedAt: new Date() })
+    .where(eq(errorLogs.id, errorId));
+  return true;
+}
+
+// ============ API统计 ============
+
+// 更新API统计
+export async function updateApiStats(apiName: string, success: boolean, creditsUsed: number = 0, responseTime: number = 0): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 尝试更新现有记录
+  const existing = await db.select().from(apiStats).where(and(eq(apiStats.date, today), eq(apiStats.apiName, apiName))).limit(1);
+  
+  if (existing.length > 0) {
+    const current = existing[0];
+    const newCallCount = (current.callCount || 0) + 1;
+    const newSuccessCount = (current.successCount || 0) + (success ? 1 : 0);
+    const newErrorCount = (current.errorCount || 0) + (success ? 0 : 1);
+    const newTotalCredits = (current.totalCreditsUsed || 0) + creditsUsed;
+    const newAvgResponseTime = Math.round(((current.avgResponseTime || 0) * (newCallCount - 1) + responseTime) / newCallCount);
+    
+    await db.update(apiStats)
+      .set({
+        callCount: newCallCount,
+        successCount: newSuccessCount,
+        errorCount: newErrorCount,
+        totalCreditsUsed: newTotalCredits,
+        avgResponseTime: newAvgResponseTime
+      })
+      .where(eq(apiStats.id, current.id));
+  } else {
+    await db.insert(apiStats).values({
+      date: today,
+      apiName,
+      callCount: 1,
+      successCount: success ? 1 : 0,
+      errorCount: success ? 0 : 1,
+      totalCreditsUsed: creditsUsed,
+      avgResponseTime: responseTime
+    });
+  }
+}
+
+// 获取API统计
+export async function getApiStatistics(days: number = 30): Promise<{
+  daily: ApiStat[];
+  summary: {
+    totalCalls: number;
+    totalSuccess: number;
+    totalErrors: number;
+    totalCredits: number;
+    avgResponseTime: number;
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { daily: [], summary: { totalCalls: 0, totalSuccess: 0, totalErrors: 0, totalCredits: 0, avgResponseTime: 0 } };
+  
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr = startDate.toISOString().split('T')[0];
+  
+  const daily = await db.select().from(apiStats).where(gte(apiStats.date, startDateStr)).orderBy(desc(apiStats.date));
+  
+  const summary = daily.reduce((acc, stat) => ({
+    totalCalls: acc.totalCalls + (stat.callCount || 0),
+    totalSuccess: acc.totalSuccess + (stat.successCount || 0),
+    totalErrors: acc.totalErrors + (stat.errorCount || 0),
+    totalCredits: acc.totalCredits + (stat.totalCreditsUsed || 0),
+    avgResponseTime: 0 // 计算后更新
+  }), { totalCalls: 0, totalSuccess: 0, totalErrors: 0, totalCredits: 0, avgResponseTime: 0 });
+  
+  if (summary.totalCalls > 0) {
+    const totalResponseTime = daily.reduce((sum, stat) => sum + (stat.avgResponseTime || 0) * (stat.callCount || 0), 0);
+    summary.avgResponseTime = Math.round(totalResponseTime / summary.totalCalls);
+  }
+  
+  return { daily, summary };
+}
+
+// ============ 订单退款 ============
+
+// 退款订单
+export async function refundOrder(orderId: string, adminNote?: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const order = await getRechargeOrder(orderId);
+  if (!order || order.status !== 'paid') return false;
+  
+  // 扣除用户积分
+  const deductResult = await deductCredits(order.userId, order.credits, 'admin_deduct', `订单退款: ${orderId}`);
+  if (!deductResult) return false;
+  
+  // 更新订单状态
+  await db.update(rechargeOrders)
+    .set({ status: 'cancelled', adminNote: adminNote || '管理员退款' })
+    .where(eq(rechargeOrders.orderId, orderId));
+  
+  return true;
+}
+
+// ============ 搜索订单 ============
+
+// 搜索订单
+export async function searchOrders(query: string, page: number = 1, limit: number = 20): Promise<{
+  orders: RechargeOrder[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { orders: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const whereClause = or(
+    like(rechargeOrders.orderId, `%${query}%`),
+    like(rechargeOrders.txId, `%${query}%`)
+  );
+  
+  const [orders, countResult] = await Promise.all([
+    db.select().from(rechargeOrders).where(whereClause).orderBy(desc(rechargeOrders.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(rechargeOrders).where(whereClause)
+  ]);
+  
+  return { orders, total: countResult[0]?.count || 0 };
 }

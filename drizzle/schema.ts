@@ -184,3 +184,85 @@ export const apiLogs = mysqlTable("api_logs", {
 });
 
 export type ApiLog = typeof apiLogs.$inferSelect;
+
+
+// 系统公告表
+export const announcements = mysqlTable("announcements", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  type: mysqlEnum("type", ["info", "warning", "success", "error"]).default("info").notNull(),
+  isPinned: boolean("isPinned").default(false),
+  isActive: boolean("isActive").default(true),
+  startTime: timestamp("startTime"),
+  endTime: timestamp("endTime"),
+  createdBy: varchar("createdBy", { length: 50 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertAnnouncement = typeof announcements.$inferInsert;
+
+// 用户消息表
+export const userMessages = mysqlTable("user_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  type: mysqlEnum("type", ["system", "support", "notification", "promotion"]).default("system").notNull(),
+  isRead: boolean("isRead").default(false),
+  createdBy: varchar("createdBy", { length: 50 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserMessage = typeof userMessages.$inferSelect;
+export type InsertUserMessage = typeof userMessages.$inferInsert;
+
+// 用户活动日志表
+export const userActivityLogs = mysqlTable("user_activity_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  action: varchar("action", { length: 50 }).notNull(), // login, logout, search, recharge, password_change, etc.
+  details: json("details"),
+  ipAddress: varchar("ipAddress", { length: 50 }),
+  userAgent: text("userAgent"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserActivityLog = typeof userActivityLogs.$inferSelect;
+export type InsertUserActivityLog = typeof userActivityLogs.$inferInsert;
+
+// API统计表 (按日汇总)
+export const apiStats = mysqlTable("api_stats", {
+  id: int("id").autoincrement().primaryKey(),
+  date: varchar("date", { length: 10 }).notNull(), // YYYY-MM-DD
+  apiName: varchar("apiName", { length: 50 }).notNull(),
+  callCount: int("callCount").default(0),
+  successCount: int("successCount").default(0),
+  errorCount: int("errorCount").default(0),
+  totalCreditsUsed: int("totalCreditsUsed").default(0),
+  avgResponseTime: int("avgResponseTime").default(0), // 毫秒
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ApiStat = typeof apiStats.$inferSelect;
+
+// 系统错误日志表
+export const errorLogs = mysqlTable("error_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  level: mysqlEnum("level", ["error", "warn", "info"]).default("error").notNull(),
+  source: varchar("source", { length: 100 }), // 错误来源：api, auth, payment, etc.
+  message: text("message").notNull(),
+  stack: text("stack"),
+  userId: int("userId"),
+  requestPath: varchar("requestPath", { length: 255 }),
+  requestBody: json("requestBody"),
+  resolved: boolean("resolved").default(false),
+  resolvedBy: varchar("resolvedBy", { length: 50 }),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ErrorLog = typeof errorLogs.$inferSelect;

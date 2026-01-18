@@ -17,9 +17,15 @@ import {
   LogOut, Target, LayoutDashboard, CreditCard, FileText,
   Database, AlertTriangle, CheckCircle, XCircle, Clock,
   Eye, Edit, Ban, UserCheck, Wallet, Copy, ExternalLink,
-  Save, Trash2, Activity, Server, Zap
+  Save, Trash2, Activity, Server, Zap, Megaphone, Mail,
+  BarChart3, MessageSquare
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserDetailDialog } from "@/components/admin/UserDetailDialog";
+import { AnnouncementManager } from "@/components/admin/AnnouncementManager";
+import { SystemMonitor } from "@/components/admin/SystemMonitor";
+import { OrderDetailDialog } from "@/components/admin/OrderDetailDialog";
+import { BulkMessageDialog } from "@/components/admin/BulkMessageDialog";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -42,6 +48,12 @@ export default function Admin() {
   const [newConfigKey, setNewConfigKey] = useState("");
   const [newConfigValue, setNewConfigValue] = useState("");
   const [newConfigDesc, setNewConfigDesc] = useState("");
+  
+  // 新增对话框状态
+  const [userDetailDialogOpen, setUserDetailDialogOpen] = useState(false);
+  const [orderDetailDialogOpen, setOrderDetailDialogOpen] = useState(false);
+  const [bulkMessageDialogOpen, setBulkMessageDialogOpen] = useState(false);
+  const [orderSearchQuery, setOrderSearchQuery] = useState("");
   
   // 检查管理员登录状态
   const adminToken = localStorage.getItem("adminToken");
@@ -255,6 +267,8 @@ export default function Admin() {
             { id: "users", label: "用户管理", icon: Users },
             { id: "orders", label: "充值订单", icon: CreditCard },
             { id: "wallet", label: "钱包监控", icon: Wallet },
+            { id: "announcements", label: "公告管理", icon: Megaphone },
+            { id: "monitor", label: "系统监控", icon: BarChart3 },
             { id: "logs", label: "系统日志", icon: FileText },
             { id: "settings", label: "系统配置", icon: Settings },
           ].map((item) => (
@@ -440,15 +454,26 @@ export default function Admin() {
                   用户列表
                 </h1>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetchUsers()}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                刷新
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBulkMessageDialogOpen(true)}
+                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  批量发消息
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchUsers()}
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  刷新
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50 overflow-hidden">
@@ -565,6 +590,17 @@ export default function Admin() {
                                 </DialogFooter>
                               </DialogContent>
                             </Dialog>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(u.id);
+                                setUserDetailDialogOpen(true);
+                              }}
+                              className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -799,6 +835,16 @@ export default function Admin() {
         {/* ============ 钱包监控 ============ */}
         {activeTab === "wallet" && (
           <WalletMonitorTab />
+        )}
+
+        {/* ============ 公告管理 ============ */}
+        {activeTab === "announcements" && (
+          <AnnouncementManager />
+        )}
+
+        {/* ============ 系统监控 ============ */}
+        {activeTab === "monitor" && (
+          <SystemMonitor />
         )}
 
         {/* ============ 系统日志 ============ */}
@@ -1535,6 +1581,33 @@ function WalletMonitorTab() {
           </div>
         )}
       </div>
+
+      {/* 用户详情对话框 */}
+      {selectedUser && (
+        <UserDetailDialog
+          userId={selectedUser}
+          open={userDetailDialogOpen}
+          onOpenChange={setUserDetailDialogOpen}
+          onRefresh={() => refetchUsers()}
+        />
+      )}
+
+      {/* 订单详情对话框 */}
+      {selectedOrder && (
+        <OrderDetailDialog
+          order={selectedOrder}
+          open={orderDetailDialogOpen}
+          onOpenChange={setOrderDetailDialogOpen}
+          onRefresh={() => refetchOrders()}
+        />
+      )}
+
+      {/* 批量消息对话框 */}
+      <BulkMessageDialog
+        open={bulkMessageDialogOpen}
+        onOpenChange={setBulkMessageDialogOpen}
+        users={users || []}
+      />
     </div>
   );
 }

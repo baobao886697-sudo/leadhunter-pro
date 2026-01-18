@@ -54,6 +54,31 @@ import {
   getAdminDashboardStats,
   getCacheStats,
   clearUserDevice,
+  // 新增功能
+  getUserDetail,
+  adminResetPassword,
+  getUserSearchHistory,
+  getUserCreditHistory,
+  getUserLoginHistory,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  getAnnouncementsAdmin,
+  getActiveAnnouncements,
+  sendMessageToUser,
+  sendMessageToUsers,
+  getUserMessages,
+  markMessageAsRead,
+  markAllMessagesAsRead,
+  logUserActivity,
+  getUserActivityLogs,
+  logError,
+  getErrorLogs,
+  resolveError,
+  updateApiStats,
+  getApiStatistics,
+  refundOrder,
+  searchOrders,
 } from "./db";
 import { executeSearch } from "./services/searchProcessor";
 
@@ -1064,6 +1089,350 @@ export const appRouter = router({
           return { found: false, error: '检查支付失败' };
         }
       }),
+
+    // ============ 用户管理增强 ============
+
+    // 获取用户详情（包含统计信息）
+    getUserDetail: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ input }) => {
+        const detail = await getUserDetail(input.userId);
+        if (!detail) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        }
+        return detail;
+      }),
+
+    // 重置用户密码
+    resetUserPassword: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        newPassword: z.string().min(6, "密码至少6位"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const passwordHash = await bcrypt.hash(input.newPassword, 10);
+        const success = await adminResetPassword(input.userId, passwordHash);
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "重置密码失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'reset_user_password',
+          'user',
+          input.userId.toString()
+        );
+        return { success: true };
+      }),
+
+    // 获取用户搜索历史
+    getUserSearchHistory: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return getUserSearchHistory(input.userId, input.page || 1, input.limit || 20);
+      }),
+
+    // 获取用户积分变动记录
+    getUserCreditHistory: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return getUserCreditHistory(input.userId, input.page || 1, input.limit || 20);
+      }),
+
+    // 获取用户登录记录
+    getUserLoginHistory: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return getUserLoginHistory(input.userId, input.page || 1, input.limit || 20);
+      }),
+
+    // 获取用户活动日志
+    getUserActivityLogs: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return getUserActivityLogs(input.userId, input.page || 1, input.limit || 50);
+      }),
+
+    // ============ 订单管理增强 ============
+
+    // 搜索订单
+    searchOrders: adminProcedure
+      .input(z.object({
+        query: z.string(),
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return searchOrders(input.query, input.page || 1, input.limit || 20);
+      }),
+
+    // 退款订单
+    refundOrder: adminProcedure
+      .input(z.object({
+        orderId: z.string(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const success = await refundOrder(input.orderId, input.reason);
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "退款失败，订单可能不存在或未支付" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'refund_order',
+          'order',
+          input.orderId,
+          { reason: input.reason }
+        );
+        return { success: true };
+      }),
+
+    // ============ 公告系统 ============
+
+    // 获取公告列表
+    getAnnouncements: adminProcedure
+      .input(z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return getAnnouncementsAdmin(input?.page || 1, input?.limit || 20);
+      }),
+
+    // 创建公告
+    createAnnouncement: adminProcedure
+      .input(z.object({
+        title: z.string().min(1, "标题不能为空"),
+        content: z.string().min(1, "内容不能为空"),
+        type: z.enum(["info", "warning", "success", "error"]).optional(),
+        isPinned: z.boolean().optional(),
+        startTime: z.string().optional(),
+        endTime: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const announcement = await createAnnouncement({
+          title: input.title,
+          content: input.content,
+          type: input.type,
+          isPinned: input.isPinned,
+          startTime: input.startTime ? new Date(input.startTime) : undefined,
+          endTime: input.endTime ? new Date(input.endTime) : undefined,
+          createdBy: (ctx as any).adminUser?.username || 'admin',
+        });
+        if (!announcement) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "创建公告失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'create_announcement',
+          'announcement',
+          announcement.id.toString(),
+          { title: input.title }
+        );
+        return announcement;
+      }),
+
+    // 更新公告
+    updateAnnouncement: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        content: z.string().optional(),
+        type: z.enum(["info", "warning", "success", "error"]).optional(),
+        isPinned: z.boolean().optional(),
+        isActive: z.boolean().optional(),
+        startTime: z.string().nullable().optional(),
+        endTime: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, startTime, endTime, ...rest } = input;
+        const success = await updateAnnouncement(id, {
+          ...rest,
+          startTime: startTime ? new Date(startTime) : null,
+          endTime: endTime ? new Date(endTime) : null,
+        });
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "更新公告失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'update_announcement',
+          'announcement',
+          id.toString()
+        );
+        return { success: true };
+      }),
+
+    // 删除公告
+    deleteAnnouncement: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const success = await deleteAnnouncement(input.id);
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "删除公告失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'delete_announcement',
+          'announcement',
+          input.id.toString()
+        );
+        return { success: true };
+      }),
+
+    // ============ 用户消息系统 ============
+
+    // 发送消息给单个用户
+    sendMessage: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        title: z.string().min(1, "标题不能为空"),
+        content: z.string().min(1, "内容不能为空"),
+        type: z.enum(["system", "support", "notification", "promotion"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const message = await sendMessageToUser({
+          userId: input.userId,
+          title: input.title,
+          content: input.content,
+          type: input.type,
+          createdBy: (ctx as any).adminUser?.username || 'admin',
+        });
+        if (!message) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "发送消息失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'send_message',
+          'user',
+          input.userId.toString(),
+          { title: input.title }
+        );
+        return message;
+      }),
+
+    // 批量发送消息
+    sendBulkMessage: adminProcedure
+      .input(z.object({
+        userIds: z.array(z.number()),
+        title: z.string().min(1, "标题不能为空"),
+        content: z.string().min(1, "内容不能为空"),
+        type: z.enum(["system", "support", "notification", "promotion"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const count = await sendMessageToUsers(input.userIds, {
+          title: input.title,
+          content: input.content,
+          type: input.type,
+          createdBy: (ctx as any).adminUser?.username || 'admin',
+        });
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'send_bulk_message',
+          'users',
+          undefined,
+          { count, title: input.title }
+        );
+        return { success: true, count };
+      }),
+
+    // ============ 系统监控 ============
+
+    // 获取API统计
+    getApiStatistics: adminProcedure
+      .input(z.object({ days: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return getApiStatistics(input?.days || 30);
+      }),
+
+    // 获取错误日志
+    getErrorLogs: adminProcedure
+      .input(z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+        level: z.string().optional(),
+        resolved: z.boolean().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return getErrorLogs(input?.page || 1, input?.limit || 50, input?.level, input?.resolved);
+      }),
+
+    // 标记错误已解决
+    resolveError: adminProcedure
+      .input(z.object({ errorId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const success = await resolveError(input.errorId, (ctx as any).adminUser?.username || 'admin');
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "标记失败" });
+        }
+        return { success: true };
+      }),
+  }),
+
+  // ============ 用户端公告和消息 API ============
+  
+  notification: router({
+    // 获取活跃公告
+    getAnnouncements: publicProcedure.query(async () => {
+      return getActiveAnnouncements();
+    }),
+
+    // 获取用户消息
+    getMessages: protectedProcedure
+      .input(z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        return getUserMessages(ctx.user.id, input?.page || 1, input?.limit || 20);
+      }),
+
+    // 标记消息已读
+    markAsRead: protectedProcedure
+      .input(z.object({ messageId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        await markMessageAsRead(input.messageId, ctx.user.id);
+        return { success: true };
+      }),
+
+    // 标记所有消息已读
+    markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
+      if (!ctx.user) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
+      await markAllMessagesAsRead(ctx.user.id);
+      return { success: true };
+    }),
+
+    // 获取未读消息数量
+    getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
+      const result = await getUserMessages(ctx.user.id, 1, 1);
+      return { count: result.unreadCount };
+    }),
   }),
 });
 
