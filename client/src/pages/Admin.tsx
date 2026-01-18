@@ -596,7 +596,6 @@ export default function Admin() {
                               size="sm"
                               data-testid={`user-detail-btn-${u.id}`}
                               onClick={() => {
-                                toast.info(`查看用户详情: ID ${u.id}`);
                                 setDetailUserId(u.id);
                                 setUserDetailDialogOpen(true);
                               }}
