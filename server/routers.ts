@@ -302,12 +302,19 @@ export const appRouter = router({
           name: z.string().min(1, "请输入姓名"),
           title: z.string().min(1, "请输入职位"),
           state: z.string().min(1, "请选择州"),
+          limit: z.number().min(10).max(100).optional().default(50),
+          ageMin: z.number().min(18).max(80).optional(),
+          ageMax: z.number().min(18).max(80).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         // 检查积分
         const credits = await getUserCredits(ctx.user.id);
-        if (credits < 1) {
+        const searchCost = 1;
+        const phoneCost = input.limit * 2;
+        const totalCost = searchCost + phoneCost;
+        
+        if (credits < searchCost) {
           throw new TRPCError({ code: "PAYMENT_REQUIRED", message: "积分不足，请先充值" });
         }
 
@@ -316,12 +323,15 @@ export const appRouter = router({
             ctx.user.id,
             input.name,
             input.title,
-            input.state
+            input.state,
+            input.limit,
+            input.ageMin,
+            input.ageMax
           );
 
           return {
             success: true,
-            taskId: task?.id,
+            taskId: task?.taskId,
             message: "搜索任务已创建",
           };
         } catch (error: any) {

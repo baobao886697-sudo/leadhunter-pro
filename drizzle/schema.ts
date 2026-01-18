@@ -71,7 +71,7 @@ export const searchTasks = mysqlTable("search_tasks", {
   requestedCount: int("requestedCount").notNull(),
   actualCount: int("actualCount").default(0),
   creditsUsed: int("creditsUsed").default(0),
-  status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "insufficient_credits"]).default("pending").notNull(),
   progress: int("progress").default(0),
   logs: json("logs").$type<Array<{ timestamp: string; level: string; message: string }>>(),
   errorMessage: text("errorMessage"),

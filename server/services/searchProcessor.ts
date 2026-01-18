@@ -20,12 +20,38 @@ const APOLLO_BATCH_SIZE = 10;
 export interface SearchProgress {
   taskId: string;
   status: string;
-  totalResults: number;
-  phonesRequested: number;
-  phonesFetched: number;
-  phonesVerified: number;
-  creditsUsed: number;
-  logs: Array<{ timestamp: string; level: string; message: string }>;
+  step: number;
+  totalSteps: number;
+  currentAction: string;
+  stats: {
+    apolloCalls: number;
+    phoneRequests: number;
+    verifyRequests: number;
+    totalRecords: number;
+    validResults: number;
+    phonesFound: number;
+    phonesVerified: number;
+    verifySuccessRate: number;
+    creditsUsed: number;
+    // 排除统计
+    excludedNoPhone: number;
+    excludedVerifyFailed: number;
+    excludedAgeFilter: number;
+    excludedOther: number;
+  };
+  logs: Array<{ 
+    timestamp: string; 
+    level: 'info' | 'success' | 'warning' | 'error'; 
+    step?: number;
+    total?: number;
+    message: string;
+    details?: {
+      name?: string;
+      phone?: string;
+      matchScore?: number;
+      reason?: string;
+    };
+  }>;
 }
 
 function generateSearchHash(name: string, title: string, state: string): string {
@@ -42,18 +68,50 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
+function formatTime(): string {
+  return new Date().toLocaleTimeString('zh-CN', { hour12: false });
+}
+
 export async function executeSearch(
   userId: number,
   searchName: string,
   searchTitle: string,
   searchState: string,
   requestedCount: number = 50,
+  ageMin?: number,
+  ageMax?: number,
   onProgress?: (progress: SearchProgress) => void
 ): Promise<SearchTask | undefined> {
-  const logs: Array<{ timestamp: string; level: string; message: string }> = [];
-  const addLog = (message: string, level: string = 'info') => {
-    const timestamp = new Date().toISOString();
-    logs.push({ timestamp, level, message });
+  
+  const logs: SearchProgress['logs'] = [];
+  const stats: SearchProgress['stats'] = {
+    apolloCalls: 0,
+    phoneRequests: 0,
+    verifyRequests: 0,
+    totalRecords: 0,
+    validResults: 0,
+    phonesFound: 0,
+    phonesVerified: 0,
+    verifySuccessRate: 0,
+    creditsUsed: 0,
+    excludedNoPhone: 0,
+    excludedVerifyFailed: 0,
+    excludedAgeFilter: 0,
+    excludedOther: 0,
+  };
+  
+  let currentStep = 0;
+  const totalSteps = requestedCount + 5; // 5个初始化步骤 + 每条结果一个步骤
+  
+  const addLog = (
+    message: string, 
+    level: 'info' | 'success' | 'warning' | 'error' = 'info',
+    step?: number,
+    total?: number,
+    details?: SearchProgress['logs'][0]['details']
+  ) => {
+    const timestamp = formatTime();
+    logs.push({ timestamp, level, step, total, message, details });
   };
 
   const user = await getUserById(userId);
@@ -61,57 +119,93 @@ export async function executeSearch(
 
   const searchCredits = 1;
   const phoneCreditsPerPerson = 2;
-  const totalPhoneCredits = requestedCount * phoneCreditsPerPerson;
-  const totalCreditsNeeded = searchCredits + totalPhoneCredits;
 
   if (user.credits < searchCredits) {
     throw new Error(`积分不足，搜索需要至少 ${searchCredits} 积分，当前余额 ${user.credits}`);
   }
 
   const searchHash = generateSearchHash(searchName, searchTitle, searchState);
-  const params = { name: searchName, title: searchTitle, state: searchState };
+  const params = { 
+    name: searchName, 
+    title: searchTitle, 
+    state: searchState,
+    limit: requestedCount,
+    ageMin,
+    ageMax
+  };
 
   const task = await createSearchTask(userId, searchHash, params, requestedCount);
   if (!task) throw new Error('创建搜索任务失败');
 
-  addLog(`🚀 开始搜索: ${searchName} | ${searchTitle} | ${searchState}`);
-  addLog(`📊 请求数量: ${requestedCount} 条`);
-
   const progress: SearchProgress = {
     taskId: task.taskId,
-    status: 'searching',
-    totalResults: 0,
-    phonesRequested: requestedCount,
-    phonesFetched: 0,
-    phonesVerified: 0,
-    creditsUsed: 0,
+    status: 'initializing',
+    step: 0,
+    totalSteps,
+    currentAction: '初始化搜索任务',
+    stats,
     logs
   };
 
-  const updateProgress = async () => {
-    await updateSearchTask(task.taskId, { logs, status: progress.status as any, creditsUsed: progress.creditsUsed });
+  const updateProgress = async (action?: string, status?: string) => {
+    if (action) progress.currentAction = action;
+    if (status) progress.status = status;
+    progress.step = currentStep;
+    
+    // 计算验证成功率
+    if (stats.phonesFound > 0) {
+      stats.verifySuccessRate = Math.round((stats.phonesVerified / stats.phonesFound) * 100);
+    }
+    
+    await updateSearchTask(task.taskId, { 
+      logs, 
+      status: progress.status as any, 
+      creditsUsed: stats.creditsUsed,
+      progress: Math.round((currentStep / totalSteps) * 100)
+    });
     onProgress?.(progress);
   };
 
   try {
-    // 扣除搜索积分
+    // ===== 步骤1: 初始化 =====
+    currentStep++;
+    addLog(`🚀 开始搜索任务 #${task.taskId.slice(0, 8)}`, 'info');
+    addLog(`📋 搜索条件: ${searchName} | ${searchTitle} | ${searchState}`, 'info');
+    addLog(`📊 请求数量: ${requestedCount} 条`, 'info');
+    if (ageMin && ageMax) {
+      addLog(`🎂 年龄筛选: ${ageMin} - ${ageMax} 岁`, 'info');
+    }
+    addLog(`💰 预估消耗: ~${searchCredits + requestedCount * phoneCreditsPerPerson} 积分`, 'info');
+    addLog(`─────────────────────────────────────`, 'info');
+    await updateProgress('初始化搜索任务', 'running');
+
+    // ===== 步骤2: 扣除搜索积分 =====
+    currentStep++;
     const searchDeducted = await deductCredits(userId, searchCredits, 'search', `搜索: ${searchName} | ${searchTitle} | ${searchState}`, task.taskId);
     if (!searchDeducted) throw new Error('扣除搜索积分失败');
-    progress.creditsUsed += searchCredits;
-    addLog(`💰 已扣除搜索积分: ${searchCredits}`);
+    stats.creditsUsed += searchCredits;
+    addLog(`💰 已扣除搜索积分: ${searchCredits}`, 'success');
+    await updateProgress('扣除搜索积分');
 
-    // 检查缓存
+    // ===== 步骤3: 检查缓存 =====
+    currentStep++;
     const cacheKey = `search:${searchHash}`;
     const cached = await getCacheByKey(cacheKey);
     
     let apolloResults: ApolloPerson[] = [];
     
     if (cached) {
-      addLog(`✨ 命中全局缓存，跳过Apollo API调用`);
+      addLog(`✨ 命中全局缓存，跳过Apollo API调用`, 'success');
       apolloResults = cached.data as ApolloPerson[];
+      stats.totalRecords = apolloResults.length;
     } else {
-      addLog(`🔍 调用Apollo API搜索...`);
+      // ===== 步骤4: 调用Apollo API =====
+      currentStep++;
+      addLog(`🔍 正在调用 Apollo API 搜索...`, 'info');
+      await updateProgress('调用 Apollo API');
+      
       const startTime = Date.now();
+      stats.apolloCalls++;
       
       const searchResult = await searchPeople(searchName, searchTitle, searchState, requestedCount * 2);
       
@@ -122,138 +216,179 @@ export async function executeSearch(
       }
 
       apolloResults = searchResult.people;
-      addLog(`📋 Apollo返回 ${apolloResults.length} 条基础数据`);
+      stats.totalRecords = apolloResults.length;
+      addLog(`📋 Apollo 返回 ${apolloResults.length} 条基础数据`, 'success');
 
       // 缓存搜索结果 180天
       await setCache(cacheKey, 'search', apolloResults, 180);
     }
 
-    progress.totalResults = apolloResults.length;
-    await updateProgress();
+    await updateProgress('处理搜索结果');
 
     if (apolloResults.length === 0) {
       progress.status = 'completed';
-      addLog(`⚠️ 未找到匹配结果`);
-      await updateProgress();
+      addLog(`⚠️ 未找到匹配结果`, 'warning');
+      await updateProgress('搜索完成', 'completed');
       return getSearchTask(task.taskId);
     }
 
-    // 跳动提取 - 打乱顺序
+    // ===== 步骤5: 打乱顺序 =====
+    currentStep++;
     const shuffledResults = shuffleArray(apolloResults);
-    addLog(`🔀 已打乱数据顺序，采用跳动提取策略`);
+    addLog(`🔀 已打乱数据顺序，采用跳动提取策略`, 'info');
+    addLog(`─────────────────────────────────────`, 'info');
 
-    // 分批获取电话号码
+    // ===== 分批获取电话号码 =====
     const toProcess = shuffledResults.slice(0, requestedCount);
-    const batches = Math.ceil(toProcess.length / BATCH_SIZE);
+    let processedCount = 0;
 
-    for (let batchIndex = 0; batchIndex < batches; batchIndex++) {
-      const batchStart = batchIndex * BATCH_SIZE;
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, toProcess.length);
-      const batchPeople = toProcess.slice(batchStart, batchEnd);
-
+    for (let i = 0; i < toProcess.length; i++) {
+      const person = toProcess[i];
+      currentStep++;
+      processedCount++;
+      
+      const personName = `${person.first_name || ''} ${person.last_name || ''}`.trim() || 'Unknown';
+      
       // 检查积分
-      const batchCredits = batchPeople.length * phoneCreditsPerPerson;
       const currentUser = await getUserById(userId);
-      if (!currentUser || currentUser.credits < batchCredits) {
-        addLog(`⚠️ 积分不足，停止获取。需要 ${batchCredits} 积分，当前 ${currentUser?.credits || 0}`);
+      if (!currentUser || currentUser.credits < phoneCreditsPerPerson) {
+        addLog(`⚠️ 积分不足，停止获取。需要 ${phoneCreditsPerPerson} 积分，当前 ${currentUser?.credits || 0}`, 'warning');
         progress.status = 'insufficient_credits';
-        await updateProgress();
         break;
       }
 
       // 扣除积分
-      const deducted = await deductCredits(userId, batchCredits, 'search', `获取电话号码 ${batchPeople.length} 条`, task.taskId);
+      const deducted = await deductCredits(userId, phoneCreditsPerPerson, 'search', `获取电话: ${personName}`, task.taskId);
       if (!deducted) {
-        addLog(`❌ 扣除积分失败`);
+        addLog(`❌ 扣除积分失败`, 'error');
         break;
       }
-      progress.creditsUsed += batchCredits;
-      addLog(`💰 已扣除电话获取积分: ${batchCredits} (${batchPeople.length}条 × ${phoneCreditsPerPerson}积分)`);
+      stats.creditsUsed += phoneCreditsPerPerson;
+      stats.phoneRequests++;
 
-      // 分小批调用Apollo Enrichment
-      const subBatches = Math.ceil(batchPeople.length / APOLLO_BATCH_SIZE);
+      addLog(`🔍 [${processedCount}/${requestedCount}] 正在处理: ${personName}`, 'info', processedCount, requestedCount);
+      await updateProgress(`处理 ${personName}`);
+
+      // 获取电话号码
+      const startTime = Date.now();
+      const enrichResult = await enrichPeopleBatch([person.id]);
       
-      for (let subIndex = 0; subIndex < subBatches; subIndex++) {
-        const subStart = subIndex * APOLLO_BATCH_SIZE;
-        const subEnd = Math.min(subStart + APOLLO_BATCH_SIZE, batchPeople.length);
-        const subBatch = batchPeople.slice(subStart, subEnd);
+      await logApi('apollo_enrich', '/people/bulk_match', { id: person.id }, enrichResult.length > 0 ? 200 : 500, Date.now() - startTime, enrichResult.length > 0, undefined, phoneCreditsPerPerson, userId);
 
-        addLog(`📞 获取电话号码 (${subStart + 1}-${subEnd}/${batchPeople.length})...`);
-
-        const startTime = Date.now();
-        const enrichResult = await enrichPeopleBatch(subBatch.map(p => p.id));
-        
-        await logApi('apollo_enrich', '/people/bulk_match', { ids: subBatch.map(p => p.id) }, enrichResult.length > 0 ? 200 : 500, Date.now() - startTime, enrichResult.length > 0, undefined, batchCredits / subBatches, userId);
-
-        if (enrichResult.length > 0) {
-          for (const person of enrichResult) {
-            if (person.phone_numbers && person.phone_numbers.length > 0) {
-              progress.phonesFetched++;
-
-              // 验证电话号码
-              const personToVerify: PersonToVerify = {
-                firstName: person.first_name || '',
-                lastName: person.last_name || '',
-                city: person.city || '',
-                state: person.state || searchState,
-                phone: person.phone_numbers[0].sanitized_number || ''
-              };
-
-              addLog(`🔍 验证: ${person.first_name} ${person.last_name}...`);
-
-              const verifyStartTime = Date.now();
-              const verifyResult = await verifyPhoneNumber(personToVerify);
-              
-              await logApi(verifyResult.source === 'TruePeopleSearch' ? 'scrape_tps' : 'scrape_fps', verifyResult.source || 'unknown', personToVerify, verifyResult.verified ? 200 : 404, Date.now() - verifyStartTime, verifyResult.verified, undefined, 0, userId);
-
-              if (verifyResult.verified) {
-                progress.phonesVerified++;
-                addLog(`✅ 验证通过: ${person.first_name} ${person.last_name} (匹配度: ${verifyResult.matchScore}%)`);
-              } else {
-                addLog(`❌ 验证失败: ${person.first_name} ${person.last_name}`);
-              }
-
-              // 保存结果
-              const resultData = {
-                apolloId: person.id,
-                firstName: person.first_name,
-                lastName: person.last_name,
-                fullName: `${person.first_name} ${person.last_name}`,
-                title: person.title,
-                company: person.organization_name,
-                city: person.city,
-                state: person.state,
-                country: person.country,
-                email: person.email,
-                phone: person.phone_numbers?.[0]?.sanitized_number,
-                phoneType: person.phone_numbers?.[0]?.type,
-                linkedinUrl: person.linkedin_url,
-                age: verifyResult.details?.age,
-                carrier: verifyResult.details?.carrier,
-              };
-
-              await saveSearchResult(task.id, person.id, resultData, verifyResult.verified, verifyResult.matchScore, verifyResult.details);
-
-              // 缓存个人数据
-              const personCacheKey = `person:${person.id}`;
-              await setCache(personCacheKey, 'person', resultData, 180);
-            }
-          }
-        }
-
-        await updateProgress();
+      if (enrichResult.length === 0 || !enrichResult[0].phone_numbers || enrichResult[0].phone_numbers.length === 0) {
+        stats.excludedNoPhone++;
+        addLog(`⚠️ [${processedCount}/${requestedCount}] ${personName} - 未找到电话号码`, 'warning', processedCount, requestedCount, { name: personName, reason: '无电话号码' });
+        continue;
       }
+
+      const enrichedPerson = enrichResult[0];
+      stats.phonesFound++;
+      
+      const phoneNumber = enrichedPerson.phone_numbers[0].sanitized_number || '';
+      addLog(`📞 [${processedCount}/${requestedCount}] 找到电话: ${phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}`, 'info', processedCount, requestedCount);
+
+      // 验证电话号码
+      const personToVerify: PersonToVerify = {
+        firstName: enrichedPerson.first_name || '',
+        lastName: enrichedPerson.last_name || '',
+        city: enrichedPerson.city || '',
+        state: enrichedPerson.state || searchState,
+        phone: phoneNumber
+      };
+
+      addLog(`🔍 [${processedCount}/${requestedCount}] 正在验证电话...`, 'info', processedCount, requestedCount);
+      stats.verifyRequests++;
+
+      const verifyStartTime = Date.now();
+      const verifyResult = await verifyPhoneNumber(personToVerify);
+      
+      await logApi(verifyResult.source === 'TruePeopleSearch' ? 'scrape_tps' : 'scrape_fps', verifyResult.source || 'unknown', personToVerify, verifyResult.verified ? 200 : 404, Date.now() - verifyStartTime, verifyResult.verified, undefined, 0, userId);
+
+      // 年龄筛选
+      if (ageMin && ageMax && verifyResult.details?.age) {
+        const age = verifyResult.details.age;
+        if (age < ageMin || age > ageMax) {
+          stats.excludedAgeFilter++;
+          addLog(`🎂 [${processedCount}/${requestedCount}] ${personName} - 年龄 ${age} 岁不在筛选范围内`, 'warning', processedCount, requestedCount, { name: personName, reason: `年龄 ${age} 不符合` });
+          continue;
+        }
+      }
+
+      if (verifyResult.verified) {
+        stats.phonesVerified++;
+        stats.validResults++;
+        addLog(`✅ [${processedCount}/${requestedCount}] 验证通过: ${personName} (匹配度: ${verifyResult.matchScore}%)`, 'success', processedCount, requestedCount, { 
+          name: personName, 
+          phone: phoneNumber,
+          matchScore: verifyResult.matchScore 
+        });
+      } else {
+        stats.excludedVerifyFailed++;
+        addLog(`❌ [${processedCount}/${requestedCount}] 验证失败: ${personName} (匹配度: ${verifyResult.matchScore}%)`, 'error', processedCount, requestedCount, { 
+          name: personName, 
+          matchScore: verifyResult.matchScore,
+          reason: '验证失败'
+        });
+      }
+
+      // 保存结果（无论验证是否通过都保存）
+      const resultData = {
+        apolloId: enrichedPerson.id,
+        firstName: enrichedPerson.first_name,
+        lastName: enrichedPerson.last_name,
+        fullName: `${enrichedPerson.first_name} ${enrichedPerson.last_name}`,
+        title: enrichedPerson.title,
+        company: enrichedPerson.organization_name,
+        city: enrichedPerson.city,
+        state: enrichedPerson.state,
+        country: enrichedPerson.country,
+        email: enrichedPerson.email,
+        phone: phoneNumber,
+        phoneType: enrichedPerson.phone_numbers?.[0]?.type,
+        linkedinUrl: enrichedPerson.linkedin_url,
+        age: verifyResult.details?.age,
+        carrier: verifyResult.details?.carrier,
+      };
+
+      await saveSearchResult(task.id, enrichedPerson.id, resultData, verifyResult.verified, verifyResult.matchScore, verifyResult.details);
+
+      // 缓存个人数据
+      const personCacheKey = `person:${enrichedPerson.id}`;
+      await setCache(personCacheKey, 'person', resultData, 180);
+
+      // 添加分隔线（每5条）
+      if (processedCount % 5 === 0 && processedCount < requestedCount) {
+        addLog(`─────────────────────────────────────`, 'info');
+      }
+
+      await updateProgress();
+    }
+
+    // ===== 完成 =====
+    addLog(`─────────────────────────────────────`, 'info');
+    addLog(`🎉 搜索完成！`, 'success');
+    addLog(`📊 结果统计:`, 'info');
+    addLog(`   • 处理记录: ${processedCount}`, 'info');
+    addLog(`   • 找到电话: ${stats.phonesFound}`, 'info');
+    addLog(`   • 验证通过: ${stats.phonesVerified}`, 'info');
+    addLog(`   • 验证成功率: ${stats.verifySuccessRate}%`, 'info');
+    addLog(`💰 总消耗积分: ${stats.creditsUsed}`, 'info');
+    
+    if (stats.excludedNoPhone > 0 || stats.excludedVerifyFailed > 0 || stats.excludedAgeFilter > 0) {
+      addLog(`🚫 排除统计:`, 'info');
+      if (stats.excludedNoPhone > 0) addLog(`   • 无电话号码: ${stats.excludedNoPhone}`, 'info');
+      if (stats.excludedVerifyFailed > 0) addLog(`   • 验证失败: ${stats.excludedVerifyFailed}`, 'info');
+      if (stats.excludedAgeFilter > 0) addLog(`   • 年龄不符: ${stats.excludedAgeFilter}`, 'info');
     }
 
     progress.status = 'completed';
-    addLog(`🎉 搜索完成！获取 ${progress.phonesFetched} 个电话，验证通过 ${progress.phonesVerified} 个`);
-    addLog(`💰 总消耗积分: ${progress.creditsUsed}`);
     
     await updateSearchTask(task.taskId, {
       status: 'completed',
-      actualCount: progress.phonesVerified,
-      creditsUsed: progress.creditsUsed,
+      actualCount: stats.validResults,
+      creditsUsed: stats.creditsUsed,
       logs,
+      progress: 100,
       completedAt: new Date()
     });
 
@@ -261,7 +396,7 @@ export async function executeSearch(
 
   } catch (error: any) {
     progress.status = 'failed';
-    addLog(`❌ 错误: ${error.message}`);
+    addLog(`❌ 错误: ${error.message}`, 'error');
     
     await updateSearchTask(task.taskId, {
       status: 'failed',
