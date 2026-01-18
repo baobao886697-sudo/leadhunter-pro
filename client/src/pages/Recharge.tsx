@@ -91,7 +91,8 @@ export default function Recharge() {
       refetchProfile();
       toast.success("充值成功！积分已到账");
     }
-  }, [orderDetail?.status, refetchProfile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderDetail?.status]);
 
   const countdown = useCountdown(orderDetail?.expiresAt ? new Date(orderDetail.expiresAt) : null);
 
