@@ -596,10 +596,9 @@ export default function Admin() {
                               size="sm"
                               data-testid={`user-detail-btn-${u.id}`}
                               onClick={() => {
-                                console.log("Eye button clicked, userId:", u.id);
+                                window.alert("Eye button clicked! userId: " + u.id);
                                 setDetailUserId(u.id);
                                 setUserDetailDialogOpen(true);
-                                console.log("State updated: detailUserId=", u.id, "userDetailDialogOpen=true");
                               }}
                               className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                             >
