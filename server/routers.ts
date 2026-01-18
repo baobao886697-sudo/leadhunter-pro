@@ -466,9 +466,9 @@ export const appRouter = router({
 
     // 获取充值记录
     history: protectedProcedure
-      .input(z.object({ limit: z.number().optional() }))
+      .input(z.object({ limit: z.number().optional(), page: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        return getUserRechargeOrders(ctx.user.id, input.limit);
+        return getUserRechargeOrders(ctx.user.id, input.page || 1, input.limit || 20);
       }),
 
     // 手动确认支付（管理员或webhook调用）
