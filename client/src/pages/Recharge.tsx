@@ -345,7 +345,7 @@ export default function Recharge() {
                       <div className="text-center">
                         <p className="text-slate-400 text-sm mb-2">请精确转账以下金额</p>
                         <div className="flex items-center justify-center gap-2">
-                          <span className="text-4xl font-bold text-yellow-400 font-mono">{orderDetail.usdtAmount}</span>
+                          <span className="text-4xl font-bold text-yellow-400 font-mono">{orderDetail.amount}</span>
                           <span className="text-xl text-yellow-400">USDT</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-2">* 金额包含唯一尾数，请勿修改</p>
@@ -354,7 +354,7 @@ export default function Recharge() {
                         variant="outline"
                         size="sm"
                         className="w-full mt-4 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-                        onClick={() => copyToClipboard(orderDetail.usdtAmount, "支付金额")}
+                        onClick={() => copyToClipboard(orderDetail.amount, "支付金额")}
                       >
                         <Copy className="w-4 h-4 mr-2" />
                         复制金额
@@ -498,7 +498,7 @@ export default function Recharge() {
                     </div>
                     <div>
                       <p className="text-white font-medium">{order.credits} 积分</p>
-                      <p className="text-sm text-slate-400">{order.usdtAmount} USDT</p>
+                      <p className="text-sm text-slate-400">{order.amount} USDT</p>
                     </div>
                   </div>
                   <div className="text-right flex items-center gap-3">

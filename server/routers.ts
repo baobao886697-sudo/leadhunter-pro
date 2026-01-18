@@ -912,9 +912,10 @@ export const appRouter = router({
       .query(async ({ input }) => {
         try {
           // 如果没有传入地址，从配置中获取
-          let walletAddress = input?.walletAddress;
+          let walletAddress: string | undefined = input?.walletAddress;
           if (!walletAddress) {
-            walletAddress = await getConfig('USDT_WALLET_TRC20');
+            const configAddr = await getConfig('USDT_WALLET_TRC20');
+            walletAddress = configAddr || undefined;
           }
           
           if (!walletAddress) {
@@ -962,9 +963,10 @@ export const appRouter = router({
       }).optional())
       .query(async ({ input }) => {
         try {
-          let walletAddress = input?.walletAddress;
+          let walletAddress: string | undefined = input?.walletAddress;
           if (!walletAddress) {
-            walletAddress = await getConfig('USDT_WALLET_TRC20');
+            const configAddr = await getConfig('USDT_WALLET_TRC20');
+            walletAddress = configAddr || undefined;
           }
           
           if (!walletAddress) {

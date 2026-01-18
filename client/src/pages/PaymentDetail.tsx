@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -64,7 +64,7 @@ export default function PaymentDetail() {
     { orderId: orderId || "" },
     { 
       enabled: !!orderId && !!user,
-      refetchInterval: (data) => data?.status === "pending" ? 5000 : false,
+      refetchInterval: (query) => query.state.data?.status === "pending" ? 5000 : false,
     }
   );
 
@@ -156,13 +156,13 @@ export default function PaymentDetail() {
 ───────────────────────────
 ${orderDetail.credits.toLocaleString()} 积分套餐
 积分数量: ${orderDetail.credits.toLocaleString()}
-金额: $${orderDetail.usdtAmount} USDT
+金额: $${orderDetail.amount} USDT
 
 ───────────────────────────
 支付信息
 ───────────────────────────
 支付网络: ${orderDetail.network}
-支付金额: $${orderDetail.usdtAmount} USDT
+支付金额: $${orderDetail.amount} USDT
 
 收款地址:
 ${orderDetail.walletAddress}
@@ -278,7 +278,7 @@ ${orderDetail.walletAddress}
                   <div className="text-center">
                     <p className="text-slate-400 text-sm mb-2">请精确转账以下金额</p>
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-5xl font-bold text-yellow-400 font-mono">{orderDetail.usdtAmount}</span>
+                      <span className="text-5xl font-bold text-yellow-400 font-mono">{orderDetail.amount}</span>
                       <span className="text-2xl text-yellow-400">USDT</span>
                     </div>
                     <p className="text-xs text-slate-500 mt-3">* 金额包含唯一尾数，请勿修改</p>
@@ -286,7 +286,7 @@ ${orderDetail.walletAddress}
                   <Button
                     variant="outline"
                     className="w-full mt-4 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-                    onClick={() => copyToClipboard(orderDetail.usdtAmount, "支付金额")}
+                    onClick={() => copyToClipboard(orderDetail.amount, "支付金额")}
                   >
                     <Copy className="w-4 h-4 mr-2" />
                     复制金额
@@ -523,7 +523,7 @@ ${orderDetail.walletAddress}
                         </p>
                         <p style={{ color: "#94a3b8", fontSize: "12px" }}>{orderDetail.credits.toLocaleString()} 积分</p>
                       </div>
-                      <p style={{ fontWeight: "600", color: "#667eea", fontSize: "16px" }}>${orderDetail.usdtAmount}</p>
+                      <p style={{ fontWeight: "600", color: "#667eea", fontSize: "16px" }}>${orderDetail.amount}</p>
                     </div>
                   </div>
 
@@ -557,7 +557,7 @@ ${orderDetail.walletAddress}
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: "#94a3b8", fontSize: "12px" }}>支付金额</span>
-                        <span style={{ color: "#667eea", fontSize: "14px", fontWeight: "600" }}>${orderDetail.usdtAmount} USDT</span>
+                        <span style={{ color: "#667eea", fontSize: "14px", fontWeight: "600" }}>${orderDetail.amount} USDT</span>
                       </div>
                     </div>
                   </div>
@@ -610,7 +610,7 @@ ${orderDetail.walletAddress}
                       background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent"
-                    }}>${orderDetail.usdtAmount} USDT</span>
+                    }}>${orderDetail.amount} USDT</span>
                   </div>
                 </div>
 
