@@ -901,6 +901,167 @@ export const appRouter = router({
     cacheStats: adminProcedure.query(async () => {
       return getCacheStats();
     }),
+
+    // ============ TRC20钱包监控 ============
+
+    // 获取钱包余额
+    getWalletBalance: adminProcedure
+      .input(z.object({
+        walletAddress: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        try {
+          // 如果没有传入地址，从配置中获取
+          let walletAddress = input?.walletAddress;
+          if (!walletAddress) {
+            walletAddress = await getConfig('USDT_WALLET_TRC20');
+          }
+          
+          if (!walletAddress) {
+            return { usdtBalance: 0, trxBalance: 0, error: '未配置收款地址' };
+          }
+          
+          // 获取TRX余额
+          const accountUrl = `https://api.trongrid.io/v1/accounts/${walletAddress}`;
+          const accountResponse = await fetch(accountUrl);
+          const accountData = await accountResponse.json();
+          
+          let trxBalance = 0;
+          let usdtBalance = 0;
+          
+          if (accountData.success && accountData.data && accountData.data.length > 0) {
+            const account = accountData.data[0];
+            // TRX余额 (1 TRX = 1,000,000 SUN)
+            trxBalance = (account.balance || 0) / 1000000;
+            
+            // 查找USDT余额
+            const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+            if (account.trc20) {
+              const usdtToken = account.trc20.find((token: any) => 
+                Object.keys(token)[0] === USDT_CONTRACT
+              );
+              if (usdtToken) {
+                // USDT有6位小数
+                usdtBalance = Number(usdtToken[USDT_CONTRACT]) / 1000000;
+              }
+            }
+          }
+          
+          return { usdtBalance, trxBalance, walletAddress };
+        } catch (error) {
+          console.error('获取钱包余额失败:', error);
+          return { usdtBalance: 0, trxBalance: 0, error: '获取余额失败' };
+        }
+      }),
+
+    // 获取最近交易记录
+    getRecentTransfers: adminProcedure
+      .input(z.object({
+        walletAddress: z.string().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        try {
+          let walletAddress = input?.walletAddress;
+          if (!walletAddress) {
+            walletAddress = await getConfig('USDT_WALLET_TRC20');
+          }
+          
+          if (!walletAddress) {
+            return { transfers: [], error: '未配置收款地址' };
+          }
+          
+          const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+          const limit = input?.limit || 20;
+          const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=${limit}&contract_address=${USDT_CONTRACT}`;
+          
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          if (!data.success || !data.data) {
+            return { transfers: [], error: 'API请求失败' };
+          }
+          
+          const transfers = data.data.map((tx: any) => ({
+            transactionId: tx.transaction_id,
+            amount: Number(tx.value) / 1000000,
+            from: tx.from,
+            to: tx.to,
+            timestamp: tx.block_timestamp,
+            type: tx.to === walletAddress ? 'in' : 'out',
+          }));
+          
+          return { transfers, walletAddress };
+        } catch (error) {
+          console.error('获取交易记录失败:', error);
+          return { transfers: [], error: '获取交易记录失败' };
+        }
+      }),
+
+    // 手动检查支付
+    checkPaymentManually: adminProcedure
+      .input(z.object({
+        orderId: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const order = await getRechargeOrder(input.orderId);
+          if (!order) {
+            return { found: false, error: '订单不存在' };
+          }
+          
+          if (order.status !== 'pending') {
+            return { found: false, error: '订单状态不是待支付' };
+          }
+          
+          const walletAddress = order.walletAddress;
+          const expectedAmount = parseFloat(order.amount);
+          const createdAfter = new Date(order.createdAt).getTime() - 60000;
+          
+          const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+          const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=50&only_to=true&contract_address=${USDT_CONTRACT}&min_timestamp=${createdAfter}`;
+          
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          if (!data.success || !data.data) {
+            return { found: false, error: 'API请求失败' };
+          }
+          
+          // 查找匹配的转账
+          const expectedValue = Math.round(expectedAmount * 1000000).toString();
+          
+          const matchingTransfer = data.data.find((tx: any) => {
+            return tx.value === expectedValue && tx.to === walletAddress;
+          });
+          
+          if (matchingTransfer) {
+            // 找到匹配的转账，确认订单
+            await confirmRechargeOrder(input.orderId, matchingTransfer.transaction_id, expectedAmount.toString());
+            
+            await logAdmin(
+              (ctx as any).adminUser?.username || 'admin',
+              'manual_check_payment',
+              'order',
+              input.orderId,
+              { txId: matchingTransfer.transaction_id, amount: expectedAmount }
+            );
+            
+            return {
+              found: true,
+              transactionId: matchingTransfer.transaction_id,
+              amount: Number(matchingTransfer.value) / 1000000,
+              from: matchingTransfer.from,
+              timestamp: matchingTransfer.block_timestamp,
+            };
+          }
+          
+          return { found: false, message: '未找到匹配的转账记录' };
+        } catch (error) {
+          console.error('手动检查支付失败:', error);
+          return { found: false, error: '检查支付失败' };
+        }
+      }),
   }),
 });
 

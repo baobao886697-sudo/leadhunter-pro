@@ -501,11 +501,24 @@ export default function Recharge() {
                       <p className="text-sm text-slate-400">{order.usdtAmount} USDT</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    {getStatusBadge(order.status)}
-                    <p className="text-xs text-slate-500 mt-1">
-                      {new Date(order.createdAt).toLocaleString()}
-                    </p>
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      {getStatusBadge(order.status)}
+                      <p className="text-xs text-slate-500 mt-1">
+                        {new Date(order.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocation(`/payment/${order.id}`);
+                      }}
+                      className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                    >
+                      查看账单
+                    </Button>
                   </div>
                 </div>
               ))}

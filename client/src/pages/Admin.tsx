@@ -254,6 +254,7 @@ export default function Admin() {
             { id: "dashboard", label: "仪表盘", icon: LayoutDashboard },
             { id: "users", label: "用户管理", icon: Users },
             { id: "orders", label: "充值订单", icon: CreditCard },
+            { id: "wallet", label: "钱包监控", icon: Wallet },
             { id: "logs", label: "系统日志", icon: FileText },
             { id: "settings", label: "系统配置", icon: Settings },
           ].map((item) => (
@@ -795,6 +796,11 @@ export default function Admin() {
           </div>
         )}
 
+        {/* ============ 钱包监控 ============ */}
+        {activeTab === "wallet" && (
+          <WalletMonitorTab />
+        )}
+
         {/* ============ 系统日志 ============ */}
         {activeTab === "logs" && (
           <div className="relative space-y-6">
@@ -1243,6 +1249,289 @@ export default function Admin() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 钱包监控Tab组件
+function WalletMonitorTab() {
+  const [checkingOrder, setCheckingOrder] = useState<string | null>(null);
+  
+  // 获取钱包余额
+  const { data: walletBalance, isLoading: balanceLoading, refetch: refetchBalance } = trpc.admin.getWalletBalance.useQuery(
+    undefined,
+    { refetchInterval: 30000 } // 每30秒自动刷新
+  );
+  
+  // 获取最近交易
+  const { data: recentTransfers, isLoading: transfersLoading, refetch: refetchTransfers } = trpc.admin.getRecentTransfers.useQuery(
+    { limit: 20 },
+    { refetchInterval: 30000 }
+  );
+  
+  // 获取待处理订单
+  const { data: pendingOrders, refetch: refetchOrders } = trpc.admin.orders.useQuery(
+    { status: 'pending' }
+  );
+  
+  // 手动检查支付
+  const checkPaymentMutation = trpc.admin.checkPaymentManually.useMutation({
+    onSuccess: (result) => {
+      if (result.found) {
+        toast.success(`检测到支付！交易哈希: ${result.transactionId?.slice(0, 16)}...`);
+        refetchOrders();
+        refetchTransfers();
+      } else {
+        toast.info(result.message || result.error || '未找到匹配的转账记录');
+      }
+      setCheckingOrder(null);
+    },
+    onError: (error) => {
+      toast.error('检查失败: ' + error.message);
+      setCheckingOrder(null);
+    },
+  });
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("已复制到剪贴板");
+  };
+  
+  const handleCheckPayment = (orderId: string) => {
+    setCheckingOrder(orderId);
+    checkPaymentMutation.mutate({ orderId });
+  };
+  
+  return (
+    <div className="relative space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Wallet className="w-5 h-5 text-green-400" />
+            <span className="text-sm text-green-400">钱包监控</span>
+          </div>
+          <h1 className="text-3xl font-bold text-white" style={{ fontFamily: 'Orbitron, sans-serif' }}>
+            TRC20 钱包监控
+          </h1>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => { refetchBalance(); refetchTransfers(); refetchOrders(); }}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          刷新数据
+        </Button>
+      </div>
+      
+      {/* 钱包余额卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-slate-400">USDT 余额</span>
+            <DollarSign className="h-5 w-5 text-green-400" />
+          </div>
+          {balanceLoading ? (
+            <Skeleton className="h-10 w-32" />
+          ) : (
+            <p className="text-3xl font-bold text-green-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {walletBalance?.usdtBalance?.toFixed(2) || '0.00'}
+            </p>
+          )}
+        </div>
+        
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-slate-400">TRX 余额</span>
+            <Zap className="h-5 w-5 text-orange-400" />
+          </div>
+          {balanceLoading ? (
+            <Skeleton className="h-10 w-32" />
+          ) : (
+            <p className="text-3xl font-bold text-orange-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {walletBalance?.trxBalance?.toFixed(2) || '0.00'}
+            </p>
+          )}
+        </div>
+        
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-slate-400">待处理订单</span>
+            <Clock className="h-5 w-5 text-yellow-400" />
+          </div>
+          <p className="text-3xl font-bold text-yellow-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            {pendingOrders?.orders?.length || 0}
+          </p>
+        </div>
+      </div>
+      
+      {/* 收款地址 */}
+      {walletBalance?.walletAddress && (
+        <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm text-slate-400">收款地址 (TRC20)</span>
+              <p className="text-white font-mono text-sm mt-1 break-all">{walletBalance.walletAddress}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => copyToClipboard(walletBalance.walletAddress!)}
+              className="text-slate-400 hover:text-white"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {/* 待处理订单列表 */}
+      {pendingOrders?.orders && pendingOrders.orders.length > 0 && (
+        <div className="rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50 overflow-hidden">
+          <div className="p-4 border-b border-slate-700/50">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-400" />
+              待处理订单
+            </h3>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-700 hover:bg-transparent">
+                <TableHead className="text-slate-400">订单号</TableHead>
+                <TableHead className="text-slate-400">金额(USDT)</TableHead>
+                <TableHead className="text-slate-400">积分</TableHead>
+                <TableHead className="text-slate-400">创建时间</TableHead>
+                <TableHead className="text-slate-400">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingOrders.orders.map((order: any) => (
+                <TableRow key={order.id} className="border-slate-700/50 hover:bg-slate-800/30">
+                  <TableCell className="font-mono text-slate-300 text-sm">
+                    {order.orderId}
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-mono text-green-400">${order.amount}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-mono text-yellow-400">{order.credits}</span>
+                  </TableCell>
+                  <TableCell className="text-slate-500 text-sm">
+                    {new Date(order.createdAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCheckPayment(order.orderId)}
+                      disabled={checkingOrder === order.orderId}
+                      className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                    >
+                      {checkingOrder === order.orderId ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          检测中...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4 mr-1" />
+                          检测支付
+                        </>
+                      )}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      
+      {/* 最近交易记录 */}
+      <div className="rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50 overflow-hidden">
+        <div className="p-4 border-b border-slate-700/50">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Activity className="h-5 w-5 text-cyan-400" />
+            最近交易记录
+          </h3>
+        </div>
+        {transfersLoading ? (
+          <div className="p-6 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-12 rounded-xl" />
+            ))}
+          </div>
+        ) : recentTransfers?.transfers && recentTransfers.transfers.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-700 hover:bg-transparent">
+                <TableHead className="text-slate-400">时间</TableHead>
+                <TableHead className="text-slate-400">类型</TableHead>
+                <TableHead className="text-slate-400">金额</TableHead>
+                <TableHead className="text-slate-400">地址</TableHead>
+                <TableHead className="text-slate-400">交易哈希</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recentTransfers.transfers.map((tx: any, index: number) => (
+                <TableRow key={index} className="border-slate-700/50 hover:bg-slate-800/30">
+                  <TableCell className="text-slate-500 text-sm">
+                    {new Date(tx.timestamp).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={tx.type === 'in' 
+                      ? "bg-green-500/20 text-green-400 border-green-500/30" 
+                      : "bg-red-500/20 text-red-400 border-red-500/30"
+                    }>
+                      {tx.type === 'in' ? '收入' : '转出'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`font-mono ${tx.type === 'in' ? 'text-green-400' : 'text-red-400'}`}>
+                      {tx.type === 'in' ? '+' : '-'}{tx.amount.toFixed(2)} USDT
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-mono text-slate-400 text-xs">
+                    {tx.type === 'in' ? tx.from?.slice(0, 8) + '...' + tx.from?.slice(-6) : tx.to?.slice(0, 8) + '...' + tx.to?.slice(-6)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-slate-400 text-xs">
+                        {tx.transactionId?.slice(0, 12)}...
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(tx.transactionId)}
+                        className="h-6 w-6 p-0 text-slate-500 hover:text-white"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <a
+                        href={`https://tronscan.org/#/transaction/${tx.transactionId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-slate-500 hover:text-cyan-400"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="text-center py-12">
+            <Activity className="h-12 w-12 text-slate-600 mx-auto mb-4" />
+            <p className="text-slate-500">暂无交易记录</p>
+            {recentTransfers?.error && (
+              <p className="text-red-400 text-sm mt-2">{recentTransfers.error}</p>
+            )}
           </div>
         )}
       </div>

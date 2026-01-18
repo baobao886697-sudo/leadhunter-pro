@@ -14,6 +14,7 @@ import Recharge from "./pages/Recharge";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
 import AdminLogin from "./pages/AdminLogin";
+import PaymentDetail from "./pages/PaymentDetail";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/search" component={Search} />
       <Route path="/results/:taskId" component={Results} />
       <Route path="/recharge" component={Recharge} />
+      <Route path="/payment/:orderId" component={PaymentDetail} />
       <Route path="/history" component={History} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={Admin} />
