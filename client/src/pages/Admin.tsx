@@ -594,6 +594,7 @@ export default function Admin() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              data-testid={`user-detail-btn-${u.id}`}
                               onClick={() => {
                                 console.log("Eye button clicked, userId:", u.id);
                                 setDetailUserId(u.id);
