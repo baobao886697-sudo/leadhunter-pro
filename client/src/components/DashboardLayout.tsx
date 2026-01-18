@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -226,13 +226,43 @@ function DashboardLayoutContent({
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5 border-b mb-1">
+                  <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Coins className="h-3 w-3 text-yellow-500" />
+                    <span className="text-xs text-yellow-500 font-medium">{user?.credits?.toLocaleString() || 0} 积分</span>
+                  </div>
+                </div>
+                <DropdownMenuItem
+                  onClick={() => setLocation('/dashboard')}
+                  className="cursor-pointer"
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  <span>个人中心</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLocation('/recharge')}
+                  className="cursor-pointer"
+                >
+                  <Wallet className="mr-2 h-4 w-4" />
+                  <span>充值积分</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLocation('/history')}
+                  className="cursor-pointer"
+                >
+                  <History className="mr-2 h-4 w-4" />
+                  <span>搜索记录</span>
+                </DropdownMenuItem>
+                <div className="border-t my-1" />
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>退出登录</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

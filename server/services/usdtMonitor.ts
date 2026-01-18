@@ -43,16 +43,26 @@ interface UsdtTransaction {
  */
 async function getTrc20Transactions(walletAddress: string): Promise<UsdtTransaction[]> {
   try {
+    // 检查API Key是否配置
+    const apiKey = process.env.TRONGRID_API_KEY;
+    if (!apiKey) {
+      // 没有API Key时静默跳过，不输出错误日志
+      return [];
+    }
+    
     const url = `${TRONGRID_API}/v1/accounts/${walletAddress}/transactions/trc20?limit=50&contract_address=${USDT_CONTRACTS.TRC20}`;
     
     const response = await fetch(url, {
       headers: {
-        "TRON-PRO-API-KEY": process.env.TRONGRID_API_KEY || "",
+        "TRON-PRO-API-KEY": apiKey,
       },
     });
 
     if (!response.ok) {
-      console.error("[USDT Monitor] TronGrid API error:", response.status);
+      // 只在非401错误时输出日志，401表示API Key无效
+      if (response.status !== 401) {
+        console.error("[USDT Monitor] TronGrid API error:", response.status);
+      }
       return [];
     }
 

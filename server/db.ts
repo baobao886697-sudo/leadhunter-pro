@@ -36,7 +36,9 @@ export async function createUser(email: string, passwordHash: string): Promise<U
   const db = await getDb();
   if (!db) return undefined;
   const openId = crypto.randomBytes(16).toString('hex');
-  await db.insert(users).values({ openId, email, passwordHash, credits: 0 });
+  // 注册赠送100积分
+  const REGISTER_BONUS_CREDITS = 100;
+  await db.insert(users).values({ openId, email, passwordHash, credits: REGISTER_BONUS_CREDITS });
   return getUserByEmail(email);
 }
 
