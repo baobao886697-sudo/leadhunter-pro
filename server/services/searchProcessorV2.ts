@@ -593,11 +593,15 @@ export async function executeSearchV2(
         stats.apolloPhoneRequests++;
         stats.phonesRequested++;
         
+        // 传递年龄筛选参数到 webhook 处理
+        const ageFilter = (ageMin || ageMax) ? { min: ageMin, max: ageMax } : undefined;
+        
         const phoneRequested = await requestPhoneNumberAsync(
           enrichedPerson.id,
           task.taskId,
           enrichedPerson,
-          userId
+          userId,
+          ageFilter
         );
         
         if (phoneRequested) {

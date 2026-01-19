@@ -51,9 +51,9 @@ export default function Search() {
   const [state, setState] = useState("");
   const [searchLimit, setSearchLimit] = useState(50);
   
-  // 年龄筛选
-  const [enableAgeFilter, setEnableAgeFilter] = useState(false);
-  const [ageRange, setAgeRange] = useState<[number, number]>([25, 65]);
+  // 年龄筛选（默认启用，范围 50-79）
+  const [enableAgeFilter, setEnableAgeFilter] = useState(true);
+  const [ageRange, setAgeRange] = useState<[number, number]>([50, 79]);
   
   // 电话验证开关
   const [enableVerification, setEnableVerification] = useState(true);
@@ -338,10 +338,13 @@ export default function Search() {
                         value={ageRange}
                         onValueChange={(value) => setAgeRange(value as [number, number])}
                         min={18}
-                        max={80}
+                        max={100}
                         step={1}
                         className="py-2"
                       />
+                      <p className="text-xs text-slate-500 mt-2">
+                        默认筛选 50-79 岁，不符合年龄范围的结果将被自动排除
+                      </p>
                     </div>
                   )}
                 </div>

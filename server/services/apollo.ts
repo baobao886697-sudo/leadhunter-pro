@@ -126,7 +126,8 @@ export async function requestPhoneNumberAsync(
   personId: string,
   taskId: string,
   personData: any,
-  userId?: number
+  userId?: number,
+  ageFilter?: { min?: number; max?: number }
 ): Promise<boolean> {
   const apiKey = await getApolloApiKey();
   const startTime = Date.now();
@@ -134,8 +135,8 @@ export async function requestPhoneNumberAsync(
   const requestId = crypto.randomUUID();
 
   try {
-    // 注册待处理请求
-    registerPendingPhoneRequest(requestId, taskId, personId, personData);
+    // 注册待处理请求（包含年龄筛选参数）
+    registerPendingPhoneRequest(requestId, taskId, personId, personData, ageFilter);
 
     const response = await axios.post(
       `${APOLLO_API_BASE}/people/bulk_match`,

@@ -446,6 +446,28 @@ export async function getSearchResultsByTaskId(taskId: string): Promise<SearchRe
   return db.select().from(searchResults).where(eq(searchResults.taskId, task.id)).orderBy(desc(searchResults.createdAt));
 }
 
+// 删除搜索结果（用于年龄筛选排除）
+export async function deleteSearchResult(taskId: string, apolloId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const task = await getSearchTask(taskId);
+  if (!task) return false;
+  
+  try {
+    await db.delete(searchResults).where(
+      and(
+        eq(searchResults.taskId, task.id),
+        eq(searchResults.apolloId, apolloId)
+      )
+    );
+    return true;
+  } catch (error) {
+    console.error('[DB] Error deleting search result:', error);
+    return false;
+  }
+}
+
 // ============ 全局缓存相关 ============
 
 export async function getCacheByKey(cacheKey: string): Promise<GlobalCache | undefined> {
