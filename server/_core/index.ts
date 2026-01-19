@@ -40,12 +40,7 @@ async function migrateOldData(db: any) {
     const existingUsers = await db.execute(sql`SELECT COUNT(*) as count FROM users`);
     const userCount = existingUsers[0]?.[0]?.count || 0;
     
-    if (userCount > 0) {
-      console.log(`[Migration] Found ${userCount} existing users, skipping migration`);
-      return;
-    }
-    
-    console.log("[Migration] No users found, importing old data...");
+    console.log(`[Migration] Found ${userCount} existing users, will merge old data...`);
     
     // 导入用户数据
     const usersToInsert = [
