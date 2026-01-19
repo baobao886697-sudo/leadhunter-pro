@@ -195,15 +195,15 @@ export async function handleApolloWebhook(payload: any): Promise<{ processed: nu
       
       await updateSearchResultByApolloId(taskId, personId, updateData);
       
-      // 生成详细日志
+      // 生成详细日志 - 包含"找到电话"关键词以便前端统计
       const maskedPhone = phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
-      let logMessage = `📱 ${personData.first_name} ${personData.last_name}`;
+      let logMessage = `📱 找到电话: ${personData.first_name} ${personData.last_name}`;
       
       if (age !== undefined) {
         logMessage += ` (${age}岁)`;
       }
       
-      logMessage += ` - 电话: ${maskedPhone}`;
+      logMessage += ` - ${maskedPhone}`;
       
       if (verifyResult.verified) {
         logMessage += ` ✅ 验证通过 (${verifyResult.matchScore}%)`;
