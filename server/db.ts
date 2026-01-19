@@ -443,10 +443,16 @@ export async function getUserSearchTasks(userId: number, page: number = 1, limit
 
 // ============ 搜索结果相关 ============
 
-export async function saveSearchResult(taskId: number, apolloId: string, data: any, verified: boolean = false, verificationScore?: number, verificationDetails?: any): Promise<void> {
+export async function saveSearchResult(taskId: number, apolloId: string, data: any, verified: boolean = false, verificationScore?: number, verificationDetails?: any): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
-  await db.insert(searchResults).values({ taskId, apolloId, data, verified, verificationScore, verificationDetails });
+  if (!db) return false;
+  try {
+    await db.insert(searchResults).values({ taskId, apolloId, data, verified, verificationScore, verificationDetails });
+    return true;
+  } catch (error) {
+    console.error('[DB] saveSearchResult error:', error);
+    return false;
+  }
 }
 
 export async function getSearchResults(taskId: number): Promise<SearchResult[]> {
