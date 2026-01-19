@@ -441,7 +441,7 @@ export const appRouter = router({
       .input(z.object({ 
         taskId: z.string(),
         format: z.enum(['standard', 'detailed', 'minimal']).optional().default('standard'),
-        includeUnverified: z.boolean().optional().default(true),
+        includeUnverified: z.boolean().optional().default(false),
       }))
       .mutation(async ({ ctx, input }) => {
         const task = await getSearchTask(input.taskId);
