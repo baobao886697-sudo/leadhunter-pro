@@ -302,11 +302,13 @@ export const appRouter = router({
       .input(
         z.object({
           name: z.string().min(1, "请输入姓名"),
-          title: z.string().min(1, "请输入职位"),
+          title: z.string().min(1, "请输入职位/行业"),
           state: z.string().min(1, "请选择州"),
           limit: z.number().min(10).max(100).optional().default(50),
           ageMin: z.number().min(18).max(80).optional(),
           ageMax: z.number().min(18).max(80).optional(),
+          searchType: z.enum(["title", "industry"]).optional().default("title"), // 搜索类型
+          industry: z.string().optional(), // 行业关键词（仅当 searchType="industry" 时有值）
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -318,7 +320,9 @@ export const appRouter = router({
             input.state,
             input.limit,
             input.ageMin,
-            input.ageMax
+            input.ageMax,
+            input.searchType,
+            input.industry
           );
           return result;
         } catch (error: any) {
@@ -334,12 +338,14 @@ export const appRouter = router({
       .input(
         z.object({
           name: z.string().min(1, "请输入姓名"),
-          title: z.string().min(1, "请输入职位"),
+          title: z.string().min(1, "请输入职位/行业"),
           state: z.string().min(1, "请选择州"),
           limit: z.number().min(10).max(100).optional().default(50),
           ageMin: z.number().min(18).max(80).optional(),
           ageMax: z.number().min(18).max(80).optional(),
           enableVerification: z.boolean().optional().default(true),
+          searchType: z.enum(["title", "industry"]).optional().default("title"), // 搜索类型
+          industry: z.string().optional(), // 行业关键词（仅当 searchType="industry" 时有值）
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -363,7 +369,9 @@ export const appRouter = router({
             input.limit,
             input.ageMin,
             input.ageMax,
-            input.enableVerification
+            input.enableVerification,
+            input.searchType,
+            input.industry
           );
 
           return {
@@ -538,6 +546,14 @@ export const appRouter = router({
             "双验证",
             "获取时间",
           ];
+          
+          // 根据搜索类型确定行业字段的值
+          // 如果是按行业搜索，行业字段填充用户输入的行业关键词
+          // 如果是按职位搜索，行业字段留空
+          const industryValue = searchParams.searchType === 'industry' 
+            ? (searchParams.industry || searchParams.title || '') 
+            : '';
+          
           getRowData = (r, data, index) => [
             (index + 1).toString(),
             data.fullName || data.name || "",
@@ -546,7 +562,7 @@ export const appRouter = router({
             data.age?.toString() || "",
             data.title || "",
             data.company || data.organization_name || "",
-            data.industry || "",
+            industryValue, // 根据搜索类型填充行业
             data.city || "",
             data.state || "",
             data.country || "",
