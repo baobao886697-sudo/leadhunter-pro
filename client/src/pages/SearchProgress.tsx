@@ -113,7 +113,7 @@ export default function SearchProgress() {
       enabled: !!user && !!taskId,
       // 如果任务已完成且有待获取的电话号码，每5秒刷新一次
       refetchInterval: (data) => {
-        if (!data || data.length === 0) return false;
+        if (!data || !Array.isArray(data) || data.length === 0) return false;
         const hasPendingPhones = data.some((r: any) => {
           const d = r.data as ResultData;
           return d?.phoneStatus === 'pending';
