@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { getConfig, logApi } from '../db';
+import { getWebhookUrl, registerPendingPhoneRequest } from './apolloWebhook';
+import crypto from 'crypto';
 
 const APOLLO_API_BASE = 'https://api.apollo.io/api/v1';
 
@@ -22,6 +24,10 @@ export interface ApolloPerson {
     position: number;
     status: string;
   }>;
+  organization?: {
+    phone?: string;
+    sanitized_phone?: string;
+  };
 }
 
 export interface ApolloSearchResult {
@@ -82,6 +88,84 @@ export async function searchPeople(
   }
 }
 
+// 同步获取人员详情（不包含电话号码）
+export async function enrichPerson(personId: string, userId?: number): Promise<ApolloPerson | null> {
+  const apiKey = await getApolloApiKey();
+  const startTime = Date.now();
+
+  try {
+    const response = await axios.post(
+      `${APOLLO_API_BASE}/people/match`,
+      {
+        id: personId,
+        reveal_personal_emails: true
+      },
+      { 
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey
+        }, 
+        timeout: 30000 
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+    await logApi('apollo_enrich', '/people/match', { id: personId }, response.status, responseTime, true, undefined, 0, userId);
+
+    return response.data.person || null;
+  } catch (error: any) {
+    const responseTime = Date.now() - startTime;
+    const errorMessage = error.response?.data?.error || error.message;
+    await logApi('apollo_enrich', '/people/match', { id: personId }, error.response?.status || 0, responseTime, false, errorMessage, 0, userId);
+    return null;
+  }
+}
+
+// 异步请求电话号码（通过 Webhook 返回）
+export async function requestPhoneNumberAsync(
+  personId: string,
+  taskId: string,
+  personData: any,
+  userId?: number
+): Promise<boolean> {
+  const apiKey = await getApolloApiKey();
+  const startTime = Date.now();
+  const webhookUrl = getWebhookUrl();
+  const requestId = crypto.randomUUID();
+
+  try {
+    // 注册待处理请求
+    registerPendingPhoneRequest(requestId, taskId, personId, personData);
+
+    const response = await axios.post(
+      `${APOLLO_API_BASE}/people/bulk_match`,
+      {
+        details: [{ id: personId }],
+        reveal_phone_number: true,
+        webhook_url: webhookUrl
+      },
+      { 
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey
+        }, 
+        timeout: 30000 
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+    await logApi('apollo_phone_request', '/people/bulk_match', { id: personId, webhook: webhookUrl }, response.status, responseTime, true, undefined, 0, userId);
+
+    return true;
+  } catch (error: any) {
+    const responseTime = Date.now() - startTime;
+    const errorMessage = error.response?.data?.error || error.message;
+    await logApi('apollo_phone_request', '/people/bulk_match', { id: personId }, error.response?.status || 0, responseTime, false, errorMessage, 0, userId);
+    return false;
+  }
+}
+
+// 批量获取人员详情（同步，不包含电话号码）
 export async function enrichPeopleBatch(peopleIds: string[], userId?: number): Promise<ApolloPerson[]> {
   const apiKey = await getApolloApiKey();
   const results: ApolloPerson[] = [];
@@ -99,7 +183,7 @@ export async function enrichPeopleBatch(peopleIds: string[], userId?: number): P
         {
           details: batch.map(id => ({ id })),
           reveal_personal_emails: true,
-          reveal_phone_number: true,
+          // 不使用 reveal_phone_number，因为需要 webhook
         },
         { 
           headers: { 
@@ -124,6 +208,18 @@ export async function enrichPeopleBatch(peopleIds: string[], userId?: number): P
   }
 
   return results;
+}
+
+// 使用公司电话作为备选方案
+export function getOrganizationPhone(person: ApolloPerson): string | null {
+  if (person.organization?.sanitized_phone) {
+    return person.organization.sanitized_phone;
+  }
+  if (person.organization?.phone) {
+    // 清理电话号码格式
+    return person.organization.phone.replace(/[^\d+]/g, '');
+  }
+  return null;
 }
 
 function shuffleArray<T>(array: T[]): T[] {

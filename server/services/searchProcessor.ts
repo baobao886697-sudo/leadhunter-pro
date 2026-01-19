@@ -9,7 +9,7 @@ import {
   setCache,
   logApi
 } from '../db';
-import { searchPeople, enrichPeopleBatch, ApolloPerson } from './apollo';
+import { searchPeople, enrichPerson, ApolloPerson, getOrganizationPhone } from './apollo';
 import { verifyPhoneNumber, PersonToVerify } from './scraper';
 import { SearchTask } from '../../drizzle/schema';
 import crypto from 'crypto';
@@ -238,7 +238,7 @@ export async function executeSearch(
     addLog(`🔀 已打乱数据顺序，采用跳动提取策略`, 'info');
     addLog(`─────────────────────────────────────`, 'info');
 
-    // ===== 分批获取电话号码 =====
+    // ===== 分批获取详细信息 =====
     const toProcess = shuffledResults.slice(0, requestedCount);
     let processedCount = 0;
 
@@ -277,23 +277,46 @@ export async function executeSearch(
       addLog(`🔍 [${processedCount}/${requestedCount}] 正在处理: ${personName}`, 'info', processedCount, requestedCount);
       await updateProgress(`处理 ${personName}`);
 
-      // 获取电话号码
+      // 获取详细信息（包含公司电话）
       const startTime = Date.now();
-      const enrichResult = await enrichPeopleBatch([person.id]);
+      const enrichedPerson = await enrichPerson(person.id, userId);
       
-      await logApi('apollo_enrich', '/people/bulk_match', { id: person.id }, enrichResult.length > 0 ? 200 : 500, Date.now() - startTime, enrichResult.length > 0, undefined, phoneCreditsPerPerson, userId);
+      await logApi('apollo_enrich', '/people/match', { id: person.id }, enrichedPerson ? 200 : 500, Date.now() - startTime, !!enrichedPerson, undefined, phoneCreditsPerPerson, userId);
 
-      if (enrichResult.length === 0 || !enrichResult[0].phone_numbers || enrichResult[0].phone_numbers.length === 0) {
+      if (!enrichedPerson) {
+        stats.excludedNoPhone++;
+        addLog(`⚠️ [${processedCount}/${requestedCount}] ${personName} - 获取详情失败`, 'warning', processedCount, requestedCount, { name: personName, reason: '获取详情失败' });
+        continue;
+      }
+
+      // 尝试获取电话号码：优先使用个人电话，其次使用公司电话
+      let phoneNumber = '';
+      let phoneSource = '';
+      
+      // 检查个人电话
+      if (enrichedPerson.phone_numbers && enrichedPerson.phone_numbers.length > 0) {
+        phoneNumber = enrichedPerson.phone_numbers[0].sanitized_number || enrichedPerson.phone_numbers[0].raw_number || '';
+        phoneSource = 'personal';
+      }
+      
+      // 如果没有个人电话，尝试使用公司电话
+      if (!phoneNumber) {
+        const orgPhone = getOrganizationPhone(enrichedPerson);
+        if (orgPhone) {
+          phoneNumber = orgPhone;
+          phoneSource = 'organization';
+        }
+      }
+
+      if (!phoneNumber) {
         stats.excludedNoPhone++;
         addLog(`⚠️ [${processedCount}/${requestedCount}] ${personName} - 未找到电话号码`, 'warning', processedCount, requestedCount, { name: personName, reason: '无电话号码' });
         continue;
       }
 
-      const enrichedPerson = enrichResult[0];
       stats.phonesFound++;
-      
-      const phoneNumber = enrichedPerson.phone_numbers[0].sanitized_number || '';
-      addLog(`📞 [${processedCount}/${requestedCount}] 找到电话: ${phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}`, 'info', processedCount, requestedCount);
+      const maskedPhone = phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+      addLog(`📞 [${processedCount}/${requestedCount}] 找到${phoneSource === 'organization' ? '公司' : ''}电话: ${maskedPhone}`, 'info', processedCount, requestedCount);
 
       // 验证电话号码
       const personToVerify: PersonToVerify = {
@@ -352,7 +375,7 @@ export async function executeSearch(
         country: enrichedPerson.country,
         email: enrichedPerson.email,
         phone: phoneNumber,
-        phoneType: enrichedPerson.phone_numbers?.[0]?.type,
+        phoneType: phoneSource === 'organization' ? 'organization' : (enrichedPerson.phone_numbers?.[0]?.type || 'unknown'),
         linkedinUrl: enrichedPerson.linkedin_url,
         age: verifyResult.details?.age,
         carrier: verifyResult.details?.carrier,
@@ -418,10 +441,11 @@ export async function executeSearch(
     
     await updateSearchTask(task.taskId, {
       status: 'failed',
-      errorMessage: error.message,
-      logs
+      logs,
+      creditsUsed: stats.creditsUsed,
+      completedAt: new Date()
     });
 
-    throw error;
+    return getSearchTask(task.taskId);
   }
 }
