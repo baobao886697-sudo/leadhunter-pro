@@ -74,7 +74,17 @@ export default function Results() {
   const { user } = useAuth();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeTab, setActiveTab] = useState("progress");
+  const [filterVerified, setFilterVerified] = useState<'all' | 'verified' | 'unverified'>('all');
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // 复制到剪贴板
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success(`已复制${label}`);
+    }).catch(() => {
+      toast.error('复制失败');
+    });
+  };
 
   const { data: task, isLoading, refetch } = trpc.search.taskStatus.useQuery(
     { taskId: taskId || "" },
@@ -444,9 +454,43 @@ export default function Results() {
                 <Card className="border-slate-700/50 bg-slate-900/50">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-white text-base">搜索结果</CardTitle>
+                      <div className="flex items-center gap-4">
+                        <CardTitle className="text-white text-base">搜索结果</CardTitle>
+                        {/* 筛选按钮 */}
+                        <div className="flex items-center gap-1 bg-slate-800/50 rounded-lg p-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`h-7 px-3 text-xs ${filterVerified === 'all' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:text-white'}`}
+                            onClick={() => setFilterVerified('all')}
+                          >
+                            全部
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`h-7 px-3 text-xs ${filterVerified === 'verified' ? 'bg-green-500/20 text-green-400' : 'text-slate-400 hover:text-white'}`}
+                            onClick={() => setFilterVerified('verified')}
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            已验证
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`h-7 px-3 text-xs ${filterVerified === 'unverified' ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-400 hover:text-white'}`}
+                            onClick={() => setFilterVerified('unverified')}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            未验证
+                          </Button>
+                        </div>
+                      </div>
                       <span className="text-sm text-slate-400">
-                        共 {results?.length || 0} 条记录
+                        共 {results?.filter(r => 
+                          filterVerified === 'all' ? true : 
+                          filterVerified === 'verified' ? r.verified : !r.verified
+                        ).length || 0} 条记录
                       </span>
                     </div>
                   </CardHeader>
@@ -461,16 +505,25 @@ export default function Results() {
                               <TableHead className="text-slate-400">职位</TableHead>
                               <TableHead className="text-slate-400">公司</TableHead>
                               <TableHead className="text-slate-400">电话</TableHead>
+                              <TableHead className="text-slate-400">邮箱</TableHead>
                               <TableHead className="text-slate-400">验证</TableHead>
+                              <TableHead className="text-slate-400 w-20">操作</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {results.map((result, index) => {
+                            {results
+                              .filter(r => 
+                                filterVerified === 'all' ? true : 
+                                filterVerified === 'verified' ? r.verified : !r.verified
+                              )
+                              .map((result, index) => {
                               const data = result.data as ResultData || {};
                               const fullName = data.fullName || data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || "-";
                               const title = data.title || "-";
                               const company = data.company || data.organization_name || "-";
                               const phone = data.phone || data.phoneNumber || "-";
+                              const email = data.email || "-";
+                              const linkedinUrl = data.linkedinUrl || data.linkedin_url;
                               
                               return (
                                 <TableRow key={result.id} className="hover:bg-slate-800/30 border-slate-700/30">
@@ -485,14 +538,51 @@ export default function Results() {
                                         </Badge>
                                       )}
                                     </div>
+                                    {data.city && data.state && (
+                                      <div className="flex items-center gap-1 mt-1 text-xs text-slate-500">
+                                        <MapPin className="h-3 w-3" />
+                                        {data.city}, {data.state}
+                                      </div>
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-slate-400">{title}</TableCell>
-                                  <TableCell className="text-slate-400">{company}</TableCell>
+                                  <TableCell className="text-slate-400 max-w-[150px] truncate" title={company}>{company}</TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-2">
                                       <Phone className="h-4 w-4 text-slate-500" />
-                                      <span className="text-cyan-400 font-mono">{phone}</span>
+                                      <span className="text-cyan-400 font-mono text-sm">{phone}</span>
+                                      {phone !== '-' && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 hover:bg-cyan-500/20"
+                                          onClick={() => copyToClipboard(phone, '电话号码')}
+                                        >
+                                          <Copy className="h-3 w-3 text-slate-400 hover:text-cyan-400" />
+                                        </Button>
+                                      )}
                                     </div>
+                                    {data.carrier && (
+                                      <div className="text-xs text-slate-500 mt-1">运营商: {data.carrier}</div>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {email !== '-' ? (
+                                      <div className="flex items-center gap-2">
+                                        <Mail className="h-4 w-4 text-slate-500" />
+                                        <span className="text-slate-400 text-sm truncate max-w-[120px]" title={email}>{email}</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 hover:bg-purple-500/20"
+                                          onClick={() => copyToClipboard(email, '邮箱')}
+                                        >
+                                          <Copy className="h-3 w-3 text-slate-400 hover:text-purple-400" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-500">-</span>
+                                    )}
                                   </TableCell>
                                   <TableCell>
                                     {result.verified ? (
@@ -506,6 +596,33 @@ export default function Results() {
                                         未验证
                                       </Badge>
                                     )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      {linkedinUrl && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 w-7 p-0 hover:bg-blue-500/20"
+                                          onClick={() => window.open(linkedinUrl, '_blank')}
+                                          title="打开 LinkedIn"
+                                        >
+                                          <ExternalLink className="h-4 w-4 text-blue-400" />
+                                        </Button>
+                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 hover:bg-slate-700"
+                                        onClick={() => {
+                                          const copyText = `${fullName}\n${title}\n${company}\n${phone}\n${email}`;
+                                          copyToClipboard(copyText, '联系人信息');
+                                        }}
+                                        title="复制全部信息"
+                                      >
+                                        <Copy className="h-4 w-4 text-slate-400" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               );
