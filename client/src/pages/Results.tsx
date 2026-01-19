@@ -609,7 +609,7 @@ export default function Results() {
                                     {result.verified ? (
                                       <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1">
                                         <CheckCircle className="h-3 w-3" />
-                                        {result.matchScore}%
+                                        {result.matchScore ? `${result.matchScore}%` : '已验证'}
                                       </Badge>
                                     ) : (
                                       <Badge variant="secondary" className="gap-1">
