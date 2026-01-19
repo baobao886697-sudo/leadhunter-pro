@@ -49,7 +49,7 @@ export async function searchPeople(
 
   try {
     const response = await axios.post(
-      `${APOLLO_API_BASE}/mixed_people/search`,
+      `${APOLLO_API_BASE}/mixed_people/api_search`,
       {
         q_keywords: name,
         person_titles: [title],
@@ -67,7 +67,7 @@ export async function searchPeople(
     );
 
     const responseTime = Date.now() - startTime;
-    await logApi('apollo_search', '/mixed_people/search', { name, title, state }, response.status, responseTime, true, undefined, 0, userId);
+    await logApi('apollo_search', '/mixed_people/api_search', { name, title, state }, response.status, responseTime, true, undefined, 0, userId);
 
     return {
       success: true,
@@ -77,7 +77,7 @@ export async function searchPeople(
   } catch (error: any) {
     const responseTime = Date.now() - startTime;
     const errorMessage = error.response?.data?.error || error.message;
-    await logApi('apollo_search', '/mixed_people/search', { name, title, state }, error.response?.status || 0, responseTime, false, errorMessage, 0, userId);
+    await logApi('apollo_search', '/mixed_people/api_search', { name, title, state }, error.response?.status || 0, responseTime, false, errorMessage, 0, userId);
     return { success: false, people: [], totalCount: 0, errorMessage };
   }
 }
