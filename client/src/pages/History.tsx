@@ -105,7 +105,7 @@ export default function History() {
               {tasks.map((task: any) => {
                 const params = task.params as SearchParams || {};
                 return (
-                  <Link key={task.id} href={`/results/${task.taskId}`}>
+                  <Link key={task.id} href={task.status === 'completed' || task.status === 'failed' || task.status === 'stopped' ? `/results/${task.taskId}` : `/progress/${task.taskId}`}>
                     <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700/30 hover:border-purple-500/30 transition-all cursor-pointer group">
                       <div className="flex items-center gap-4">
                         <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${

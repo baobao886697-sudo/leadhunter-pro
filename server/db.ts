@@ -368,6 +368,12 @@ export async function updateSearchTask(taskId: string, updates: Partial<SearchTa
   await db.update(searchTasks).set(updates as any).where(eq(searchTasks.taskId, taskId));
 }
 
+export async function updateSearchTaskStatus(taskId: string, status: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(searchTasks).set({ status, updatedAt: new Date() }).where(eq(searchTasks.taskId, taskId));
+}
+
 export async function getUserSearchTasks(userId: number, page: number = 1, limit: number = 20): Promise<{ tasks: SearchTask[]; total: number }> {
   const db = await getDb();
   if (!db) return { tasks: [], total: 0 };

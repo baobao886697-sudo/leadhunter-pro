@@ -64,7 +64,8 @@ export default function Search() {
       toast.success("搜索任务已创建，正在处理中...");
       setShowConfirmDialog(false);
       if (data.taskId) {
-        setLocation(`/results/${data.taskId}`);
+        // 跳转到新的进度页面
+        setLocation(`/progress/${data.taskId}`);
       }
     },
     onError: (error) => {

@@ -249,6 +249,14 @@ export async function executeSearch(
       
       const personName = `${person.first_name || ''} ${person.last_name || ''}`.trim() || 'Unknown';
       
+      // 检查任务是否被停止
+      const currentTask = await getSearchTask(task.taskId);
+      if (currentTask?.status === 'stopped') {
+        addLog(`⏹️ 任务已被用户停止`, 'warning');
+        progress.status = 'stopped';
+        break;
+      }
+      
       // 检查积分
       const currentUser = await getUserById(userId);
       if (!currentUser || currentUser.credits < phoneCreditsPerPerson) {
@@ -366,7 +374,17 @@ export async function executeSearch(
 
     // ===== 完成 =====
     addLog(`─────────────────────────────────────`, 'info');
-    addLog(`🎉 搜索完成！`, 'success');
+    
+    const finalStatus = progress.status === 'stopped' ? 'stopped' : 
+                         progress.status === 'insufficient_credits' ? 'insufficient_credits' : 'completed';
+    
+    if (finalStatus === 'stopped') {
+      addLog(`⏹️ 搜索已停止`, 'warning');
+    } else if (finalStatus === 'insufficient_credits') {
+      addLog(`⚠️ 积分不足，搜索提前结束`, 'warning');
+    } else {
+      addLog(`🎉 搜索完成！`, 'success');
+    }
     addLog(`📊 结果统计:`, 'info');
     addLog(`   • 处理记录: ${processedCount}`, 'info');
     addLog(`   • 找到电话: ${stats.phonesFound}`, 'info');
@@ -381,10 +399,10 @@ export async function executeSearch(
       if (stats.excludedAgeFilter > 0) addLog(`   • 年龄不符: ${stats.excludedAgeFilter}`, 'info');
     }
 
-    progress.status = 'completed';
+    progress.status = finalStatus;
     
     await updateSearchTask(task.taskId, {
-      status: 'completed',
+      status: finalStatus,
       actualCount: stats.validResults,
       creditsUsed: stats.creditsUsed,
       logs,

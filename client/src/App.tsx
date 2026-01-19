@@ -10,6 +10,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Search from "./pages/Search";
 import Results from "./pages/Results";
+import SearchProgress from "./pages/SearchProgress";
 import Recharge from "./pages/Recharge";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/search" component={Search} />
       <Route path="/results/:taskId" component={Results} />
+      <Route path="/progress/:taskId" component={SearchProgress} />
       <Route path="/recharge" component={Recharge} />
       <Route path="/payment/:orderId" component={PaymentDetail} />
       <Route path="/history" component={History} />

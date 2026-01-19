@@ -28,6 +28,7 @@ import {
   getSearchTask,
   getUserSearchTasks,
   getSearchResults,
+  updateSearchTaskStatus,
   createRechargeOrder,
   createRechargeOrderWithUniqueAmount,
   getRechargeOrder,
@@ -369,6 +370,34 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
         }
         return getSearchResults(task.id);
+      }),
+
+    // 停止搜索任务
+    stop: protectedProcedure
+      .input(z.object({ taskId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const task = await getSearchTask(input.taskId);
+        if (!task || task.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
+        }
+        
+        if (task.status !== 'running' && task.status !== 'pending' && task.status !== 'fetching' && task.status !== 'verifying') {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "任务已完成或已停止" });
+        }
+        
+        // 更新任务状态为已停止
+        await updateSearchTaskStatus(input.taskId, 'stopped');
+        
+        // 记录日志
+        await addOperationLog({
+          type: 'search',
+          action: 'stop_task',
+          userId: ctx.user.id,
+          details: { taskId: input.taskId },
+          ip: ctx.ip || 'unknown',
+        });
+        
+        return { success: true, message: "搜索任务已停止" };
       }),
 
     // 导出CSV
