@@ -354,6 +354,29 @@ export async function executeSearchV2(
     lastUpdateTime: Date.now()
   };
 
+  // 将内部状态映射到数据库允许的状态
+  // 数据库只允许: pending, running, completed, failed, stopped, insufficient_credits
+  const mapStatusToDbStatus = (status: SearchProgress['status']): string => {
+    switch (status) {
+      case 'initializing':
+      case 'searching':
+      case 'enriching':
+      case 'requesting_phones':
+      case 'verifying':
+        return 'running';
+      case 'completed':
+        return 'completed';
+      case 'stopped':
+        return 'stopped';
+      case 'failed':
+        return 'failed';
+      case 'insufficient_credits':
+        return 'insufficient_credits';
+      default:
+        return 'running';
+    }
+  };
+
   // 更新进度的辅助函数
   const updateProgress = async (
     action?: string, 
@@ -376,10 +399,11 @@ export async function executeSearchV2(
       stats.verifySuccessRate = Math.round((stats.phonesVerified / stats.phonesReceived) * 100);
     }
     
-    // 更新数据库
+    // 更新数据库 - 使用映射后的状态
+    const dbStatus = mapStatusToDbStatus(progress.status);
     await updateSearchTask(task.taskId, { 
       logs, 
-      status: progress.status as any, 
+      status: dbStatus as any, 
       creditsUsed: stats.creditsUsed,
       progress: progress.overallProgress
     });
