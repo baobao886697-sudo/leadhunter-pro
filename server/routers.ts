@@ -357,7 +357,7 @@ export const appRouter = router({
     tasks: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        return getUserSearchTasks(ctx.user.id, input.limit);
+        return getUserSearchTasks(ctx.user.id, 1, input.limit || 50);
       }),
 
     // 获取搜索结果
