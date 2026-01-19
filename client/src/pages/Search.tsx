@@ -446,7 +446,7 @@ export default function Search() {
                     type="button"
                     variant="outline"
                     onClick={handlePreview}
-                    disabled={previewMutation.isPending || !name.trim() || !title.trim() || !state}
+                    disabled={previewMutation.isPending || !name.trim() || !(searchType === 'title' ? title.trim() : industry.trim()) || !state}
                     className="flex-1 h-12 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 rounded-xl"
                   >
                     {previewMutation.isPending ? (
@@ -464,7 +464,7 @@ export default function Search() {
                   <Button
                     type="button"
                     onClick={handleDirectSearch}
-                    disabled={searchMutation.isPending || !creditEstimate.canAfford || !name.trim() || !title.trim() || !state}
+                    disabled={searchMutation.isPending || !creditEstimate.canAfford || !name.trim() || !(searchType === 'title' ? title.trim() : industry.trim()) || !state}
                     className="flex-1 h-12 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/25"
                   >
                     {searchMutation.isPending ? (
