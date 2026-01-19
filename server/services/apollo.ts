@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getConfig, logApi } from '../db';
 
-const APOLLO_API_BASE = 'https://api.apollo.io/v1';
+const APOLLO_API_BASE = 'https://api.apollo.io/api/v1';
 
 export interface ApolloPerson {
   id: string;
@@ -51,14 +51,19 @@ export async function searchPeople(
     const response = await axios.post(
       `${APOLLO_API_BASE}/mixed_people/search`,
       {
-        api_key: apiKey,
         q_keywords: name,
         person_titles: [title],
         person_locations: [state],
         page: 1,
         per_page: Math.min(limit, 100),
       },
-      { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+      { 
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey
+        }, 
+        timeout: 30000 
+      }
     );
 
     const responseTime = Date.now() - startTime;
@@ -71,8 +76,9 @@ export async function searchPeople(
     };
   } catch (error: any) {
     const responseTime = Date.now() - startTime;
-    await logApi('apollo_search', '/mixed_people/search', { name, title, state }, error.response?.status || 0, responseTime, false, error.message, 0, userId);
-    return { success: false, people: [], totalCount: 0, errorMessage: error.message };
+    const errorMessage = error.response?.data?.error || error.message;
+    await logApi('apollo_search', '/mixed_people/search', { name, title, state }, error.response?.status || 0, responseTime, false, errorMessage, 0, userId);
+    return { success: false, people: [], totalCount: 0, errorMessage };
   }
 }
 
@@ -91,12 +97,17 @@ export async function enrichPeopleBatch(peopleIds: string[], userId?: number): P
       const response = await axios.post(
         `${APOLLO_API_BASE}/people/bulk_match`,
         {
-          api_key: apiKey,
           details: batch.map(id => ({ id })),
           reveal_personal_emails: true,
           reveal_phone_number: true,
         },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 60000 }
+        { 
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Api-Key': apiKey
+          }, 
+          timeout: 60000 
+        }
       );
 
       const responseTime = Date.now() - startTime;
@@ -107,7 +118,8 @@ export async function enrichPeopleBatch(peopleIds: string[], userId?: number): P
       }
     } catch (error: any) {
       const responseTime = Date.now() - startTime;
-      await logApi('apollo_enrich', '/people/bulk_match', { ids: batch }, error.response?.status || 0, responseTime, false, error.message, 0, userId);
+      const errorMessage = error.response?.data?.error || error.message;
+      await logApi('apollo_enrich', '/people/bulk_match', { ids: batch }, error.response?.status || 0, responseTime, false, errorMessage, 0, userId);
     }
   }
 
