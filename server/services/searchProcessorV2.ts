@@ -28,6 +28,7 @@ import {
 } from '../db';
 import { searchPeople, enrichPerson, ApolloPerson, requestPhoneNumberAsync } from './apollo';
 import { verifyPhoneNumber, PersonToVerify, VerificationResult } from './scraper';
+import { getDataWithSmartCache, SmartCacheResult } from './smartCache';
 import { SearchTask } from '../../drizzle/schema';
 import crypto from 'crypto';
 
@@ -200,38 +201,61 @@ export async function previewSearch(
     };
   }
 
-  // 检查缓存
+  // 检查缓存和智能缓存状态
   const searchHash = generateSearchHash(searchName, searchTitle, searchState);
   const cacheKey = `search:${searchHash}`;
   const cached = await getCacheByKey(cacheKey);
+  const coverageThreshold = await getCacheCoverageThreshold();
+  const expireDays = await getAssignedRecordExpireDays();
   
   let totalAvailable = 0;
   let cacheHit = false;
+  let cacheCount = 0;
+  let availableCount = 0;
+  let coverageRate = 0;
+  let smartCacheMessage = '';
 
-  if (cached) {
-    cacheHit = true;
-    const cachedData = cached.data as ApolloPerson[];
-    totalAvailable = cachedData.length;
-  } else {
-    // 调用 Apollo API 获取总数（只获取第一页）
-    try {
-      const result = await searchPeople(searchName, searchTitle, searchState, 1, userId);
-      if (result.success) {
-        totalAvailable = result.totalCount;
-      }
-    } catch (error) {
-      console.error('Preview search error:', error);
+  // 先获取 Apollo 总数
+  try {
+    const result = await searchPeople(searchName, searchTitle, searchState, 1, userId);
+    if (result.success) {
+      totalAvailable = result.totalCount;
     }
+  } catch (error) {
+    console.error('Preview search error:', error);
   }
 
-  const actualCount = Math.min(requestedCount, totalAvailable);
+  if (cached) {
+    const cachedData = cached.data as ApolloPerson[];
+    cacheCount = cachedData.length;
+    
+    // 计算覆盖率
+    coverageRate = totalAvailable > 0 ? (cacheCount / totalAvailable) * 100 : 0;
+    
+    // 获取已分配记录数
+    const assignedIds = await getAssignedApolloIds(searchHash, expireDays);
+    const assignedIdSet = new Set(assignedIds);
+    availableCount = cachedData.filter(p => !assignedIdSet.has(p.id)).length;
+    
+    // 判断是否使用缓存
+    if (coverageRate >= coverageThreshold) {
+      cacheHit = true;
+      smartCacheMessage = `✨ 智能缓存命中！覆盖率 ${coverageRate.toFixed(1)}% (阈值 ${coverageThreshold}%) | 可用 ${availableCount} 条（已排除已分配 ${assignedIds.length} 条）`;
+    } else {
+      smartCacheMessage = `🔍 缓存覆盖率 ${coverageRate.toFixed(1)}% < 阈值 ${coverageThreshold}%，将从 API 获取 | Apollo 返回 ${totalAvailable} 条`;
+    }
+  } else {
+    smartCacheMessage = `🔍 无缓存，将从 Apollo API 获取 | 可用 ${totalAvailable} 条记录`;
+  }
+
+  const actualCount = Math.min(requestedCount, cacheHit ? availableCount : totalAvailable);
   const estimatedCredits = SEARCH_CREDITS + actualCount * PHONE_CREDITS_PER_PERSON;
   const canAfford = user.credits >= estimatedCredits;
   const maxAffordable = Math.max(0, Math.floor((user.credits - SEARCH_CREDITS) / PHONE_CREDITS_PER_PERSON));
 
   return {
     success: true,
-    totalAvailable,
+    totalAvailable: cacheHit ? availableCount : totalAvailable,
     estimatedCredits,
     searchCredits: SEARCH_CREDITS,
     phoneCreditsPerPerson: PHONE_CREDITS_PER_PERSON,
@@ -240,9 +264,7 @@ export async function previewSearch(
     maxAffordable,
     searchParams: { name: searchName, title: searchTitle, state: searchState, limit: requestedCount, ageMin, ageMax },
     cacheHit,
-    message: cacheHit 
-      ? `✨ 命中缓存！找到 ${totalAvailable} 条记录` 
-      : `🔍 Apollo 返回 ${totalAvailable} 条可用记录`
+    message: smartCacheMessage
   };
 }
 
@@ -449,45 +471,67 @@ export async function executeSearchV2(
     await updateProgress('扣除搜索积分', undefined, undefined, 20);
 
     // ═══════════════════════════════════════════════════════════════
-    // 阶段 3: 检查缓存 / 调用 Apollo API
+    // 阶段 3: 智能缓存系统 - 检查缓存 / 调用 Apollo API
     // ═══════════════════════════════════════════════════════════════
     currentStep++;
     const cacheKey = `search:${searchHash}`;
-    const cached = await getCacheByKey(cacheKey);
+    
+    // 获取配置
+    const coverageThreshold = await getCacheCoverageThreshold();
+    addLog(`智能缓存阈值: ${coverageThreshold}%`, 'info', 'apollo', '⚙️');
     
     let apolloResults: ApolloPerson[] = [];
     
-    if (cached) {
+    // 使用智能缓存系统获取数据
+    addLog(`正在检查智能缓存...`, 'info', 'apollo', '🔍');
+    await updateProgress('智能缓存检查', 'searching', 'apollo', 30);
+    
+    const apiStartTime = Date.now();
+    const smartCacheResult = await getDataWithSmartCache(
+      searchHash,
+      cacheKey,
+      searchName,
+      searchTitle,
+      searchState,
+      requestedCount,
+      userId
+    );
+    const apiDuration = Date.now() - apiStartTime;
+    
+    if (!smartCacheResult.success) {
+      throw new Error(smartCacheResult.message || '获取数据失败');
+    }
+    
+    apolloResults = smartCacheResult.data;
+    stats.totalRecordsFound = smartCacheResult.totalAvailable;
+    
+    // 记录日志
+    if (smartCacheResult.source === 'cache') {
       stats.cacheHits++;
-      addLog(`命中全局缓存！跳过 Apollo API 调用`, 'success', 'apollo', '✨');
-      apolloResults = cached.data as ApolloPerson[];
-      stats.totalRecordsFound = apolloResults.length;
-      addLog(`缓存中有 ${apolloResults.length} 条记录`, 'info', 'apollo', '📦');
+      addLog(`✨ 智能缓存命中！`, 'success', 'apollo', '✨');
+      addLog(`   覆盖率: ${smartCacheResult.coverageRate.toFixed(1)}% (阈值: ${coverageThreshold}%)`, 'info', 'apollo', '   ');
+      addLog(`   从缓存获取 ${apolloResults.length} 条记录`, 'info', 'apollo', '📦');
+      addLog(`   已排除已分配记录，避免重复`, 'info', 'apollo', '🔒');
+    } else if (smartCacheResult.source === 'mixed') {
+      stats.cacheHits++;
+      stats.apolloSearchCalls++;
+      addLog(`🔄 混合获取模式`, 'success', 'apollo', '🔄');
+      addLog(`   覆盖率: ${smartCacheResult.coverageRate.toFixed(1)}% (阈值: ${coverageThreshold}%)`, 'info', 'apollo', '   ');
+      addLog(`   缓存: ${smartCacheResult.cacheCount} 条 + API: ${smartCacheResult.apiCount} 条`, 'info', 'apollo', '📦');
     } else {
       stats.cacheMisses++;
-      addLog(`正在调用 Apollo API 搜索...`, 'info', 'apollo', '🔍');
-      await updateProgress('调用 Apollo API', 'searching', 'apollo', 30);
-      
-      const apiStartTime = Date.now();
       stats.apolloSearchCalls++;
-      
-      const searchResult = await searchPeople(searchName, searchTitle, searchState, requestedCount * 2, userId);
-      const apiDuration = Date.now() - apiStartTime;
-      
-      await logApi('apollo_search', '/people/search', params, searchResult.success ? 200 : 500, apiDuration, searchResult.success, searchResult.errorMessage, 0, userId);
-
-      if (!searchResult.success || !searchResult.people) {
-        throw new Error(searchResult.errorMessage || 'Apollo 搜索失败');
+      addLog(`🔍 从 Apollo API 获取数据`, 'success', 'apollo', '🔍');
+      if (smartCacheResult.coverageRate > 0) {
+        addLog(`   缓存覆盖率 ${smartCacheResult.coverageRate.toFixed(1)}% < 阈值 ${coverageThreshold}%`, 'info', 'apollo', '   ');
       }
-
-      apolloResults = searchResult.people;
-      stats.totalRecordsFound = apolloResults.length;
-      addLog(`Apollo API 返回 ${apolloResults.length} 条基础数据`, 'success', 'apollo', '📋', undefined, undefined, { duration: apiDuration });
-      addLog(`API 响应时间: ${formatDuration(apiDuration)}`, 'debug', 'apollo', '⏱️');
-
-      // 缓存搜索结果 180天
-      await setCache(cacheKey, 'search', apolloResults, 180);
-      addLog(`已缓存搜索结果 (180天有效)`, 'info', 'apollo', '💾');
+      addLog(`   获取 ${apolloResults.length} 条记录`, 'info', 'apollo', '📋');
+    }
+    
+    addLog(`响应时间: ${formatDuration(apiDuration)}`, 'debug', 'apollo', '⏱️');
+    // 智能缓存日志记录（使用 apollo_search 类型）
+    if (smartCacheResult.source !== 'cache') {
+      await logApi('apollo_search', '/smart-cache', params, 200, apiDuration, true, undefined, 0, userId);
     }
 
     await updateProgress('处理搜索结果', undefined, 'apollo', 50);
@@ -500,11 +544,12 @@ export async function executeSearchV2(
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 阶段 4: 打乱顺序并准备处理
+    // 阶段 4: 准备处理数据（智能缓存已处理排序和去重）
     // ═══════════════════════════════════════════════════════════════
     currentStep++;
-    const shuffledResults = shuffleArray(apolloResults);
-    addLog(`已打乱数据顺序，采用跳动提取策略`, 'info', 'enrich', '🔀');
+    // 智能缓存已经打乱顺序并排除已分配记录，无需再次打乱
+    const shuffledResults = apolloResults;
+    addLog(`数据已通过智能缓存处理，避免重复分配`, 'info', 'enrich', '🔀');
     addLog('───────────────────────────────────────────────────────────', 'info', 'enrich', '');
     addLog(`开始逐条处理数据...`, 'info', 'enrich', '📊');
     addLog('───────────────────────────────────────────────────────────', 'info', 'enrich', '');
@@ -749,8 +794,8 @@ export async function verifyPhoneWithScrapeDo(
       await updateSearchResult(resultId, {
         verified: result.verified,
         verificationScore: result.matchScore,
-        verificationSource: result.source,
-        data: {
+        verificationDetails: {
+          source: result.source,
           phoneType: result.phoneType,
           carrier: result.carrier,
           verifiedAt: new Date().toISOString()

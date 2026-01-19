@@ -1295,7 +1295,7 @@ export async function searchOrders(query: string, page: number = 1, limit: numbe
 // ============ 已分配记录管理 (防止数据重复分配) ============
 
 // 获取某个搜索条件下已分配的 Apollo ID 列表（排除已过期的）
-export async function getAssignedApolloIds(searchHash: string): Promise<string[]> {
+export async function getAssignedApolloIds(searchHash: string, expireDays?: number): Promise<string[]> {
   const db = await getDb();
   if (!db) return [];
   
