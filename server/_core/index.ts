@@ -61,8 +61,9 @@ async function migrateOldData(db: any) {
     }
     console.log(`[Migration] Imported ${usersToInsert.length} users`);
     
-    // 更新系统配置
-    const configsToUpdate = [
+    // 更新系统配置 - 只插入不存在的配置，不覆盖已有值
+    // 注意：敏感配置（如 API Key）应该只通过环境变量设置，不在数据库中存储
+    const configsToInsert = [
       { key: 'USDT_WALLET_TRC20', value: 'TEtRGZvdPqvUDhopMi1MEGCEiD9Ehdh1iZ', description: 'TRC20 USDT收款地址' },
       { key: 'USDT_WALLET_ERC20', value: '', description: 'ERC20 USDT收款地址' },
       { key: 'USDT_WALLET_BEP20', value: '', description: 'BEP20 USDT收款地址' },
@@ -71,18 +72,19 @@ async function migrateOldData(db: any) {
       { key: 'ORDER_EXPIRE_MINUTES', value: '30', description: '订单过期时间(分钟)' },
       { key: 'CACHE_TTL_DAYS', value: '180', description: '缓存有效期(天)' },
       { key: 'SEARCH_CREDITS_PER_PERSON', value: '2', description: '每条搜索结果消耗积分' },
-      { key: 'PREVIEW_CREDITS', value: '1', description: '预览搜索消耗积分' },
-      { key: 'APOLLO_API_KEY', value: process.env.APOLLO_API_KEY || '', description: 'Apollo API密钥 (优先使用环境变量)' }
+      { key: 'PREVIEW_CREDITS', value: '1', description: '预览搜索消耗积分' }
+      // 注意：APOLLO_API_KEY 不再在这里设置，完全依赖环境变量
+      // 这样可以避免每次启动时覆盖数据库中的值
     ];
     
-    for (const config of configsToUpdate) {
+    for (const config of configsToInsert) {
+      // 使用 INSERT IGNORE 只在配置不存在时插入，不覆盖已有值
       await db.execute(sql`
-        INSERT INTO system_configs (\`key\`, value, description, updatedBy)
+        INSERT IGNORE INTO system_configs (\`key\`, value, description, updatedBy)
         VALUES (${config.key}, ${config.value}, ${config.description}, '88888888')
-        ON DUPLICATE KEY UPDATE value = ${config.value}, description = ${config.description}
       `);
     }
-    console.log(`[Migration] Updated ${configsToUpdate.length} system configs`);
+    console.log(`[Migration] Checked ${configsToInsert.length} system configs (only inserted missing ones)`);
     
     console.log("[Migration] Data migration completed successfully!");
   } catch (error) {
