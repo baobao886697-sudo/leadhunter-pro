@@ -20,7 +20,11 @@ import {
   getCacheByKey,
   setCache,
   logApi,
-  getConfig
+  getConfig,
+  getAssignedApolloIds,
+  recordAssignedRecords,
+  getCacheCoverageThreshold,
+  getAssignedRecordExpireDays
 } from '../db';
 import { searchPeople, enrichPerson, ApolloPerson, requestPhoneNumberAsync } from './apollo';
 import { verifyPhoneNumber, PersonToVerify, VerificationResult } from './scraper';

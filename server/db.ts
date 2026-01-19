@@ -7,6 +7,7 @@ import {
   searchTasks, SearchTask,
   searchResults, SearchResult,
   globalCache, GlobalCache,
+  assignedRecords, AssignedRecord, InsertAssignedRecord,
   creditLogs, CreditLog,
   searchLogs, SearchLog,
   adminLogs, AdminLog,
@@ -1288,4 +1289,117 @@ export async function searchOrders(query: string, page: number = 1, limit: numbe
   ]);
   
   return { orders, total: countResult[0]?.count || 0 };
+}
+
+
+// ============ 已分配记录管理 (防止数据重复分配) ============
+
+// 获取某个搜索条件下已分配的 Apollo ID 列表（排除已过期的）
+export async function getAssignedApolloIds(searchHash: string): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  const results = await db.select({ apolloId: assignedRecords.apolloId })
+    .from(assignedRecords)
+    .where(and(
+      eq(assignedRecords.searchHash, searchHash),
+      gte(assignedRecords.expiresAt, now)
+    ));
+  
+  return results.map(r => r.apolloId);
+}
+
+// 批量记录已分配的记录
+export async function recordAssignedRecords(
+  searchHash: string, 
+  apolloIds: string[], 
+  userId: number, 
+  taskId?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db || apolloIds.length === 0) return;
+  
+  // 30天后过期
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  
+  const values = apolloIds.map(apolloId => ({
+    searchHash,
+    apolloId,
+    userId,
+    taskId,
+    expiresAt
+  }));
+  
+  // 使用 INSERT IGNORE 避免重复插入
+  await db.insert(assignedRecords).values(values).onDuplicateKeyUpdate({ 
+    set: { expiresAt } // 如果已存在，更新过期时间
+  });
+}
+
+// 获取已分配记录统计
+export async function getAssignedRecordsStats(searchHash: string): Promise<{
+  total: number;
+  expired: number;
+  active: number;
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, expired: 0, active: 0 };
+  
+  const now = new Date();
+  
+  const [totalResult, activeResult] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` })
+      .from(assignedRecords)
+      .where(eq(assignedRecords.searchHash, searchHash)),
+    db.select({ count: sql<number>`count(*)` })
+      .from(assignedRecords)
+      .where(and(
+        eq(assignedRecords.searchHash, searchHash),
+        gte(assignedRecords.expiresAt, now)
+      ))
+  ]);
+  
+  const total = totalResult[0]?.count || 0;
+  const active = activeResult[0]?.count || 0;
+  
+  return {
+    total,
+    expired: total - active,
+    active
+  };
+}
+
+// 清理过期的已分配记录
+export async function cleanupExpiredAssignedRecords(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const now = new Date();
+  const result = await db.delete(assignedRecords)
+    .where(lte(assignedRecords.expiresAt, now));
+  
+  return (result as any)[0]?.affectedRows || 0;
+}
+
+// 获取缓存覆盖率阈值配置
+export async function getCacheCoverageThreshold(): Promise<number> {
+  const threshold = await getConfig('CACHE_COVERAGE_THRESHOLD');
+  return threshold ? parseFloat(threshold) : 80; // 默认 80%
+}
+
+// 设置缓存覆盖率阈值配置
+export async function setCacheCoverageThreshold(threshold: number, adminUsername: string = 'system'): Promise<void> {
+  await setConfig('CACHE_COVERAGE_THRESHOLD', threshold.toString(), adminUsername, '缓存覆盖率阈值（百分比），缓存数据量必须达到此比例才使用缓存');
+}
+
+// 获取已分配记录过期天数配置
+export async function getAssignedRecordExpireDays(): Promise<number> {
+  const days = await getConfig('ASSIGNED_RECORD_EXPIRE_DAYS');
+  return days ? parseInt(days) : 30; // 默认 30 天
+}
+
+// 设置已分配记录过期天数配置
+export async function setAssignedRecordExpireDays(days: number, adminUsername: string = 'system'): Promise<void> {
+  await setConfig('ASSIGNED_RECORD_EXPIRE_DAYS', days.toString(), adminUsername, '已分配记录过期天数，过期后可重新分配给其他用户');
 }
