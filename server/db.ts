@@ -469,11 +469,19 @@ export async function updateSearchResult(resultId: number, updates: Partial<{ da
 
 export async function updateSearchResultByApolloId(taskId: string, apolloId: string, dataUpdates: Record<string, any>): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.log(`[DB] updateSearchResultByApolloId: No database connection`);
+    return;
+  }
   
   // 先获取任务ID
   const task = await getSearchTask(taskId);
-  if (!task) return;
+  if (!task) {
+    console.log(`[DB] updateSearchResultByApolloId: Task not found for taskId ${taskId}`);
+    return;
+  }
+  
+  console.log(`[DB] updateSearchResultByApolloId: Looking for apolloId ${apolloId} in task ${task.id}`);
   
   // 查找对应的搜索结果
   const results = await db.select().from(searchResults).where(
@@ -483,13 +491,18 @@ export async function updateSearchResultByApolloId(taskId: string, apolloId: str
     )
   ).limit(1);
   
-  if (results.length === 0) return;
+  if (results.length === 0) {
+    console.log(`[DB] updateSearchResultByApolloId: No result found for apolloId ${apolloId}`);
+    return;
+  }
   
   const result = results[0];
   const existingData = result.data as Record<string, any> || {};
   
   // 合并更新数据
   const newData = { ...existingData, ...dataUpdates };
+  
+  console.log(`[DB] updateSearchResultByApolloId: Updating result ${result.id} with phone: ${dataUpdates.phone}`);
   
   // 更新记录
   await db.update(searchResults).set({
@@ -498,6 +511,8 @@ export async function updateSearchResultByApolloId(taskId: string, apolloId: str
     verificationScore: dataUpdates.verificationScore !== undefined ? dataUpdates.verificationScore : result.verificationScore,
     verificationDetails: dataUpdates.verificationDetails !== undefined ? dataUpdates.verificationDetails : result.verificationDetails
   }).where(eq(searchResults.id, result.id));
+  
+  console.log(`[DB] updateSearchResultByApolloId: Successfully updated result ${result.id}`);
 }
 
 export async function getSearchResultsByTaskId(taskId: string): Promise<SearchResult[]> {
