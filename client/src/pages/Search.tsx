@@ -746,8 +746,8 @@ export default function Search() {
                 <span className="text-white">{name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">职位</span>
-                <span className="text-white">{title}</span>
+                <span className="text-slate-400">{searchType === 'industry' ? '行业' : '职位'}</span>
+                <span className="text-white">{searchType === 'industry' ? industry : title}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">地区</span>
