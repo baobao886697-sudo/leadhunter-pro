@@ -108,20 +108,6 @@ export const globalCache = mysqlTable("global_cache", {
 
 export type GlobalCache = typeof globalCache.$inferSelect;
 
-// 已分配记录表 (防止不同用户获取重复数据)
-export const assignedRecords = mysqlTable("assigned_records", {
-  id: int("id").autoincrement().primaryKey(),
-  searchHash: varchar("searchHash", { length: 32 }).notNull(), // 搜索条件哈希
-  apolloId: varchar("apolloId", { length: 64 }).notNull(), // Apollo 记录 ID
-  userId: int("userId").notNull(), // 分配给的用户
-  taskId: varchar("taskId", { length: 32 }), // 关联的搜索任务
-  expiresAt: timestamp("expiresAt").notNull(), // 30天后过期
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type AssignedRecord = typeof assignedRecords.$inferSelect;
-export type InsertAssignedRecord = typeof assignedRecords.$inferInsert;
-
 // 积分变动记录表
 export const creditLogs = mysqlTable("credit_logs", {
   id: int("id").autoincrement().primaryKey(),
