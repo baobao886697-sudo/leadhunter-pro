@@ -192,7 +192,7 @@ export default function SearchProgress() {
   const progress = task?.progress || 0;
   const creditsUsed = task?.creditsUsed || 0;
   const actualCount = task?.actualCount || 0;
-  const isRunning = task?.status === 'running' || task?.status === 'pending' || task?.status === 'fetching' || task?.status === 'verifying';
+  const isRunning = task?.status === 'running' || task?.status === 'pending';
   const isCompleted = task?.status === 'completed';
   const isStopped = task?.status === 'stopped';
   const isFailed = task?.status === 'failed';
@@ -202,9 +202,7 @@ export default function SearchProgress() {
     if (!task) return 'init';
     switch (task.status) {
       case 'pending': return 'init';
-      case 'fetching': return 'apollo';
-      case 'running':
-      case 'verifying': return 'verification';
+      case 'running': return 'verification';
       case 'completed':
       case 'stopped':
       case 'failed': return 'done';

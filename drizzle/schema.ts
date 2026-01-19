@@ -70,32 +70,12 @@ export const searchTasks = mysqlTable("search_tasks", {
   params: json("params").notNull(),
   requestedCount: int("requestedCount").notNull(),
   actualCount: int("actualCount").default(0),
-  verifiedCount: int("verifiedCount").default(0),
-  verifiedPassedCount: int("verifiedPassedCount").default(0),
   creditsUsed: int("creditsUsed").default(0),
-  status: mysqlEnum("status", [
-    "pending",      // 等待开始
-    "fetching",     // 正在从Apollo获取
-    "verifying",    // 正在验证电话
-    "completed",    // 完成
-    "failed",       // 失败
-    "stopped",      // 用户停止
-    "insufficient_credits"  // 积分不足
-  ]).default("pending").notNull(),
-  progress: int("progress").default(0),  // 0-100
-  currentPhase: varchar("currentPhase", { length: 20 }),  // apollo/verification/done
-  // 统计信息
-  stats: json("stats").$type<{
-    apolloRequests: number;
-    verificationRequests: number;
-    cacheHits: number;
-    rateLimitRetries: number;
-  }>(),
-  // 实时日志（最近100条）
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "stopped", "insufficient_credits"]).default("pending").notNull(),
+  progress: int("progress").default(0),
   logs: json("logs").$type<Array<{ timestamp: string; level: string; message: string }>>(),
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  startedAt: timestamp("startedAt"),
   completedAt: timestamp("completedAt"),
 });
 
