@@ -1,128 +1,76 @@
-import { drizzle, MySql2Database } from 'drizzle-orm/mysql2';
-import mysql from 'mysql2/promise';
-import { eq, and, gte, lte, desc, sql, or, like, inArray, isNull, gt, lt, ne, asc, SQL, count } from 'drizzle-orm';
-import * as crypto from 'crypto';
-import {
-  users, User, InsertUser,
+import { sql, eq, desc, and, gte, lte, like, or, isNull, ne, asc, count } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import { 
+  users, InsertUser, User,
   systemConfigs, SystemConfig,
   rechargeOrders, RechargeOrder,
   searchTasks, SearchTask,
   searchResults, SearchResult,
   globalCache, GlobalCache,
   creditLogs, CreditLog,
-  adminLogs, AdminLog,
-  userMessages, UserMessage,
-  apiLogs, ApiLog,
-  apiStats, ApiStat,
-  errorLogs, ErrorLog,
   searchLogs, SearchLog,
+  adminLogs, AdminLog,
   loginLogs, LoginLog,
-  userActivityLogs, UserActivityLog,
-  announcements, Announcement
-} from '../drizzle/schema';
+  apiLogs, ApiLog,
+  announcements, Announcement, InsertAnnouncement,
+  userMessages, UserMessage, InsertUserMessage,
+  userActivityLogs, UserActivityLog, InsertUserActivityLog,
+  apiStats, ApiStat,
+  errorLogs, ErrorLog
+} from "../drizzle/schema";
+import { ENV } from './_core/env';
+import crypto from 'crypto';
 
-let db: MySql2Database | null = null;
-let pool: mysql.Pool | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
-export async function getDb(): Promise<MySql2Database | null> {
-  if (db) return db;
-  
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error('DATABASE_URL is not set');
-    return null;
+// 导出数据库实例用于直接SQL操作
+export function getDbSync() {
+  if (!_db && process.env.DATABASE_URL) {
+    try {
+      _db = drizzle(process.env.DATABASE_URL);
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
   }
-  
-  try {
-    pool = mysql.createPool({
-      uri: databaseUrl,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      enableKeepAlive: true,
-      keepAliveInitialDelay: 0
-    });
-    
-    db = drizzle(pool);
-    console.log('Database connected successfully');
-    return db;
-  } catch (error) {
-    console.error('Failed to connect to database:', error);
-    return null;
+  return _db;
+}
+
+export async function getDb() {
+  if (!_db && process.env.DATABASE_URL) {
+    try {
+      _db = drizzle(process.env.DATABASE_URL);
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
   }
-}
-
-// 获取原始连接池用于原生 SQL
-export async function getPool(): Promise<mysql.Pool | null> {
-  if (pool) return pool;
-  await getDb();
-  return pool;
-}
-
-// ============ 配置缓存 ============
-const configCache = new Map<string, { value: string; expiry: number }>();
-const CONFIG_CACHE_TTL = 60 * 1000; // 1分钟缓存
-
-export async function getConfig(key: string): Promise<string | null> {
-  // 检查缓存
-  const cached = configCache.get(key);
-  if (cached && cached.expiry > Date.now()) {
-    return cached.value;
-  }
-  
-  const db = await getDb();
-  if (!db) return null;
-  
-  const result = await db.select().from(systemConfigs).where(eq(systemConfigs.key, key)).limit(1);
-  if (result.length > 0) {
-    configCache.set(key, { value: result[0].value, expiry: Date.now() + CONFIG_CACHE_TTL });
-    return result[0].value;
-  }
-  return null;
-}
-
-export async function setConfig(key: string, value: string, description?: string, updatedBy?: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  
-  await db.insert(systemConfigs).values({ key, value, description, updatedBy })
-    .onDuplicateKeyUpdate({ set: { value, description, updatedBy } });
-  configCache.set(key, { value, expiry: Date.now() + CONFIG_CACHE_TTL });
-}
-
-export async function getAllConfigs(): Promise<SystemConfig[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(systemConfigs);
-}
-
-export async function deleteConfig(key: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.delete(systemConfigs).where(eq(systemConfigs.key, key));
-  configCache.delete(key);
+  return _db;
 }
 
 // ============ 用户相关 ============
 
-export async function createUser(openId: string, email: string, passwordHash: string, name?: string): Promise<User | undefined> {
+export async function createUser(email: string, passwordHash: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  await db.insert(users).values({ openId, email, passwordHash, name });
+  const openId = crypto.randomBytes(16).toString('hex');
+  // 注册赠送100积分
+  const REGISTER_BONUS_CREDITS = 100;
+  await db.insert(users).values({ openId, email, passwordHash, credits: REGISTER_BONUS_CREDITS });
   return getUserByEmail(email);
-}
-
-export async function getUserById(id: number): Promise<User | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserById(id: number): Promise<User | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -133,74 +81,129 @@ export async function getUserByOpenId(openId: string): Promise<User | undefined>
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateUser(id: number, updates: Partial<User>): Promise<void> {
+export async function updateUserLastSignIn(userId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.update(users).set(updates).where(eq(users.id, id));
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
 }
 
-export async function getAllUsers(page: number = 1, limit: number = 20): Promise<{ users: User[]; total: number }> {
+export async function updateUserDevice(userId: number, deviceId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ currentDeviceId: deviceId, currentDeviceLoginAt: new Date(), lastSignedIn: new Date() }).where(eq(users.id, userId));
+}
+
+export async function checkUserDevice(userId: number, deviceId: string): Promise<boolean> {
+  const user = await getUserById(userId);
+  if (!user) return false;
+  if (!user.currentDeviceId) return true;
+  return user.currentDeviceId === deviceId;
+}
+
+export async function clearUserDevice(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ currentDeviceId: null, currentDeviceLoginAt: null }).where(eq(users.id, userId));
+}
+
+export async function getAllUsers(page: number = 1, limit: number = 20, search?: string): Promise<{ users: User[]; total: number }> {
   const db = await getDb();
   if (!db) return { users: [], total: 0 };
   const offset = (page - 1) * limit;
-  const result = await db.select().from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(users);
+  let query = db.select().from(users);
+  let countQuery = db.select({ count: sql<number>`count(*)` }).from(users);
+  if (search) {
+    const cond = or(like(users.email, `%${search}%`), like(users.name, `%${search}%`));
+    query = query.where(cond) as typeof query;
+    countQuery = countQuery.where(cond) as typeof countQuery;
+  }
+  const result = await query.orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+  const countResult = await countQuery;
   return { users: result, total: countResult[0]?.count || 0 };
 }
 
-export async function addCredits(userId: number, amount: number, type: string, description: string, referenceId?: string): Promise<void> {
+export async function updateUserStatus(userId: number, status: "active" | "disabled"): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  
-  // 更新用户积分
-  await db.update(users).set({ credits: sql`credits + ${amount}` }).where(eq(users.id, userId));
-  
-  // 获取更新后的余额
-  const user = await getUserById(userId);
-  const balanceAfter = user?.credits || 0;
-  
-  // 记录积分变动
-  await db.insert(creditLogs).values({
-    userId,
-    amount,
-    type,
-    description,
-    referenceId,
-    balanceAfter
-  });
+  await db.update(users).set({ status }).where(eq(users.id, userId));
 }
 
-export async function deductCredits(userId: number, amount: number, type: string, description: string, referenceId?: string): Promise<boolean> {
+// ============ 积分相关 ============
+
+export async function getUserCredits(userId: number): Promise<number> {
+  const user = await getUserById(userId);
+  return user?.credits || 0;
+}
+
+export async function deductCredits(userId: number, amount: number, type: "search" | "admin_deduct", description: string, relatedTaskId?: string): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  
   const user = await getUserById(userId);
   if (!user || user.credits < amount) return false;
-  
-  await db.update(users).set({ credits: sql`credits - ${amount}` }).where(eq(users.id, userId));
-  
-  const updatedUser = await getUserById(userId);
-  const balanceAfter = updatedUser?.credits || 0;
-  
-  await db.insert(creditLogs).values({
-    userId,
-    amount: -amount,
-    type,
-    description,
-    referenceId,
-    balanceAfter
-  });
-  
+  const newBalance = user.credits - amount;
+  await db.update(users).set({ credits: newBalance }).where(eq(users.id, userId));
+  await db.insert(creditLogs).values({ userId, amount: -amount, balanceAfter: newBalance, type, description, relatedTaskId });
   return true;
 }
 
-export async function getUserCreditLogs(userId: number, page: number = 1, limit: number = 20): Promise<{ logs: CreditLog[]; total: number }> {
+export async function addCredits(userId: number, amount: number, type: "recharge" | "admin_add" | "refund", description: string, relatedOrderId?: string): Promise<{ success: boolean; newBalance?: number }> {
+  const db = await getDb();
+  if (!db) return { success: false };
+  const user = await getUserById(userId);
+  if (!user) return { success: false };
+  const newBalance = user.credits + amount;
+  await db.update(users).set({ credits: newBalance }).where(eq(users.id, userId));
+  await db.insert(creditLogs).values({ userId, amount, balanceAfter: newBalance, type, description, relatedOrderId });
+  return { success: true, newBalance };
+}
+
+export async function getCreditLogs(userId: number, page: number = 1, limit: number = 20): Promise<{ logs: CreditLog[]; total: number }> {
   const db = await getDb();
   if (!db) return { logs: [], total: 0 };
   const offset = (page - 1) * limit;
   const result = await db.select().from(creditLogs).where(eq(creditLogs.userId, userId)).orderBy(desc(creditLogs.createdAt)).limit(limit).offset(offset);
   const countResult = await db.select({ count: sql<number>`count(*)` }).from(creditLogs).where(eq(creditLogs.userId, userId));
   return { logs: result, total: countResult[0]?.count || 0 };
+}
+
+// ============ 系统配置相关 ============
+
+const configCache = new Map<string, { value: string; expireAt: number }>();
+
+export async function getConfig(key: string): Promise<string | null> {
+  const cached = configCache.get(key);
+  if (cached && cached.expireAt > Date.now()) return cached.value;
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(systemConfigs).where(eq(systemConfigs.key, key)).limit(1);
+  if (result.length === 0) return null;
+  configCache.set(key, { value: result[0].value, expireAt: Date.now() + 5 * 60 * 1000 });
+  return result[0].value;
+}
+
+export async function setConfig(key: string, value: string, adminUsername: string, description?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(systemConfigs).where(eq(systemConfigs.key, key)).limit(1);
+  if (existing.length > 0) {
+    await db.update(systemConfigs).set({ value, updatedBy: adminUsername }).where(eq(systemConfigs.key, key));
+  } else {
+    await db.insert(systemConfigs).values({ key, value, description, updatedBy: adminUsername });
+  }
+  configCache.delete(key);
+}
+
+export async function getAllConfigs(): Promise<SystemConfig[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(systemConfigs).orderBy(systemConfigs.key);
+}
+
+export async function deleteConfig(key: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(systemConfigs).where(eq(systemConfigs.key, key));
+  configCache.delete(key);
 }
 
 // ============ 充值订单相关 ============
@@ -297,29 +300,58 @@ export async function updateRechargeOrderStatus(orderId: string, status: "pendin
   if (!db) return false;
   const order = await getRechargeOrder(orderId);
   if (!order) return false;
-  
-  const updates: any = { status };
-  if (adminNote) updates.adminNote = adminNote;
-  if (status === "paid") updates.paidAt = new Date();
-  
-  await db.update(rechargeOrders).set(updates).where(eq(rechargeOrders.orderId, orderId));
-  
-  // 如果是确认支付，添加积分
-  if (status === "paid" && order.status !== "paid") {
-    await addCredits(order.userId, order.credits, "recharge", `充值订单 ${orderId} (管理员确认)`, orderId);
-  }
-  
+  await db.update(rechargeOrders).set({ status, adminNote }).where(eq(rechargeOrders.orderId, orderId));
   return true;
+}
+
+// 取消订单
+export async function cancelRechargeOrder(orderId: string, reason?: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const order = await getRechargeOrder(orderId);
+  if (!order || order.status !== "pending") return false;
+  await db.update(rechargeOrders).set({ status: "cancelled", adminNote: reason }).where(eq(rechargeOrders.orderId, orderId));
+  return true;
+}
+
+// 标记为金额不匹配
+export async function markOrderMismatch(orderId: string, receivedAmount: string, txId: string, adminNote?: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const order = await getRechargeOrder(orderId);
+  if (!order) return false;
+  await db.update(rechargeOrders).set({ status: "mismatch", receivedAmount, txId, adminNote }).where(eq(rechargeOrders.orderId, orderId));
+  return true;
+}
+
+// 处理金额不匹配订单 - 按实际金额发放积分
+export async function resolveMismatchOrder(orderId: string, actualCredits: number, adminNote?: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const order = await getRechargeOrder(orderId);
+  if (!order || order.status !== "mismatch") return false;
+  await db.update(rechargeOrders).set({ status: "paid", credits: actualCredits, adminNote, paidAt: new Date() }).where(eq(rechargeOrders.orderId, orderId));
+  await addCredits(order.userId, actualCredits, "recharge", `充值订单 ${orderId} (金额调整)`, orderId);
+  return true;
+}
+
+// 过期未支付订单
+export async function expireOldOrders(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.update(rechargeOrders)
+    .set({ status: "expired" })
+    .where(and(eq(rechargeOrders.status, "pending"), lte(rechargeOrders.expiresAt, new Date())));
+  return (result as any).affectedRows || 0;
 }
 
 // ============ 搜索任务相关 ============
 
-export async function createSearchTask(userId: number, params: any, requestedCount: number): Promise<SearchTask | undefined> {
+export async function createSearchTask(userId: number, searchHash: string, params: any, requestedCount: number): Promise<SearchTask | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const taskId = crypto.randomBytes(8).toString('hex');
-  const searchHash = crypto.createHash('md5').update(JSON.stringify(params)).digest('hex');
-  await db.insert(searchTasks).values({ taskId, userId, searchHash, params, requestedCount });
+  await db.insert(searchTasks).values({ taskId, userId, searchHash, params, requestedCount, logs: [] });
   return getSearchTask(taskId);
 }
 
@@ -330,70 +362,60 @@ export async function getSearchTask(taskId: string): Promise<SearchTask | undefi
   return result.length > 0 ? result[0] : undefined;
 }
 
-// 使用完全原生 SQL 的 updateSearchTask 函数
 export async function updateSearchTask(taskId: string, updates: Partial<SearchTask>): Promise<void> {
-  const pool = await getPool();
-  if (!pool) {
-    console.error('[DB] updateSearchTask: Database pool not available');
+  const db = await getDb();
+  if (!db) {
+    console.error('[DB] updateSearchTask: Database not available');
     return;
   }
-  
-  // 构建 SET 子句
-  const setClauses: string[] = [];
-  const values: any[] = [];
-  
-  // 处理 logs 字段，截断过长的日志
-  if (updates.logs && Array.isArray(updates.logs)) {
-    if (updates.logs.length > 100) {
-      updates.logs = updates.logs.slice(-100);
-    }
-  }
-  
-  // 遍历所有更新字段
-  for (const [key, value] of Object.entries(updates)) {
-    if (value === undefined) continue;
-    
-    // 跳过不应该更新的字段
-    if (key === 'id' || key === 'taskId' || key === 'createdAt') continue;
-    
-    if (key === 'logs' || key === 'params') {
-      // JSON 字段
-      setClauses.push(`\`${key}\` = ?`);
-      values.push(JSON.stringify(value));
-    } else if (value instanceof Date) {
-      setClauses.push(`\`${key}\` = ?`);
-      values.push(value);
-    } else if (value === null) {
-      setClauses.push(`\`${key}\` = NULL`);
-    } else {
-      setClauses.push(`\`${key}\` = ?`);
-      values.push(value);
-    }
-  }
-  
-  if (setClauses.length === 0) {
-    console.warn('[DB] updateSearchTask: No fields to update');
-    return;
-  }
-  
-  // 添加 taskId 到 values
-  values.push(taskId);
-  
-  const sqlQuery = `UPDATE search_tasks SET ${setClauses.join(', ')} WHERE taskId = ?`;
   
   // 重试机制
   const maxRetries = 3;
   let lastError: any;
   
+  // 处理 logs 字段，截断过长的日志
+  const processedUpdates = { ...updates };
+  if (processedUpdates.logs && Array.isArray(processedUpdates.logs)) {
+    if (processedUpdates.logs.length > 100) {
+      processedUpdates.logs = processedUpdates.logs.slice(-100);
+    }
+  }
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await pool.execute(sqlQuery, values);
+      // 分离 logs 字段，单独处理
+      const { logs, ...otherUpdates } = processedUpdates;
+      
+      // 先更新非 JSON 字段
+      if (Object.keys(otherUpdates).length > 0) {
+        await db.update(searchTasks).set(otherUpdates as any).where(eq(searchTasks.taskId, taskId));
+      }
+      
+      // 如果有 logs，使用原生 SQL 更新
+      if (logs) {
+        const logsJson = JSON.stringify(logs);
+        await db.execute(sql`UPDATE search_tasks SET logs = ${logsJson} WHERE taskId = ${taskId}`);
+      }
+      
       return; // 成功则返回
     } catch (error: any) {
       lastError = error;
       console.error(`[DB] updateSearchTask attempt ${attempt}/${maxRetries} failed:`, error.message);
-      console.error(`[DB] SQL: ${sqlQuery}`);
-      console.error(`[DB] Values: ${JSON.stringify(values).substring(0, 500)}`);
+      
+      // 如果失败，尝试只更新非 logs 字段
+      if (attempt === 2) {
+        console.warn('[DB] Retrying without logs field...');
+        const { logs, ...updatesWithoutLogs } = processedUpdates;
+        try {
+          if (Object.keys(updatesWithoutLogs).length > 0) {
+            await db.update(searchTasks).set(updatesWithoutLogs as any).where(eq(searchTasks.taskId, taskId));
+            console.log('[DB] Update succeeded without logs field');
+            return;
+          }
+        } catch (e) {
+          // 继续重试
+        }
+      }
       
       if (attempt < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)));
@@ -405,9 +427,9 @@ export async function updateSearchTask(taskId: string, updates: Partial<SearchTa
 }
 
 export async function updateSearchTaskStatus(taskId: string, status: string): Promise<void> {
-  const pool = await getPool();
-  if (!pool) return;
-  await pool.execute('UPDATE search_tasks SET status = ? WHERE taskId = ?', [status, taskId]);
+  const db = await getDb();
+  if (!db) return;
+  await db.update(searchTasks).set({ status, updatedAt: new Date() }).where(eq(searchTasks.taskId, taskId));
 }
 
 export async function getUserSearchTasks(userId: number, page: number = 1, limit: number = 20): Promise<{ tasks: SearchTask[]; total: number }> {
@@ -458,46 +480,116 @@ export async function updateSearchResultByApolloId(taskId: string, apolloId: str
   if (results.length === 0) return;
   
   const result = results[0];
-  const currentData = result.data as Record<string, any>;
-  const newData = { ...currentData, ...dataUpdates };
+  const existingData = result.data as Record<string, any> || {};
   
-  await db.update(searchResults).set({ data: newData }).where(eq(searchResults.id, result.id));
+  // 合并更新数据
+  const newData = { ...existingData, ...dataUpdates };
+  
+  // 更新记录
+  await db.update(searchResults).set({
+    data: newData,
+    verified: dataUpdates.verified !== undefined ? dataUpdates.verified : result.verified,
+    verificationScore: dataUpdates.verificationScore !== undefined ? dataUpdates.verificationScore : result.verificationScore,
+    verificationDetails: dataUpdates.verificationDetails !== undefined ? dataUpdates.verificationDetails : result.verificationDetails
+  }).where(eq(searchResults.id, result.id));
+}
+
+export async function getSearchResultsByTaskId(taskId: string): Promise<SearchResult[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const task = await getSearchTask(taskId);
+  if (!task) return [];
+  
+  return db.select().from(searchResults).where(eq(searchResults.taskId, task.id)).orderBy(desc(searchResults.createdAt));
+}
+
+// 删除搜索结果（用于年龄筛选排除）
+export async function deleteSearchResult(taskId: string, apolloId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const task = await getSearchTask(taskId);
+  if (!task) return false;
+  
+  try {
+    await db.delete(searchResults).where(
+      and(
+        eq(searchResults.taskId, task.id),
+        eq(searchResults.apolloId, apolloId)
+      )
+    );
+    return true;
+  } catch (error) {
+    console.error('[DB] Error deleting search result:', error);
+    return false;
+  }
 }
 
 // ============ 全局缓存相关 ============
 
-export async function getCachedPerson(apolloId: string): Promise<GlobalCache | undefined> {
+export async function getCacheByKey(cacheKey: string): Promise<GlobalCache | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(globalCache).where(
-    and(
-      eq(globalCache.apolloId, apolloId),
-      gte(globalCache.expiresAt, new Date())
-    )
-  ).limit(1);
+  const result = await db.select().from(globalCache).where(and(eq(globalCache.cacheKey, cacheKey), gte(globalCache.expiresAt, new Date()))).limit(1);
+  if (result.length > 0) {
+    await db.update(globalCache).set({ hitCount: sql`${globalCache.hitCount} + 1` }).where(eq(globalCache.cacheKey, cacheKey));
+  }
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function cachePerson(apolloId: string, data: any, phone?: string, phoneVerified?: boolean, verificationScore?: number): Promise<void> {
+export async function setCache(cacheKey: string, cacheType: "search" | "person" | "verification", data: any, ttlDays: number = 180): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); // 180天
-  await db.insert(globalCache).values({ apolloId, data, phone, phoneVerified, verificationScore, expiresAt })
-    .onDuplicateKeyUpdate({ set: { data, phone, phoneVerified, verificationScore, expiresAt } });
+  const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+  await db.insert(globalCache).values({ cacheKey, cacheType, data, expiresAt }).onDuplicateKeyUpdate({ set: { data, expiresAt } });
 }
 
-export async function updateCachedPersonPhone(apolloId: string, phone: string, verified: boolean, score?: number): Promise<void> {
+export async function getCacheStats(): Promise<{ totalEntries: number; searchCache: number; personCache: number; verificationCache: number; totalHits: number }> {
   const db = await getDb();
-  if (!db) return;
-  await db.update(globalCache).set({ phone, phoneVerified: verified, verificationScore: score }).where(eq(globalCache.apolloId, apolloId));
+  if (!db) return { totalEntries: 0, searchCache: 0, personCache: 0, verificationCache: 0, totalHits: 0 };
+  
+  const totalResult = await db.select({ count: sql<number>`count(*)`, hits: sql<number>`COALESCE(SUM(hitCount), 0)` }).from(globalCache);
+  const searchResult = await db.select({ count: sql<number>`count(*)` }).from(globalCache).where(eq(globalCache.cacheType, "search"));
+  const personResult = await db.select({ count: sql<number>`count(*)` }).from(globalCache).where(eq(globalCache.cacheType, "person"));
+  const verificationResult = await db.select({ count: sql<number>`count(*)` }).from(globalCache).where(eq(globalCache.cacheType, "verification"));
+  
+  return {
+    totalEntries: totalResult[0]?.count || 0,
+    searchCache: searchResult[0]?.count || 0,
+    personCache: personResult[0]?.count || 0,
+    verificationCache: verificationResult[0]?.count || 0,
+    totalHits: totalResult[0]?.hits || 0
+  };
 }
 
-// ============ 管理员日志相关 ============
+// ============ 日志相关 ============
 
-export async function logAdminAction(adminId: number, action: string, targetType: string, targetId: string, details?: any): Promise<void> {
+export async function logApi(apiType: "apollo_search" | "apollo_enrich" | "scrape_tps" | "scrape_fps", endpoint: string, requestParams: any, responseStatus: number, responseTime: number, success: boolean, errorMessage?: string, creditsUsed: number = 0, userId?: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.insert(adminLogs).values({ adminId, action, targetType, targetId, details });
+  await db.insert(apiLogs).values({ userId, apiType, endpoint, requestParams, responseStatus, responseTime, success, errorMessage, creditsUsed });
+}
+
+export async function getApiLogs(page: number = 1, limit: number = 50, apiType?: string): Promise<{ logs: ApiLog[]; total: number }> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  const offset = (page - 1) * limit;
+  let query = db.select().from(apiLogs);
+  let countQuery = db.select({ count: sql<number>`count(*)` }).from(apiLogs);
+  if (apiType) {
+    query = query.where(eq(apiLogs.apiType, apiType as any)) as typeof query;
+    countQuery = countQuery.where(eq(apiLogs.apiType, apiType as any)) as typeof countQuery;
+  }
+  const result = await query.orderBy(desc(apiLogs.createdAt)).limit(limit).offset(offset);
+  const countResult = await countQuery;
+  return { logs: result, total: countResult[0]?.count || 0 };
+}
+
+export async function logAdmin(adminUsername: string, action: string, targetType?: string, targetId?: string, details?: any, ipAddress?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(adminLogs).values({ adminUsername, action, targetType, targetId, details, ipAddress });
 }
 
 export async function getAdminLogs(page: number = 1, limit: number = 50): Promise<{ logs: AdminLog[]; total: number }> {
@@ -509,118 +601,13 @@ export async function getAdminLogs(page: number = 1, limit: number = 50): Promis
   return { logs: result, total: countResult[0]?.count || 0 };
 }
 
-// ============ 用户消息相关 ============
-
-export async function createUserMessage(userId: number, type: string, title: string, content: string): Promise<void> {
+export async function logLogin(userId: number, deviceId: string | null, ipAddress: string | null, userAgent: string | null, success: boolean, failReason?: string): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.insert(userMessages).values({ userId, type, title, content });
+  await db.insert(loginLogs).values({ userId, deviceId, ipAddress, userAgent, success, failReason });
 }
 
-export async function getUserMessages(userId: number, page: number = 1, limit: number = 20): Promise<{ messages: UserMessage[]; total: number; unread: number }> {
-  const db = await getDb();
-  if (!db) return { messages: [], total: 0, unread: 0 };
-  const offset = (page - 1) * limit;
-  const result = await db.select().from(userMessages).where(eq(userMessages.userId, userId)).orderBy(desc(userMessages.createdAt)).limit(limit).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(userMessages).where(eq(userMessages.userId, userId));
-  const unreadResult = await db.select({ count: sql<number>`count(*)` }).from(userMessages).where(and(eq(userMessages.userId, userId), eq(userMessages.read, false)));
-  return { messages: result, total: countResult[0]?.count || 0, unread: unreadResult[0]?.count || 0 };
-}
-
-export async function markMessageAsRead(messageId: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(userMessages).set({ read: true }).where(eq(userMessages.id, messageId));
-}
-
-export async function markAllMessagesAsRead(userId: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(userMessages).set({ read: true }).where(eq(userMessages.userId, userId));
-}
-
-// ============ API日志相关 ============
-
-export async function logApiCall(service: string, endpoint: string, success: boolean, responseTime: number, errorMessage?: string, userId?: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(apiLogs).values({ service, endpoint, success, responseTime, errorMessage, userId });
-  
-  // 更新统计
-  const today = new Date().toISOString().split('T')[0];
-  const existingStat = await db.select().from(apiStats).where(
-    and(eq(apiStats.service, service), eq(apiStats.date, today))
-  ).limit(1);
-  
-  if (existingStat.length > 0) {
-    await db.update(apiStats).set({
-      totalCalls: sql`totalCalls + 1`,
-      successCalls: success ? sql`successCalls + 1` : sql`successCalls`,
-      failedCalls: success ? sql`failedCalls` : sql`failedCalls + 1`,
-      avgResponseTime: sql`(avgResponseTime * totalCalls + ${responseTime}) / (totalCalls + 1)`
-    }).where(eq(apiStats.id, existingStat[0].id));
-  } else {
-    await db.insert(apiStats).values({
-      service,
-      date: today,
-      totalCalls: 1,
-      successCalls: success ? 1 : 0,
-      failedCalls: success ? 0 : 1,
-      avgResponseTime: responseTime
-    });
-  }
-}
-
-export async function getApiStats(days: number = 7): Promise<ApiStat[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  return db.select().from(apiStats).where(gte(apiStats.date, startDate)).orderBy(desc(apiStats.date));
-}
-
-// ============ 错误日志相关 ============
-
-export async function logError(errorType: string, message: string, stack?: string, context?: any, userId?: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(errorLogs).values({ errorType, message, stack, context, userId });
-}
-
-export async function getErrorLogs(page: number = 1, limit: number = 50): Promise<{ logs: ErrorLog[]; total: number }> {
-  const db = await getDb();
-  if (!db) return { logs: [], total: 0 };
-  const offset = (page - 1) * limit;
-  const result = await db.select().from(errorLogs).orderBy(desc(errorLogs.createdAt)).limit(limit).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(errorLogs);
-  return { logs: result, total: countResult[0]?.count || 0 };
-}
-
-// ============ 搜索日志相关 ============
-
-export async function logSearch(taskId: string, userId: number, params: any, status: string, resultsCount?: number, creditsUsed?: number, duration?: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(searchLogs).values({ taskId, userId, params, status, resultsCount, creditsUsed, duration });
-}
-
-export async function getSearchLogs(page: number = 1, limit: number = 50): Promise<{ logs: SearchLog[]; total: number }> {
-  const db = await getDb();
-  if (!db) return { logs: [], total: 0 };
-  const offset = (page - 1) * limit;
-  const result = await db.select().from(searchLogs).orderBy(desc(searchLogs.createdAt)).limit(limit).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(searchLogs);
-  return { logs: result, total: countResult[0]?.count || 0 };
-}
-
-// ============ 登录日志相关 ============
-
-export async function logLogin(userId: number, ip: string, userAgent: string, success: boolean, failReason?: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(loginLogs).values({ userId, ip, userAgent, success, failReason });
-}
-
-export async function getLoginLogs(userId?: number, page: number = 1, limit: number = 50): Promise<{ logs: LoginLog[]; total: number }> {
+export async function getLoginLogs(page: number = 1, limit: number = 50, userId?: number): Promise<{ logs: LoginLog[]; total: number }> {
   const db = await getDb();
   if (!db) return { logs: [], total: 0 };
   const offset = (page - 1) * limit;
@@ -635,89 +622,649 @@ export async function getLoginLogs(userId?: number, page: number = 1, limit: num
   return { logs: result, total: countResult[0]?.count || 0 };
 }
 
-// ============ 用户活动日志相关 ============
+// ============ 统计相关 ============
 
-export async function logUserActivity(userId: number, action: string, details?: any, ip?: string): Promise<void> {
+export async function getSearchStats(): Promise<{ todaySearches: number; todayCreditsUsed: number; totalSearches: number; cacheHitRate: number }> {
   const db = await getDb();
-  if (!db) return;
-  await db.insert(userActivityLogs).values({ userId, action, details, ip });
+  if (!db) return { todaySearches: 0, todayCreditsUsed: 0, totalSearches: 0, cacheHitRate: 0 };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayResult = await db.select({ count: sql<number>`count(*)`, credits: sql<number>`COALESCE(SUM(creditsUsed), 0)` }).from(searchTasks).where(gte(searchTasks.createdAt, today));
+  const totalResult = await db.select({ count: sql<number>`count(*)` }).from(searchTasks);
+  return { todaySearches: todayResult[0]?.count || 0, todayCreditsUsed: todayResult[0]?.credits || 0, totalSearches: totalResult[0]?.count || 0, cacheHitRate: 0 };
 }
 
-export async function getUserActivityLogs(userId: number, page: number = 1, limit: number = 50): Promise<{ logs: UserActivityLog[]; total: number }> {
+export async function getUserStats(): Promise<{ total: number; active: number; newToday: number; newThisWeek: number }> {
+  const db = await getDb();
+  if (!db) return { total: 0, active: 0, newToday: 0, newThisWeek: 0 };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  const totalResult = await db.select({ count: sql<number>`count(*)` }).from(users);
+  const activeResult = await db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.status, "active"));
+  const todayResult = await db.select({ count: sql<number>`count(*)` }).from(users).where(gte(users.createdAt, today));
+  const weekResult = await db.select({ count: sql<number>`count(*)` }).from(users).where(gte(users.createdAt, weekAgo));
+  return { total: totalResult[0]?.count || 0, active: activeResult[0]?.count || 0, newToday: todayResult[0]?.count || 0, newThisWeek: weekResult[0]?.count || 0 };
+}
+
+export async function getRechargeStats(): Promise<{ pendingCount: number; todayCount: number; todayAmount: number; monthAmount: number }> {
+  const db = await getDb();
+  if (!db) return { pendingCount: 0, todayCount: 0, todayAmount: 0, monthAmount: 0 };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const pendingResult = await db.select({ count: sql<number>`count(*)` }).from(rechargeOrders).where(eq(rechargeOrders.status, "pending"));
+  const todayResult = await db.select({ count: sql<number>`count(*)`, amount: sql<number>`COALESCE(SUM(CAST(amount AS DECIMAL(10,2))), 0)` }).from(rechargeOrders).where(and(eq(rechargeOrders.status, "paid"), gte(rechargeOrders.paidAt, today)));
+  const monthResult = await db.select({ amount: sql<number>`COALESCE(SUM(CAST(amount AS DECIMAL(10,2))), 0)` }).from(rechargeOrders).where(and(eq(rechargeOrders.status, "paid"), gte(rechargeOrders.paidAt, monthStart)));
+  return { pendingCount: pendingResult[0]?.count || 0, todayCount: todayResult[0]?.count || 0, todayAmount: todayResult[0]?.amount || 0, monthAmount: monthResult[0]?.amount || 0 };
+}
+
+// 获取完整的管理员仪表盘统计
+export async function getAdminDashboardStats(): Promise<{
+  users: { total: number; active: number; newToday: number; newThisWeek: number };
+  orders: { pendingCount: number; todayCount: number; todayAmount: number; monthAmount: number };
+  searches: { todaySearches: number; todayCreditsUsed: number; totalSearches: number; cacheHitRate: number };
+  cache: { totalEntries: number; searchCache: number; personCache: number; verificationCache: number; totalHits: number };
+}> {
+  const [userStats, rechargeStats, searchStats, cacheStats] = await Promise.all([
+    getUserStats(),
+    getRechargeStats(),
+    getSearchStats(),
+    getCacheStats()
+  ]);
+  
+  return {
+    users: userStats,
+    orders: rechargeStats,
+    searches: searchStats,
+    cache: cacheStats
+  };
+}
+
+// OAuth兼容
+export async function upsertUser(user: Partial<InsertUser> & { openId: string }): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await getUserByOpenId(user.openId);
+  if (existing) {
+    await db.update(users).set({ lastSignedIn: new Date(), ...(user.name && { name: user.name }), ...(user.email && { email: user.email }) }).where(eq(users.openId, user.openId));
+  } else {
+    await db.insert(users).values({ openId: user.openId, email: user.email || `${user.openId}@oauth.local`, passwordHash: crypto.randomBytes(32).toString('hex'), name: user.name, credits: 0, role: user.openId === ENV.ownerOpenId ? 'admin' : 'user' });
+  }
+}
+
+
+// ============ 缺失的函数补充 ============
+
+export async function verifyUserEmail(token: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  // For now, we'll use a simple token-based verification
+  // In production, you'd have a separate email_verification_tokens table
+  const result = await db.select().from(users).where(eq(users.resetToken, token)).limit(1);
+  if (result.length === 0) return false;
+  await db.update(users).set({ emailVerified: true, resetToken: null }).where(eq(users.id, result[0].id));
+  return true;
+}
+
+export async function createPasswordResetToken(email: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const user = await getUserByEmail(email);
+  if (!user) return null;
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  await db.update(users).set({ resetToken: token, resetTokenExpires: expires }).where(eq(users.id, user.id));
+  return token;
+}
+
+export async function resetPassword(token: string, newPasswordHash: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db.select().from(users).where(and(eq(users.resetToken, token), gte(users.resetTokenExpires, new Date()))).limit(1);
+  if (result.length === 0) return false;
+  await db.update(users).set({ passwordHash: newPasswordHash, resetToken: null, resetTokenExpires: null }).where(eq(users.id, result[0].id));
+  return true;
+}
+
+export async function updateUserRole(userId: number, role: "user" | "admin"): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+export async function getCreditTransactions(userId: number, page: number = 1, limit: number = 20): Promise<{ transactions: CreditLog[]; total: number }> {
+  return getCreditLogs(userId, page, limit).then(r => ({ transactions: r.logs, total: r.total }));
+}
+
+
+// ============ 用户管理增强功能 ============
+
+// 获取用户详情（包含统计信息）
+export async function getUserDetail(userId: number): Promise<{
+  user: User | null;
+  stats: {
+    totalOrders: number;
+    totalSpent: number;
+    totalSearches: number;
+    totalCreditsUsed: number;
+    lastLoginAt: Date | null;
+    loginCount: number;
+  };
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const user = await getUserById(userId);
+  if (!user) return null;
+  
+  // 获取订单统计
+  const orderStats = await db.select({
+    count: sql<number>`count(*)`,
+    total: sql<number>`COALESCE(SUM(CAST(amount AS DECIMAL(10,2))), 0)`
+  }).from(rechargeOrders).where(and(eq(rechargeOrders.userId, userId), eq(rechargeOrders.status, 'paid')));
+  
+  // 获取搜索统计
+  const searchStats = await db.select({
+    count: sql<number>`count(*)`,
+    credits: sql<number>`COALESCE(SUM(creditsUsed), 0)`
+  }).from(searchTasks).where(eq(searchTasks.userId, userId));
+  
+  // 获取登录统计
+  const loginStats = await db.select({
+    count: sql<number>`count(*)`,
+    lastLogin: sql<Date>`MAX(createdAt)`
+  }).from(loginLogs).where(and(eq(loginLogs.userId, userId), eq(loginLogs.success, true)));
+  
+  return {
+    user,
+    stats: {
+      totalOrders: orderStats[0]?.count || 0,
+      totalSpent: orderStats[0]?.total || 0,
+      totalSearches: searchStats[0]?.count || 0,
+      totalCreditsUsed: searchStats[0]?.credits || 0,
+      lastLoginAt: loginStats[0]?.lastLogin || null,
+      loginCount: loginStats[0]?.count || 0
+    }
+  };
+}
+
+// 重置用户密码（管理员操作）
+export async function adminResetPassword(userId: number, newPasswordHash: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const result = await db.update(users)
+    .set({ passwordHash: newPasswordHash, resetToken: null, resetTokenExpires: null })
+    .where(eq(users.id, userId));
+  
+  return true;
+}
+
+// 获取用户搜索历史
+export async function getUserSearchHistory(userId: number, page: number = 1, limit: number = 20): Promise<{
+  searches: SearchTask[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { searches: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [searches, countResult] = await Promise.all([
+    db.select().from(searchTasks).where(eq(searchTasks.userId, userId)).orderBy(desc(searchTasks.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(searchTasks).where(eq(searchTasks.userId, userId))
+  ]);
+  
+  return { searches, total: countResult[0]?.count || 0 };
+}
+
+// 获取用户积分变动记录
+export async function getUserCreditHistory(userId: number, page: number = 1, limit: number = 20): Promise<{
+  logs: CreditLog[];
+  total: number;
+}> {
   const db = await getDb();
   if (!db) return { logs: [], total: 0 };
+  
   const offset = (page - 1) * limit;
-  const result = await db.select().from(userActivityLogs).where(eq(userActivityLogs.userId, userId)).orderBy(desc(userActivityLogs.createdAt)).limit(limit).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(userActivityLogs).where(eq(userActivityLogs.userId, userId));
-  return { logs: result, total: countResult[0]?.count || 0 };
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(creditLogs).where(eq(creditLogs.userId, userId)).orderBy(desc(creditLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(creditLogs).where(eq(creditLogs.userId, userId))
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
 }
 
-// ============ 公告相关 ============
-
-export async function createAnnouncement(title: string, content: string, type: string = "info", priority: number = 0, expiresAt?: Date): Promise<void> {
+// 获取用户登录记录
+export async function getUserLoginHistory(userId: number, page: number = 1, limit: number = 20): Promise<{
+  logs: LoginLog[];
+  total: number;
+}> {
   const db = await getDb();
-  if (!db) return;
-  await db.insert(announcements).values({ title, content, type, priority, active: true, expiresAt });
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(loginLogs).where(eq(loginLogs.userId, userId)).orderBy(desc(loginLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(loginLogs).where(eq(loginLogs.userId, userId))
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
 }
 
+// ============ 公告系统 ============
+
+// 创建公告
+export async function createAnnouncement(data: {
+  title: string;
+  content: string;
+  type?: 'info' | 'warning' | 'success' | 'error';
+  isPinned?: boolean;
+  startTime?: Date;
+  endTime?: Date;
+  createdBy?: string;
+}): Promise<Announcement | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(announcements).values({
+    title: data.title,
+    content: data.content,
+    type: data.type || 'info',
+    isPinned: data.isPinned || false,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    createdBy: data.createdBy
+  });
+  
+  const inserted = await db.select().from(announcements).where(eq(announcements.id, Number(result[0].insertId))).limit(1);
+  return inserted[0] || null;
+}
+
+// 更新公告
+export async function updateAnnouncement(id: number, data: Partial<{
+  title: string;
+  content: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  isPinned: boolean;
+  isActive: boolean;
+  startTime: Date | null;
+  endTime: Date | null;
+}>): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(announcements).set(data).where(eq(announcements.id, id));
+  return true;
+}
+
+// 删除公告
+export async function deleteAnnouncement(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(announcements).where(eq(announcements.id, id));
+  return true;
+}
+
+// 获取公告列表（管理员）
+export async function getAnnouncementsAdmin(page: number = 1, limit: number = 20): Promise<{
+  announcements: Announcement[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { announcements: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [list, countResult] = await Promise.all([
+    db.select().from(announcements).orderBy(desc(announcements.isPinned), desc(announcements.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(announcements)
+  ]);
+  
+  return { announcements: list, total: countResult[0]?.count || 0 };
+}
+
+// 获取活跃公告（用户端）
 export async function getActiveAnnouncements(): Promise<Announcement[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(announcements).where(
-    and(
-      eq(announcements.active, true),
+  
+  const now = new Date();
+  
+  return db.select().from(announcements)
+    .where(and(
+      eq(announcements.isActive, true),
       or(
-        isNull(announcements.expiresAt),
-        gte(announcements.expiresAt, new Date())
+        sql`${announcements.startTime} IS NULL`,
+        lte(announcements.startTime, now)
+      ),
+      or(
+        sql`${announcements.endTime} IS NULL`,
+        gte(announcements.endTime, now)
       )
-    )
-  ).orderBy(desc(announcements.priority), desc(announcements.createdAt));
+    ))
+    .orderBy(desc(announcements.isPinned), desc(announcements.createdAt))
+    .limit(10);
 }
 
-export async function getAllAnnouncements(page: number = 1, limit: number = 20): Promise<{ announcements: Announcement[]; total: number }> {
+// ============ 用户消息系统 ============
+
+// 发送消息给用户
+export async function sendMessageToUser(data: {
+  userId: number;
+  title: string;
+  content: string;
+  type?: 'system' | 'support' | 'notification' | 'promotion';
+  createdBy?: string;
+}): Promise<UserMessage | null> {
   const db = await getDb();
-  if (!db) return { announcements: [], total: 0 };
-  const offset = (page - 1) * limit;
-  const result = await db.select().from(announcements).orderBy(desc(announcements.createdAt)).limit(limit).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(announcements);
-  return { announcements: result, total: countResult[0]?.count || 0 };
+  if (!db) return null;
+  
+  const result = await db.insert(userMessages).values({
+    userId: data.userId,
+    title: data.title,
+    content: data.content,
+    type: data.type || 'system',
+    createdBy: data.createdBy
+  });
+  
+  const inserted = await db.select().from(userMessages).where(eq(userMessages.id, Number(result[0].insertId))).limit(1);
+  return inserted[0] || null;
 }
 
-export async function updateAnnouncement(id: number, updates: Partial<{ title: string; content: string; type: string; priority: number; active: boolean; expiresAt: Date | null }>): Promise<void> {
+// 批量发送消息
+export async function sendMessageToUsers(userIds: number[], data: {
+  title: string;
+  content: string;
+  type?: 'system' | 'support' | 'notification' | 'promotion';
+  createdBy?: string;
+}): Promise<number> {
   const db = await getDb();
-  if (!db) return;
-  await db.update(announcements).set(updates).where(eq(announcements.id, id));
+  if (!db) return 0;
+  
+  const values = userIds.map(userId => ({
+    userId,
+    title: data.title,
+    content: data.content,
+    type: data.type || 'system',
+    createdBy: data.createdBy
+  }));
+  
+  await db.insert(userMessages).values(values);
+  return userIds.length;
 }
 
-export async function deleteAnnouncement(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.delete(announcements).where(eq(announcements.id, id));
-}
-
-// ============ 统计相关 ============
-
-export async function getDashboardStats(): Promise<{
-  totalUsers: number;
-  activeUsers: number;
-  totalSearches: number;
-  totalCreditsUsed: number;
-  pendingOrders: number;
+// 获取用户消息
+export async function getUserMessages(userId: number, page: number = 1, limit: number = 20): Promise<{
+  messages: UserMessage[];
+  total: number;
+  unreadCount: number;
 }> {
   const db = await getDb();
-  if (!db) return { totalUsers: 0, activeUsers: 0, totalSearches: 0, totalCreditsUsed: 0, pendingOrders: 0 };
+  if (!db) return { messages: [], total: 0, unreadCount: 0 };
   
-  const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
-  const [activeUsersCount] = await db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.status, "active"));
-  const [searchesCount] = await db.select({ count: sql<number>`count(*)` }).from(searchTasks);
-  const [creditsSum] = await db.select({ sum: sql<number>`COALESCE(SUM(creditsUsed), 0)` }).from(searchTasks);
-  const [pendingCount] = await db.select({ count: sql<number>`count(*)` }).from(rechargeOrders).where(eq(rechargeOrders.status, "pending"));
+  const offset = (page - 1) * limit;
   
-  return {
-    totalUsers: usersCount?.count || 0,
-    activeUsers: activeUsersCount?.count || 0,
-    totalSearches: searchesCount?.count || 0,
-    totalCreditsUsed: creditsSum?.sum || 0,
-    pendingOrders: pendingCount?.count || 0
+  const [messages, countResult, unreadResult] = await Promise.all([
+    db.select().from(userMessages).where(eq(userMessages.userId, userId)).orderBy(desc(userMessages.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(userMessages).where(eq(userMessages.userId, userId)),
+    db.select({ count: sql<number>`count(*)` }).from(userMessages).where(and(eq(userMessages.userId, userId), eq(userMessages.isRead, false)))
+  ]);
+  
+  return { 
+    messages, 
+    total: countResult[0]?.count || 0,
+    unreadCount: unreadResult[0]?.count || 0
   };
+}
+
+// 标记消息已读
+export async function markMessageAsRead(messageId: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(userMessages)
+    .set({ isRead: true })
+    .where(and(eq(userMessages.id, messageId), eq(userMessages.userId, userId)));
+  return true;
+}
+
+// 标记所有消息已读
+export async function markAllMessagesAsRead(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(userMessages)
+    .set({ isRead: true })
+    .where(eq(userMessages.userId, userId));
+  return true;
+}
+
+// ============ 用户活动日志 ============
+
+// 记录用户活动
+export async function logUserActivity(data: {
+  userId: number;
+  action: string;
+  details?: any;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(userActivityLogs).values({
+    userId: data.userId,
+    action: data.action,
+    details: data.details,
+    ipAddress: data.ipAddress,
+    userAgent: data.userAgent
+  });
+}
+
+// 获取用户活动日志
+export async function getUserActivityLogs(userId: number, page: number = 1, limit: number = 50): Promise<{
+  logs: UserActivityLog[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(userActivityLogs).where(eq(userActivityLogs.userId, userId)).orderBy(desc(userActivityLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(userActivityLogs).where(eq(userActivityLogs.userId, userId))
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
+}
+
+// ============ 系统错误日志 ============
+
+// 记录错误日志
+export async function logError(data: {
+  level?: 'error' | 'warn' | 'info';
+  source?: string;
+  message: string;
+  stack?: string;
+  userId?: number;
+  requestPath?: string;
+  requestBody?: any;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(errorLogs).values({
+    level: data.level || 'error',
+    source: data.source,
+    message: data.message,
+    stack: data.stack,
+    userId: data.userId,
+    requestPath: data.requestPath,
+    requestBody: data.requestBody
+  });
+}
+
+// 获取错误日志
+export async function getErrorLogs(page: number = 1, limit: number = 50, level?: string, resolved?: boolean): Promise<{
+  logs: ErrorLog[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  let whereClause = sql`1=1`;
+  if (level) {
+    whereClause = and(whereClause, eq(errorLogs.level, level as any))!;
+  }
+  if (resolved !== undefined) {
+    whereClause = and(whereClause, eq(errorLogs.resolved, resolved))!;
+  }
+  
+  const [logs, countResult] = await Promise.all([
+    db.select().from(errorLogs).where(whereClause).orderBy(desc(errorLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(errorLogs).where(whereClause)
+  ]);
+  
+  return { logs, total: countResult[0]?.count || 0 };
+}
+
+// 标记错误已解决
+export async function resolveError(errorId: number, resolvedBy: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(errorLogs)
+    .set({ resolved: true, resolvedBy, resolvedAt: new Date() })
+    .where(eq(errorLogs.id, errorId));
+  return true;
+}
+
+// ============ API统计 ============
+
+// 更新API统计
+export async function updateApiStats(apiName: string, success: boolean, creditsUsed: number = 0, responseTime: number = 0): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 尝试更新现有记录
+  const existing = await db.select().from(apiStats).where(and(eq(apiStats.date, today), eq(apiStats.apiName, apiName))).limit(1);
+  
+  if (existing.length > 0) {
+    const current = existing[0];
+    const newCallCount = (current.callCount || 0) + 1;
+    const newSuccessCount = (current.successCount || 0) + (success ? 1 : 0);
+    const newErrorCount = (current.errorCount || 0) + (success ? 0 : 1);
+    const newTotalCredits = (current.totalCreditsUsed || 0) + creditsUsed;
+    const newAvgResponseTime = Math.round(((current.avgResponseTime || 0) * (newCallCount - 1) + responseTime) / newCallCount);
+    
+    await db.update(apiStats)
+      .set({
+        callCount: newCallCount,
+        successCount: newSuccessCount,
+        errorCount: newErrorCount,
+        totalCreditsUsed: newTotalCredits,
+        avgResponseTime: newAvgResponseTime
+      })
+      .where(eq(apiStats.id, current.id));
+  } else {
+    await db.insert(apiStats).values({
+      date: today,
+      apiName,
+      callCount: 1,
+      successCount: success ? 1 : 0,
+      errorCount: success ? 0 : 1,
+      totalCreditsUsed: creditsUsed,
+      avgResponseTime: responseTime
+    });
+  }
+}
+
+// 获取API统计
+export async function getApiStatistics(days: number = 30): Promise<{
+  daily: ApiStat[];
+  summary: {
+    totalCalls: number;
+    totalSuccess: number;
+    totalErrors: number;
+    totalCredits: number;
+    avgResponseTime: number;
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { daily: [], summary: { totalCalls: 0, totalSuccess: 0, totalErrors: 0, totalCredits: 0, avgResponseTime: 0 } };
+  
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startDateStr = startDate.toISOString().split('T')[0];
+  
+  const daily = await db.select().from(apiStats).where(gte(apiStats.date, startDateStr)).orderBy(desc(apiStats.date));
+  
+  const summary = daily.reduce((acc, stat) => ({
+    totalCalls: acc.totalCalls + (stat.callCount || 0),
+    totalSuccess: acc.totalSuccess + (stat.successCount || 0),
+    totalErrors: acc.totalErrors + (stat.errorCount || 0),
+    totalCredits: acc.totalCredits + (stat.totalCreditsUsed || 0),
+    avgResponseTime: 0 // 计算后更新
+  }), { totalCalls: 0, totalSuccess: 0, totalErrors: 0, totalCredits: 0, avgResponseTime: 0 });
+  
+  if (summary.totalCalls > 0) {
+    const totalResponseTime = daily.reduce((sum, stat) => sum + (stat.avgResponseTime || 0) * (stat.callCount || 0), 0);
+    summary.avgResponseTime = Math.round(totalResponseTime / summary.totalCalls);
+  }
+  
+  return { daily, summary };
+}
+
+// ============ 订单退款 ============
+
+// 退款订单
+export async function refundOrder(orderId: string, adminNote?: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const order = await getRechargeOrder(orderId);
+  if (!order || order.status !== 'paid') return false;
+  
+  // 扣除用户积分
+  const deductResult = await deductCredits(order.userId, order.credits, 'admin_deduct', `订单退款: ${orderId}`);
+  if (!deductResult) return false;
+  
+  // 更新订单状态
+  await db.update(rechargeOrders)
+    .set({ status: 'cancelled', adminNote: adminNote || '管理员退款' })
+    .where(eq(rechargeOrders.orderId, orderId));
+  
+  return true;
+}
+
+// ============ 搜索订单 ============
+
+// 搜索订单
+export async function searchOrders(query: string, page: number = 1, limit: number = 20): Promise<{
+  orders: RechargeOrder[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { orders: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const whereClause = or(
+    like(rechargeOrders.orderId, `%${query}%`),
+    like(rechargeOrders.txId, `%${query}%`)
+  );
+  
+  const [orders, countResult] = await Promise.all([
+    db.select().from(rechargeOrders).where(whereClause).orderBy(desc(rechargeOrders.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(rechargeOrders).where(whereClause)
+  ]);
+  
+  return { orders, total: countResult[0]?.count || 0 };
 }
