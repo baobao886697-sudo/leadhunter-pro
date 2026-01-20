@@ -190,7 +190,7 @@ export async function previewSearch(
   searchName: string,
   searchTitle: string,
   searchState: string,
-  requestedCount: number = 50,
+  requestedCount: number = 100,
   ageMin?: number,
   ageMax?: number
 ): Promise<SearchPreviewResult> {
@@ -256,7 +256,7 @@ export async function executeSearchV3(
   searchName: string,
   searchTitle: string,
   searchState: string,
-  requestedCount: number = 50,
+  requestedCount: number = 100,
   ageMin?: number,
   ageMax?: number,
   enableVerification: boolean = true,

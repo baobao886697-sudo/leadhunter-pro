@@ -379,7 +379,7 @@ export async function searchPeople(
   searchName: string,
   searchTitle: string,
   searchState: string,
-  limit: number = 50,
+  limit: number = 100,
   userId?: number
 ): Promise<ApifySearchResult> {
   const startTime = Date.now();
