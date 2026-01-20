@@ -50,6 +50,7 @@ export default function Search() {
   const [title, setTitle] = useState("");
   const [state, setState] = useState("");
   const [searchLimit, setSearchLimit] = useState(100);
+  const [customLimit, setCustomLimit] = useState("");
   
   // 年龄筛选（默认启用，范围 50-79）
   const [enableAgeFilter, setEnableAgeFilter] = useState(true);
@@ -297,9 +298,12 @@ export default function Search() {
                       <button
                         key={option.value}
                         type="button"
-                        onClick={() => setSearchLimit(option.value)}
+                        onClick={() => {
+                          setSearchLimit(option.value);
+                          setCustomLimit("");
+                        }}
                         className={`relative p-3 rounded-xl border transition-all ${
-                          searchLimit === option.value
+                          searchLimit === option.value && !customLimit
                             ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
                             : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
                         }`}
@@ -314,6 +318,34 @@ export default function Search() {
                       </button>
                     ))}
                   </div>
+                  {/* 自定义数量输入框 */}
+                  <div className="flex items-center gap-3 mt-3">
+                    <span className="text-sm text-slate-400">或自定义:</span>
+                    <div className="relative flex-1">
+                      <Input
+                        type="number"
+                        placeholder="输入数量 (100-10000)"
+                        value={customLimit}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setCustomLimit(value);
+                          const num = parseInt(value);
+                          if (!isNaN(num) && num >= 100 && num <= 10000) {
+                            setSearchLimit(num);
+                          }
+                        }}
+                        className={`bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 pr-12 ${
+                          customLimit ? 'border-cyan-500 ring-1 ring-cyan-500/30' : ''
+                        }`}
+                        min={100}
+                        max={10000}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">条</span>
+                    </div>
+                  </div>
+                  {customLimit && (parseInt(customLimit) < 100 || parseInt(customLimit) > 10000) && (
+                    <p className="text-xs text-red-400 mt-1">请输入 100-10000 之间的数字</p>
+                  )}
                 </div>
 
                 {/* 年龄筛选 */}
