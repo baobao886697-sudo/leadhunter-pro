@@ -242,6 +242,8 @@ function convertToLeadPerson(raw: ApifyLeadRaw): LeadPerson {
 
 /**
  * 将搜索参数转换为 Apify Actor 输入格式
+ * 
+ * 参数参考: https://apify.com/code_crafter/leads-finder/input-schema
  */
 function buildActorInput(
   searchName: string,
@@ -250,33 +252,36 @@ function buildActorInput(
   limit: number
 ): Record<string, any> {
   // Apify Leads Finder Actor 输入格式
-  // 参考: https://apify.com/code_crafter/leads-finder
+  // 正确的参数名称:
+  // - fetch_count: 获取数量 (默认 50000)
+  // - contact_job_title: 职位筛选 (数组)
+  // - contact_location: 地区筛选 (数组)
+  // - company_keywords: 公司关键词 (数组)
   
   const input: Record<string, any> = {
-    // 搜索条件
-    maxResults: limit,
+    // 获取数量限制 - 这是最重要的参数！
+    fetch_count: limit,
     
-    // 职位筛选
-    jobTitles: searchTitle ? [searchTitle] : [],
-    
-    // 地区筛选 - 使用美国州名
-    locations: searchState ? [searchState] : [],
-    
-    // 关键词搜索（用于姓名匹配）
-    keywords: searchName ? [searchName] : [],
-    
-    // 输出选项
-    includeEmail: true,
-    includePhone: true,
-    includeLinkedIn: true,
-    includeCompanyInfo: true,
-    
-    // 代理设置
-    proxyConfiguration: {
-      useApifyProxy: true,
-      apifyProxyGroups: ['RESIDENTIAL']
-    }
+    // 文件名/运行标签
+    file_name: `LeadHunter_${searchTitle || 'Search'}_${searchState || 'All'}`,
   };
+  
+  // 职位筛选
+  if (searchTitle && searchTitle.trim()) {
+    input.contact_job_title = [searchTitle.trim()];
+  }
+  
+  // 地区筛选 - 使用美国州名
+  if (searchState && searchState.trim()) {
+    input.contact_location = [searchState.trim()];
+  }
+  
+  // 关键词搜索（用于公司名称匹配，不是人名）
+  // 注意：Apify Leads Finder 不支持按人名搜索
+  // searchName 参数暂时不使用，因为 company_keywords 是用于公司关键词
+  // if (searchName && searchName.trim()) {
+  //   input.company_keywords = [searchName.trim()];
+  // }
   
   return input;
 }
