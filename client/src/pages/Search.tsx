@@ -438,7 +438,7 @@ export default function Search() {
                     type="button"
                     onClick={handleDirectSearch}
                     disabled={searchMutation.isPending || !creditEstimate.canAfford || !name.trim() || !title.trim() || !state}
-                    className="flex-1 h-12 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/25"
+                    className="flex-1 h-12 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl shadow-lg shadow-cyan-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                   >
                     {searchMutation.isPending ? (
                       <>
