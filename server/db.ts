@@ -1306,12 +1306,15 @@ export async function createFeedback(data: {
   const db = await getDb();
   if (!db) return null;
   
+  // 确保 contactInfo 为空时传递 null 而不是空字符串
+  const contactInfoValue = data.contactInfo && data.contactInfo.trim() ? data.contactInfo.trim() : null;
+  
   const result = await db.insert(userFeedbacks).values({
     userId: data.userId,
     type: data.type,
     title: data.title,
     content: data.content,
-    contactInfo: data.contactInfo || null
+    contactInfo: contactInfoValue
   });
   
   const inserted = await db.select().from(userFeedbacks).where(eq(userFeedbacks.id, Number(result[0].insertId))).limit(1);
