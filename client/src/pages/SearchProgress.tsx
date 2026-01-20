@@ -92,9 +92,7 @@ const SEARCH_PHASES = [
 
 // CSV 导出格式选项
 const CSV_FORMATS = [
-  { value: 'simple', label: '简洁版', description: '基本信息（姓名、职位、电话）', icon: FileText },
   { value: 'standard', label: '标准版', description: '常用字段（含公司、邮箱）', icon: FileSpreadsheet },
-  { value: 'detailed', label: '详细版', description: '全部字段（40+字段）', icon: Database },
 ];
 
 export default function SearchProgress() {
