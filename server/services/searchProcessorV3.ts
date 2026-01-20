@@ -25,7 +25,9 @@ import {
 } from '../db';
 import { searchPeople as apifySearchPeople, LeadPerson } from './apify';
 import { verifyPhoneNumber, PersonToVerify, VerificationResult } from './scraper';
-import { SearchTask } from '../../drizzle/schema';
+import { SearchTask, users } from '../../drizzle/schema';
+import { getDb } from '../db';
+import { sql, eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
 // ============ 类型定义 ============
@@ -804,6 +806,13 @@ export async function executeSearchV3(
         // 等待当前批次完成
         const batchResults = await Promise.all(batchPromises);
         
+        // 检查是否有 API 积分耗尽的情况
+        const apiErrorResults = batchResults.filter(r => r.apiError);
+        if (apiErrorResults.length > 0) {
+          apiCreditsExhausted = true;
+          stats.apiCreditsExhausted = true;
+        }
+        
         // 保存结果到数据库
         for (const result of batchResults) {
           if (!result.excluded) {
@@ -837,6 +846,37 @@ export async function executeSearchV3(
         
         addLog(`   ✅ 批次完成: ${verified} 验证通过, ${excluded} 被排除, 耗时 ${formatDuration(batchDuration)}`, 'success', 'process', '');
         await updateProgress(`已处理 ${processedCount}/${actualCount}`, 'processing', 'process', progressPercent);
+        
+        // 如果 API 积分耗尽，立即停止处理
+        if (apiCreditsExhausted) {
+          addLog('', 'info', 'process', '');
+          addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error', 'process', '');
+          addLog('⚠️ 系统 API 积分已耗尽，搜索提前结束', 'error', 'process', '');
+          addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error', 'process', '');
+          addLog('📌 已验证的数据已保存，您可以导出已完成的结果', 'warning', 'process', '');
+          addLog('📞 请联系管理员处理 API 积分问题', 'warning', 'process', '');
+          addLog('', 'info', 'process', '');
+          
+          // 计算退还积分
+          const unprocessedCount = actualCount - processedCount;
+          const refundCredits = unprocessedCount * PHONE_CREDITS_PER_PERSON;
+          
+          if (refundCredits > 0) {
+            // 退还积分
+            const db = await getDb();
+            if (db) {
+              await db.update(users)
+                .set({ credits: sql`credits + ${refundCredits}` })
+                .where(eq(users.id, userId));
+            }
+            
+            stats.creditsRefunded += refundCredits;
+            addLog(`💰 已退还 ${refundCredits} 积分（未处理 ${unprocessedCount} 条记录 × ${PHONE_CREDITS_PER_PERSON} 积分/条）`, 'success', 'process', '');
+          }
+          
+          progress.status = 'stopped';
+          break; // 跳出批次循环
+        }
         
         // 每5个批次添加分隔线
         if ((batchIndex + 1) % 5 === 0 && (batchIndex + 1) < totalBatches) {
