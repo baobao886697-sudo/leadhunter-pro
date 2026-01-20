@@ -80,6 +80,13 @@ import {
   getApiStatistics,
   refundOrder,
   searchOrders,
+  // 用户反馈系统
+  createFeedback,
+  getUserFeedbacks,
+  getAllFeedbacks,
+  replyFeedback,
+  updateFeedbackStatus,
+  getFeedbackById,
 } from "./db";
 // Apollo 相关处理器已移除
 import { previewSearch, executeSearchV3 } from "./services/searchProcessorV3";
@@ -1598,6 +1605,122 @@ export const appRouter = router({
       const result = await getUserMessages(ctx.user.id, 1, 1);
       return { count: result.unreadCount };
     }),
+  }),
+
+  // ============ 用户反馈系统 ============
+  feedback: router({
+    // 提交反馈（用户端）
+    submit: protectedProcedure
+      .input(z.object({
+        type: z.enum(['question', 'suggestion', 'business', 'custom_dev', 'other']),
+        title: z.string().min(1, "标题不能为空").max(200, "标题不能超过200字"),
+        content: z.string().min(10, "内容至少10字").max(2000, "内容不能超过2000字"),
+        contactInfo: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        const feedback = await createFeedback({
+          userId: ctx.user.id,
+          type: input.type,
+          title: input.title,
+          content: input.content,
+          contactInfo: input.contactInfo,
+        });
+        if (!feedback) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "提交反馈失败" });
+        }
+        return { success: true, feedback };
+      }),
+
+    // 获取我的反馈列表（用户端）
+    myFeedbacks: protectedProcedure
+      .input(z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED" });
+        }
+        return getUserFeedbacks(ctx.user.id, input?.page || 1, input?.limit || 20);
+      }),
+
+    // 获取所有反馈列表（管理员）
+    list: adminProcedure
+      .input(z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+        status: z.enum(['pending', 'processing', 'resolved', 'closed']).optional(),
+        type: z.enum(['question', 'suggestion', 'business', 'custom_dev', 'other']).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return getAllFeedbacks(
+          input?.page || 1, 
+          input?.limit || 20,
+          input?.status,
+          input?.type
+        );
+      }),
+
+    // 获取反馈详情（管理员）
+    detail: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const feedback = await getFeedbackById(input.id);
+        if (!feedback) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "反馈不存在" });
+        }
+        return feedback;
+      }),
+
+    // 回复反馈（管理员）
+    reply: adminProcedure
+      .input(z.object({
+        feedbackId: z.number(),
+        reply: z.string().min(1, "回复内容不能为空"),
+        status: z.enum(['pending', 'processing', 'resolved', 'closed']).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const success = await replyFeedback(
+          input.feedbackId,
+          input.reply,
+          (ctx as any).adminUser?.username || 'admin',
+          input.status
+        );
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "回复失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'reply_feedback',
+          'feedback',
+          input.feedbackId.toString()
+        );
+        return { success: true };
+      }),
+
+    // 更新反馈状态（管理员）
+    updateStatus: adminProcedure
+      .input(z.object({
+        feedbackId: z.number(),
+        status: z.enum(['pending', 'processing', 'resolved', 'closed']),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const success = await updateFeedbackStatus(input.feedbackId, input.status);
+        if (!success) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "更新状态失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'update_feedback_status',
+          'feedback',
+          input.feedbackId.toString(),
+          { status: input.status }
+        );
+        return { success: true };
+      }),
   }),
 });
 

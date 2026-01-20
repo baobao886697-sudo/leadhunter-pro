@@ -266,3 +266,22 @@ export const errorLogs = mysqlTable("error_logs", {
 });
 
 export type ErrorLog = typeof errorLogs.$inferSelect;
+
+// 用户反馈表
+export const userFeedbacks = mysqlTable("user_feedbacks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  type: mysqlEnum("type", ["question", "suggestion", "business", "custom_dev", "other"]).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  contactInfo: varchar("contactInfo", { length: 200 }), // 可选的联系方式（微信、电话等）
+  status: mysqlEnum("status", ["pending", "processing", "resolved", "closed"]).default("pending").notNull(),
+  adminReply: text("adminReply"),
+  repliedBy: varchar("repliedBy", { length: 50 }),
+  repliedAt: timestamp("repliedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserFeedback = typeof userFeedbacks.$inferSelect;
+export type InsertUserFeedback = typeof userFeedbacks.$inferInsert;

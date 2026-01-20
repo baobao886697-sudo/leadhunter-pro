@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -33,6 +33,7 @@ const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; labe
   { icon: Search, label: "开始搜索", path: "/search" },
   { icon: History, label: "历史记录", path: "/history" },
   { icon: Wallet, label: "积分充值", path: "/recharge" },
+  { icon: MessageCircle, label: "联系我们", path: "/feedback" },
   { icon: Shield, label: "管理后台", path: "/admin", adminOnly: true },
 ];
 
@@ -206,6 +207,35 @@ function DashboardLayoutContent({
                 );
               })}
             </SidebarMenu>
+            
+            {/* 产品介绍 */}
+            {!isCollapsed && (
+              <div className="mx-3 mt-4 p-3 rounded-lg bg-gradient-to-br from-cyan-500/5 to-blue-500/5 border border-cyan-500/10 group-data-[collapsible=icon]:hidden">
+                <div className="text-xs font-medium text-cyan-400 mb-2">精准获客 · 拒绝无效数据</div>
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  云端寻踪 Pro 专注于为您提供经过验证的高质量 LinkedIn 商业联系人信息。
+                </p>
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                    <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
+                    <span>年龄精准筛选 - 锁定决策层</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                    <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
+                    <span>电话双重验证 - 确保可达</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                    <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
+                    <span>邮箱有效确认 - 提升触达率</span>
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-gray-700/50">
+                  <p className="text-[10px] text-gray-500">
+                    如有定制开发或商务合作需求，欢迎通过「联系我们」与我们的团队沟通。
+                  </p>
+                </div>
+              </div>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3">

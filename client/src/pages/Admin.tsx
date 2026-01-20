@@ -26,6 +26,7 @@ import { AnnouncementManager } from "@/components/admin/AnnouncementManager";
 import { SystemMonitor } from "@/components/admin/SystemMonitor";
 import { OrderDetailDialog } from "@/components/admin/OrderDetailDialog";
 import { BulkMessageDialog } from "@/components/admin/BulkMessageDialog";
+import { FeedbackManager } from "@/components/admin/FeedbackManager";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -268,6 +269,7 @@ export default function Admin() {
             { id: "users", label: "用户管理", icon: Users },
             { id: "orders", label: "充值订单", icon: CreditCard },
             { id: "wallet", label: "钱包监控", icon: Wallet },
+            { id: "feedbacks", label: "用户反馈", icon: MessageSquare },
             { id: "announcements", label: "公告管理", icon: Megaphone },
             { id: "monitor", label: "系统监控", icon: BarChart3 },
             { id: "logs", label: "系统日志", icon: FileText },
@@ -849,6 +851,11 @@ export default function Admin() {
         {/* ============ 钱包监控 ============ */}
         {activeTab === "wallet" && (
           <WalletMonitorTab />
+        )}
+
+        {/* ============ 用户反馈 ============ */}
+        {activeTab === "feedbacks" && (
+          <FeedbackManager />
         )}
 
         {/* ============ 公告管理 ============ */}

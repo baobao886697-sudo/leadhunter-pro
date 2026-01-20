@@ -16,6 +16,7 @@ import History from "./pages/History";
 import Admin from "./pages/Admin";
 import AdminLogin from "./pages/AdminLogin";
 import PaymentDetail from "./pages/PaymentDetail";
+import Feedback from "./pages/Feedback";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/recharge" component={Recharge} />
       <Route path="/payment/:orderId" component={PaymentDetail} />
       <Route path="/history" component={History} />
+      <Route path="/feedback" component={Feedback} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={Admin} />
       <Route path="/404" component={NotFound} />

@@ -16,7 +16,8 @@ import {
   userMessages, UserMessage, InsertUserMessage,
   userActivityLogs, UserActivityLog, InsertUserActivityLog,
   apiStats, ApiStat,
-  errorLogs, ErrorLog
+  errorLogs, ErrorLog,
+  userFeedbacks, UserFeedback, InsertUserFeedback
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import crypto from 'crypto';
@@ -1289,4 +1290,192 @@ export async function searchOrders(query: string, page: number = 1, limit: numbe
   ]);
   
   return { orders, total: countResult[0]?.count || 0 };
+}
+
+
+// ============ 用户反馈系统 ============
+
+// 创建用户反馈
+export async function createFeedback(data: {
+  userId: number;
+  type: 'question' | 'suggestion' | 'business' | 'custom_dev' | 'other';
+  title: string;
+  content: string;
+  contactInfo?: string;
+}): Promise<UserFeedback | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(userFeedbacks).values({
+    userId: data.userId,
+    type: data.type,
+    title: data.title,
+    content: data.content,
+    contactInfo: data.contactInfo
+  });
+  
+  const inserted = await db.select().from(userFeedbacks).where(eq(userFeedbacks.id, Number(result[0].insertId))).limit(1);
+  return inserted[0] || null;
+}
+
+// 获取用户的反馈列表
+export async function getUserFeedbacks(userId: number, page: number = 1, limit: number = 20): Promise<{
+  feedbacks: UserFeedback[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { feedbacks: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const [feedbacks, countResult] = await Promise.all([
+    db.select().from(userFeedbacks).where(eq(userFeedbacks.userId, userId)).orderBy(desc(userFeedbacks.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(userFeedbacks).where(eq(userFeedbacks.userId, userId))
+  ]);
+  
+  return { feedbacks, total: countResult[0]?.count || 0 };
+}
+
+// 获取所有反馈列表（管理员）
+export async function getAllFeedbacks(
+  page: number = 1, 
+  limit: number = 20,
+  status?: 'pending' | 'processing' | 'resolved' | 'closed',
+  type?: 'question' | 'suggestion' | 'business' | 'custom_dev' | 'other'
+): Promise<{
+  feedbacks: (UserFeedback & { userEmail?: string })[];
+  total: number;
+  stats: {
+    pending: number;
+    processing: number;
+    resolved: number;
+    closed: number;
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { feedbacks: [], total: 0, stats: { pending: 0, processing: 0, resolved: 0, closed: 0 } };
+  
+  const offset = (page - 1) * limit;
+  
+  // 构建查询条件
+  const conditions = [];
+  if (status) conditions.push(eq(userFeedbacks.status, status));
+  if (type) conditions.push(eq(userFeedbacks.type, type));
+  
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  
+  // 获取反馈列表（关联用户邮箱）
+  const feedbacksQuery = db.select({
+    id: userFeedbacks.id,
+    userId: userFeedbacks.userId,
+    type: userFeedbacks.type,
+    title: userFeedbacks.title,
+    content: userFeedbacks.content,
+    contactInfo: userFeedbacks.contactInfo,
+    status: userFeedbacks.status,
+    adminReply: userFeedbacks.adminReply,
+    repliedBy: userFeedbacks.repliedBy,
+    repliedAt: userFeedbacks.repliedAt,
+    createdAt: userFeedbacks.createdAt,
+    updatedAt: userFeedbacks.updatedAt,
+    userEmail: users.email
+  })
+  .from(userFeedbacks)
+  .leftJoin(users, eq(userFeedbacks.userId, users.id))
+  .orderBy(desc(userFeedbacks.createdAt))
+  .limit(limit)
+  .offset(offset);
+  
+  if (whereClause) {
+    feedbacksQuery.where(whereClause);
+  }
+  
+  const feedbacks = await feedbacksQuery;
+  
+  // 获取总数
+  const countQuery = db.select({ count: sql<number>`count(*)` }).from(userFeedbacks);
+  if (whereClause) {
+    countQuery.where(whereClause);
+  }
+  const countResult = await countQuery;
+  
+  // 获取各状态统计
+  const statsResult = await db.select({
+    status: userFeedbacks.status,
+    count: sql<number>`count(*)`
+  }).from(userFeedbacks).groupBy(userFeedbacks.status);
+  
+  const stats = { pending: 0, processing: 0, resolved: 0, closed: 0 };
+  statsResult.forEach(s => {
+    if (s.status in stats) {
+      stats[s.status as keyof typeof stats] = s.count;
+    }
+  });
+  
+  return { feedbacks, total: countResult[0]?.count || 0, stats };
+}
+
+// 回复用户反馈
+export async function replyFeedback(
+  feedbackId: number, 
+  reply: string, 
+  repliedBy: string,
+  newStatus?: 'pending' | 'processing' | 'resolved' | 'closed'
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(userFeedbacks)
+    .set({ 
+      adminReply: reply, 
+      repliedBy, 
+      repliedAt: new Date(),
+      status: newStatus || 'resolved'
+    })
+    .where(eq(userFeedbacks.id, feedbackId));
+  
+  return true;
+}
+
+// 更新反馈状态
+export async function updateFeedbackStatus(
+  feedbackId: number, 
+  status: 'pending' | 'processing' | 'resolved' | 'closed'
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.update(userFeedbacks)
+    .set({ status })
+    .where(eq(userFeedbacks.id, feedbackId));
+  
+  return true;
+}
+
+// 获取单个反馈详情
+export async function getFeedbackById(feedbackId: number): Promise<(UserFeedback & { userEmail?: string }) | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select({
+    id: userFeedbacks.id,
+    userId: userFeedbacks.userId,
+    type: userFeedbacks.type,
+    title: userFeedbacks.title,
+    content: userFeedbacks.content,
+    contactInfo: userFeedbacks.contactInfo,
+    status: userFeedbacks.status,
+    adminReply: userFeedbacks.adminReply,
+    repliedBy: userFeedbacks.repliedBy,
+    repliedAt: userFeedbacks.repliedAt,
+    createdAt: userFeedbacks.createdAt,
+    updatedAt: userFeedbacks.updatedAt,
+    userEmail: users.email
+  })
+  .from(userFeedbacks)
+  .leftJoin(users, eq(userFeedbacks.userId, users.id))
+  .where(eq(userFeedbacks.id, feedbackId))
+  .limit(1);
+  
+  return result[0] || null;
 }
