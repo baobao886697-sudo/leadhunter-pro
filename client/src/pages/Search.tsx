@@ -363,7 +363,7 @@ export default function Search() {
                     />
                   </div>
                   <p className="text-xs text-slate-500">
-                    启用后将通过 Scrape.do 验证电话号码真实性，提高数据质量
+                    启用后将验证电话号码真实性，提高数据质量
                   </p>
                 </div>
 
@@ -491,7 +491,7 @@ export default function Search() {
                   <ul className="space-y-1">
                     <li>• 搜索费用：每次搜索 1 积分</li>
                     <li>• 电话获取：每条结果 2 积分</li>
-                    <li>• 电话验证：免费（Scrape.do）</li>
+                    <li>• 电话验证：免费</li>
                     <li>• 实际消耗可能因结果数量有所浮动</li>
                   </ul>
                 </div>
@@ -507,7 +507,7 @@ export default function Search() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Database className="h-3 w-3 text-blue-400" />
-                      <span>Apify 数据获取</span>
+                      <span>数据获取</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <ArrowRight className="h-3 w-3 text-slate-600" />
@@ -515,7 +515,7 @@ export default function Search() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Shield className="h-3 w-3 text-green-400" />
-                      <span>Scrape.do 二次验证</span>
+                      <span>二次验证</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="h-3 w-3 text-cyan-400" />
@@ -553,7 +553,7 @@ export default function Search() {
                     <Database className="h-4 w-4 text-blue-400" />
                   )}
                   <span className={previewResult.cacheHit ? "text-yellow-400" : "text-blue-400"}>
-                    {previewResult.cacheHit ? "命中缓存" : "Apify 查询"}
+                    {previewResult.cacheHit ? "命中缓存" : "数据查询"}
                   </span>
                 </div>
                 

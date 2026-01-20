@@ -723,7 +723,7 @@ export default function Results() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
-                  <span className="text-slate-400 text-sm">Apify API</span>
+                  <span className="text-slate-400 text-sm">数据获取</span>
                   <span className="text-white font-mono">{displayStats.apifyApiCalls}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
