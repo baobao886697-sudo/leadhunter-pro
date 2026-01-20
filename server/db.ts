@@ -1306,16 +1306,20 @@ export async function createFeedback(data: {
   const db = await getDb();
   if (!db) return null;
   
-  // 确保 contactInfo 为空时传递 null 而不是空字符串
-  const contactInfoValue = data.contactInfo && data.contactInfo.trim() ? data.contactInfo.trim() : null;
-  
-  const result = await db.insert(userFeedbacks).values({
+  // 动态构建插入对象，只有当 contactInfo 有值时才包含该字段
+  const insertValues: any = {
     userId: data.userId,
     type: data.type,
     title: data.title,
     content: data.content,
-    contactInfo: contactInfoValue
-  });
+  };
+  
+  // 只有当 contactInfo 有实际内容时才添加到插入对象中
+  if (data.contactInfo && data.contactInfo.trim()) {
+    insertValues.contactInfo = data.contactInfo.trim();
+  }
+  
+  const result = await db.insert(userFeedbacks).values(insertValues);
   
   const inserted = await db.select().from(userFeedbacks).where(eq(userFeedbacks.id, Number(result[0].insertId))).limit(1);
   return inserted[0] || null;
