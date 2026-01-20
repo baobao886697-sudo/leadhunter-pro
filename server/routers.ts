@@ -311,7 +311,7 @@ export const appRouter = router({
           name: z.string().min(1, "请输入姓名"),
           title: z.string().min(1, "请输入职位"),
           state: z.string().min(1, "请选择州"),
-          limit: z.number().min(10).max(100).optional().default(50),
+          limit: z.number().min(100).max(5000).optional().default(100),
           ageMin: z.number().min(18).max(80).optional(),
           ageMax: z.number().min(18).max(80).optional(),
         })
@@ -343,7 +343,7 @@ export const appRouter = router({
           name: z.string().min(1, "请输入姓名"),
           title: z.string().min(1, "请输入职位"),
           state: z.string().min(1, "请选择州"),
-          limit: z.number().min(10).max(100).optional().default(50),
+          limit: z.number().min(100).max(5000).optional().default(100),
           ageMin: z.number().min(18).max(80).optional(),
           ageMax: z.number().min(18).max(80).optional(),
           enableVerification: z.boolean().optional().default(true),

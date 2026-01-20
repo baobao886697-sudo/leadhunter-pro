@@ -31,10 +31,10 @@ const US_STATES = [
 
 // 搜索数量选项
 const SEARCH_LIMITS = [
-  { value: 10, label: "10 条", description: "快速测试" },
-  { value: 25, label: "25 条", description: "小批量" },
-  { value: 50, label: "50 条", description: "标准搜索", recommended: true },
-  { value: 100, label: "100 条", description: "大批量" },
+  { value: 100, label: "100 条", description: "快速测试", recommended: true },
+  { value: 500, label: "500 条", description: "小批量" },
+  { value: 1000, label: "1000 条", description: "标准搜索" },
+  { value: 5000, label: "5000 条", description: "大批量" },
 ];
 
 // 积分费用常量
@@ -49,7 +49,7 @@ export default function Search() {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [state, setState] = useState("");
-  const [searchLimit, setSearchLimit] = useState(50);
+  const [searchLimit, setSearchLimit] = useState(100);
   
   // 年龄筛选（默认启用，范围 50-79）
   const [enableAgeFilter, setEnableAgeFilter] = useState(true);
