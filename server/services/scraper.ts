@@ -3,6 +3,22 @@ import { getConfig, logApi } from '../db';
 
 const SCRAPE_DO_BASE = 'https://api.scrape.do';
 
+// 重试配置
+const RETRY_CONFIG = {
+  maxRetries: 1,        // 最大重试次数
+  retryDelay: 2000,     // 重试间隔（毫秒）
+  retryableErrors: [    // 可重试的错误类型
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'ENETUNREACH',
+    'EAI_AGAIN',
+    'timeout',
+    'Network Error',
+  ],
+};
+
 export interface VerificationResult {
   verified: boolean;
   source: 'TruePeopleSearch' | 'FastPeopleSearch' | 'none';
@@ -43,6 +59,46 @@ async function getScrapeDoToken(): Promise<string> {
 }
 
 /**
+ * 延迟函数
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 判断错误是否可重试
+ */
+function isRetryableError(error: any): boolean {
+  if (!error) return false;
+  
+  // 检查错误代码
+  if (error.code && RETRY_CONFIG.retryableErrors.includes(error.code)) {
+    return true;
+  }
+  
+  // 检查错误消息
+  if (error.message) {
+    for (const retryableError of RETRY_CONFIG.retryableErrors) {
+      if (error.message.includes(retryableError)) {
+        return true;
+      }
+    }
+  }
+  
+  // 检查 HTTP 状态码（5xx 服务器错误可重试）
+  if (error.response?.status >= 500) {
+    return true;
+  }
+  
+  // 429 Too Many Requests 也可重试
+  if (error.response?.status === 429) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * 格式化电话号码为带连字符的格式（用于 FastPeopleSearch）
  * 例如：4155480165 -> 415-548-0165
  */
@@ -59,103 +115,149 @@ function formatPhoneWithDashes(phone: string): string {
 /**
  * 第一阶段验证：使用 TruePeopleSearch 进行电话号码反向搜索
  * URL 格式：https://www.truepeoplesearch.com/resultphone?phoneno=4155480165
+ * 支持重试机制
  */
 export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?: number): Promise<VerificationResult> {
   const token = await getScrapeDoToken();
-  const startTime = Date.now();
-
-  // 清理电话号码，只保留数字
   const cleanPhone = person.phone.replace(/\D/g, '');
-  
-  // 使用电话号码反向搜索 URL
   const targetUrl = `https://www.truepeoplesearch.com/resultphone?phoneno=${cleanPhone}`;
 
   console.log(`[Scraper] TruePeopleSearch reverse lookup for phone: ${cleanPhone}`);
   console.log(`[Scraper] Target URL: ${targetUrl}`);
 
-  try {
-    const response = await axios.get(SCRAPE_DO_BASE, {
-      params: { 
-        token, 
-        url: targetUrl, 
-        super: true, 
-        geoCode: 'us', 
-        render: true 
-      },
-      timeout: 90000,
-    });
-
-    const responseTime = Date.now() - startTime;
-    const html = response.data;
+  let lastError: any = null;
+  
+  for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    const startTime = Date.now();
     
-    console.log(`[Scraper] TruePeopleSearch response received, length: ${html.length}`);
-    
-    const result = parseTruePeopleSearchReverseResult(html, person);
+    try {
+      if (attempt > 0) {
+        console.log(`[Scraper] TruePeopleSearch retry attempt ${attempt}/${RETRY_CONFIG.maxRetries}`);
+        await delay(RETRY_CONFIG.retryDelay);
+      }
+      
+      const response = await axios.get(SCRAPE_DO_BASE, {
+        params: { 
+          token, 
+          url: targetUrl, 
+          super: true, 
+          geoCode: 'us', 
+          render: true 
+        },
+        timeout: 90000,
+      });
 
-    await logApi('scrape_tps', targetUrl, { phone: cleanPhone }, response.status, responseTime, true, undefined, 0, userId);
+      const responseTime = Date.now() - startTime;
+      const html = response.data;
+      
+      console.log(`[Scraper] TruePeopleSearch response received, length: ${html.length}`);
+      
+      const result = parseTruePeopleSearchReverseResult(html, person);
 
-    console.log(`[Scraper] TruePeopleSearch result: verified=${result.verified}, score=${result.matchScore}, age=${result.details?.age}, name=${result.details?.name}`);
+      await logApi('scrape_tps', targetUrl, { phone: cleanPhone, attempt }, response.status, responseTime, true, undefined, 0, userId);
 
-    return result;
-  } catch (error: any) {
-    const responseTime = Date.now() - startTime;
-    console.error(`[Scraper] TruePeopleSearch error:`, error.message);
-    await logApi('scrape_tps', targetUrl, { phone: cleanPhone }, error.response?.status || 0, responseTime, false, error.message, 0, userId);
-    return { verified: false, source: 'TruePeopleSearch', matchScore: 0 };
+      console.log(`[Scraper] TruePeopleSearch result: verified=${result.verified}, score=${result.matchScore}, age=${result.details?.age}, name=${result.details?.name}`);
+
+      return result;
+    } catch (error: any) {
+      const responseTime = Date.now() - startTime;
+      lastError = error;
+      
+      console.error(`[Scraper] TruePeopleSearch error (attempt ${attempt + 1}):`, error.message);
+      
+      // 如果是可重试的错误且还有重试次数，继续重试
+      if (isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
+        console.log(`[Scraper] Error is retryable, will retry after ${RETRY_CONFIG.retryDelay}ms`);
+        continue;
+      }
+      
+      // 不可重试或已用完重试次数
+      await logApi('scrape_tps', targetUrl, { phone: cleanPhone, attempt, retried: attempt > 0 }, error.response?.status || 0, responseTime, false, error.message, 0, userId);
+      return { verified: false, source: 'TruePeopleSearch', matchScore: 0 };
+    }
   }
+  
+  // 所有重试都失败
+  return { verified: false, source: 'TruePeopleSearch', matchScore: 0 };
 }
 
 /**
  * 第二阶段验证：使用 FastPeopleSearch 进行电话号码反向搜索
  * URL 格式：https://www.fastpeoplesearch.com/415-548-0165（带连字符）
+ * 支持重试机制
  */
 export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?: number): Promise<VerificationResult> {
   const token = await getScrapeDoToken();
-  const startTime = Date.now();
-
-  // 格式化电话号码为带连字符的格式
   const formattedPhone = formatPhoneWithDashes(person.phone);
-  
-  // 使用电话号码反向搜索 URL
   const targetUrl = `https://www.fastpeoplesearch.com/${formattedPhone}`;
 
   console.log(`[Scraper] FastPeopleSearch reverse lookup for phone: ${formattedPhone}`);
   console.log(`[Scraper] Target URL: ${targetUrl}`);
 
-  try {
-    const response = await axios.get(SCRAPE_DO_BASE, {
-      params: { 
-        token, 
-        url: targetUrl, 
-        super: true, 
-        geoCode: 'us', 
-        render: true 
-      },
-      timeout: 90000,
-    });
-
-    const responseTime = Date.now() - startTime;
-    const html = response.data;
+  let lastError: any = null;
+  
+  for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    const startTime = Date.now();
     
-    console.log(`[Scraper] FastPeopleSearch response received, length: ${html.length}`);
-    
-    const result = parseFastPeopleSearchReverseResult(html, person);
+    try {
+      if (attempt > 0) {
+        console.log(`[Scraper] FastPeopleSearch retry attempt ${attempt}/${RETRY_CONFIG.maxRetries}`);
+        await delay(RETRY_CONFIG.retryDelay);
+      }
+      
+      const response = await axios.get(SCRAPE_DO_BASE, {
+        params: { 
+          token, 
+          url: targetUrl, 
+          super: true, 
+          geoCode: 'us', 
+          render: true 
+        },
+        timeout: 90000,
+      });
 
-    await logApi('scrape_fps', targetUrl, { phone: formattedPhone }, response.status, responseTime, true, undefined, 0, userId);
+      const responseTime = Date.now() - startTime;
+      const html = response.data;
+      
+      console.log(`[Scraper] FastPeopleSearch response received, length: ${html.length}`);
+      
+      const result = parseFastPeopleSearchReverseResult(html, person);
 
-    console.log(`[Scraper] FastPeopleSearch result: verified=${result.verified}, score=${result.matchScore}, age=${result.details?.age}, name=${result.details?.name}`);
+      await logApi('scrape_fps', targetUrl, { phone: formattedPhone, attempt }, response.status, responseTime, true, undefined, 0, userId);
 
-    return result;
-  } catch (error: any) {
-    const responseTime = Date.now() - startTime;
-    console.error(`[Scraper] FastPeopleSearch error:`, error.message);
-    await logApi('scrape_fps', targetUrl, { phone: formattedPhone }, error.response?.status || 0, responseTime, false, error.message, 0, userId);
-    return { verified: false, source: 'FastPeopleSearch', matchScore: 0 };
+      console.log(`[Scraper] FastPeopleSearch result: verified=${result.verified}, score=${result.matchScore}, age=${result.details?.age}, name=${result.details?.name}`);
+
+      return result;
+    } catch (error: any) {
+      const responseTime = Date.now() - startTime;
+      lastError = error;
+      
+      console.error(`[Scraper] FastPeopleSearch error (attempt ${attempt + 1}):`, error.message);
+      
+      // 如果是可重试的错误且还有重试次数，继续重试
+      if (isRetryableError(error) && attempt < RETRY_CONFIG.maxRetries) {
+        console.log(`[Scraper] Error is retryable, will retry after ${RETRY_CONFIG.retryDelay}ms`);
+        continue;
+      }
+      
+      // 不可重试或已用完重试次数
+      await logApi('scrape_fps', targetUrl, { phone: formattedPhone, attempt, retried: attempt > 0 }, error.response?.status || 0, responseTime, false, error.message, 0, userId);
+      return { verified: false, source: 'FastPeopleSearch', matchScore: 0 };
+    }
   }
+  
+  // 所有重试都失败
+  return { verified: false, source: 'FastPeopleSearch', matchScore: 0 };
 }
 
 /**
  * 主验证函数：先尝试 TruePeopleSearch，失败后尝试 FastPeopleSearch
+ * 验证逻辑：
+ * 1. 先调用 TruePeopleSearch
+ * 2. 如果 TPS 验证成功（verified=true 且 matchScore>=60），直接返回
+ * 3. 如果 TPS 失败，再调用 FastPeopleSearch
+ * 4. 如果 FPS 验证成功，返回 FPS 结果
+ * 5. 如果都失败，返回分数较高的结果
  */
 export async function verifyPhoneNumber(person: PersonToVerify, userId?: number): Promise<VerificationResult> {
   console.log(`[Scraper] Starting phone verification for ${person.firstName} ${person.lastName}, phone: ${person.phone}`);
