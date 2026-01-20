@@ -800,45 +800,60 @@ export default function Results() {
               </CardContent>
             </Card>
 
-            {/* 排除统计 */}
-            {(displayStats.excludedNoPhone > 0 || displayStats.excludedNoContact > 0 || displayStats.excludedAgeFilter > 0 || displayStats.excludedError > 0) && (
-              <Card className="border-slate-700/50 bg-gradient-to-br from-slate-900/80 to-slate-800/50">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
-                      <Ban className="h-4 w-4 text-red-400" />
-                    </div>
-                    <CardTitle className="text-white text-base">排除统计</CardTitle>
+            {/* 数据分析 - 更清晰的统计说明 */}
+            <Card className="border-slate-700/50 bg-gradient-to-br from-slate-900/80 to-slate-800/50">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                    <Filter className="h-4 w-4 text-orange-400" />
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {displayStats.excludedNoPhone > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
-                      <span className="text-slate-400 text-sm">无电话号码</span>
-                      <span className="text-red-400 font-mono">{displayStats.excludedNoPhone}</span>
-                    </div>
-                  )}
-                  {displayStats.excludedNoContact > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
-                      <span className="text-slate-400 text-sm">无联系方式</span>
-                      <span className="text-red-400 font-mono">{displayStats.excludedNoContact}</span>
-                    </div>
-                  )}
-                  {displayStats.excludedAgeFilter > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
-                      <span className="text-slate-400 text-sm">年龄不符</span>
-                      <span className="text-red-400 font-mono">{displayStats.excludedAgeFilter}</span>
-                    </div>
-                  )}
-                  {displayStats.excludedError > 0 && (
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-slate-400 text-sm">处理失败</span>
-                      <span className="text-red-400 font-mono">{displayStats.excludedError}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                  <CardTitle className="text-white text-base">数据分析</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* 数据来源 */}
+                <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
+                  <span className="text-slate-400 text-sm">原始数据</span>
+                  <span className="text-white font-mono">{displayStats.apifyReturned || searchLimit}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
+                  <span className="text-slate-400 text-sm">已处理</span>
+                  <span className="text-white font-mono">{displayStats.recordsProcessed}</span>
+                </div>
+                
+                {/* 排除原因 */}
+                {displayStats.excludedNoContact > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
+                    <span className="text-slate-400 text-sm">❌ 无联系方式</span>
+                    <span className="text-red-400 font-mono">{displayStats.excludedNoContact}</span>
+                  </div>
+                )}
+                {displayStats.excludedAgeFilter > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
+                    <span className="text-slate-400 text-sm">❌ 年龄不符</span>
+                    <span className="text-red-400 font-mono">{displayStats.excludedAgeFilter}</span>
+                  </div>
+                )}
+                {displayStats.excludedError > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
+                    <span className="text-slate-400 text-sm">❌ 处理失败</span>
+                    <span className="text-red-400 font-mono">{displayStats.excludedError}</span>
+                  </div>
+                )}
+                
+                {/* 电话统计 */}
+                <div className="pt-2 border-t border-slate-700/50">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-400 text-sm">📱 有电话</span>
+                    <span className="text-cyan-400 font-mono">{displayStats.resultsWithPhone}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-400 text-sm">📧 仅邮箱</span>
+                    <span className="text-purple-400 font-mono">{Math.max(0, displayStats.totalResults - displayStats.resultsWithPhone)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
