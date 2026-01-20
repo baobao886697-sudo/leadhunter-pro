@@ -415,7 +415,7 @@ export default function SearchProgress() {
   const handleExport = () => {
     exportMutation.mutate({ 
       taskId: taskId || "",
-      format: selectedExportFormat as 'simple' | 'standard' | 'detailed'
+      format: selectedExportFormat as 'minimal' | 'standard' | 'detailed'
     });
   };
 

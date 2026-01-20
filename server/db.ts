@@ -427,10 +427,10 @@ export async function updateSearchTask(taskId: string, updates: Partial<SearchTa
   console.error('[DB] updateSearchTask failed after all retries:', lastError?.message);
 }
 
-export async function updateSearchTaskStatus(taskId: string, status: string): Promise<void> {
+export async function updateSearchTaskStatus(taskId: string, status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped' | 'insufficient_credits'): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.update(searchTasks).set({ status, updatedAt: new Date() }).where(eq(searchTasks.taskId, taskId));
+  await db.update(searchTasks).set({ status }).where(eq(searchTasks.taskId, taskId));
 }
 
 export async function getUserSearchTasks(userId: number, page: number = 1, limit: number = 20): Promise<{ tasks: SearchTask[]; total: number }> {
@@ -1390,7 +1390,10 @@ export async function getAllFeedbacks(
     feedbacksQuery.where(whereClause);
   }
   
-  const feedbacks = await feedbacksQuery;
+  const feedbacks = await feedbacksQuery.then(rows => rows.map(row => ({
+    ...row,
+    userEmail: row.userEmail ?? undefined
+  })));
   
   // 获取总数
   const countQuery = db.select({ count: sql<number>`count(*)` }).from(userFeedbacks);
@@ -1477,5 +1480,9 @@ export async function getFeedbackById(feedbackId: number): Promise<(UserFeedback
   .where(eq(userFeedbacks.id, feedbackId))
   .limit(1);
   
-  return result[0] || null;
+  if (!result[0]) return null;
+  return {
+    ...result[0],
+    userEmail: result[0].userEmail ?? undefined
+  };
 }

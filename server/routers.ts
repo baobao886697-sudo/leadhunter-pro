@@ -424,7 +424,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
         }
         
-        if (task.status !== 'running' && task.status !== 'pending' && task.status !== 'fetching' && task.status !== 'verifying') {
+        if (task.status !== 'running' && task.status !== 'pending') {
           throw new TRPCError({ code: "BAD_REQUEST", message: "任务已完成或已停止" });
         }
         
@@ -432,13 +432,7 @@ export const appRouter = router({
         await updateSearchTaskStatus(input.taskId, 'stopped');
         
         // 记录日志
-        await addOperationLog({
-          type: 'search',
-          action: 'stop_task',
-          userId: ctx.user.id,
-          details: { taskId: input.taskId },
-          ip: ctx.ip || 'unknown',
-        });
+        console.log(`[TASK] User ${ctx.user.id} stopped task ${input.taskId}`);
         
         return { success: true, message: "搜索任务已停止" };
       }),
