@@ -597,7 +597,7 @@ export async function executeSearchV3(
         await updateProgress('调用 Apify API', 'searching', 'apify', 30);
         
         const apiStartTime = Date.now();
-        const searchResult = await apifySearchPeople(searchName, searchTitle, searchState, requestedCount * 2, userId);
+        const searchResult = await apifySearchPeople(searchName, searchTitle, searchState, requestedCount, userId);
         const apiDuration = Date.now() - apiStartTime;
 
         if (!searchResult.success || !searchResult.people) {
@@ -634,7 +634,7 @@ export async function executeSearchV3(
       await updateProgress('调用 Apify API', 'searching', 'apify', 30);
       
       const apiStartTime = Date.now();
-      const searchResult = await apifySearchPeople(searchName, searchTitle, searchState, requestedCount * 2, userId);
+      const searchResult = await apifySearchPeople(searchName, searchTitle, searchState, requestedCount, userId);
       const apiDuration = Date.now() - apiStartTime;
 
       if (!searchResult.success || !searchResult.people) {
