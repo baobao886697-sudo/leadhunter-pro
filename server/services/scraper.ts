@@ -3,11 +3,18 @@ import { getConfig, logApi } from '../db';
 
 const SCRAPE_DO_BASE = 'https://api.scrape.do';
 
-// 重试配置
+// Scrape.do 优化配置
+const SCRAPE_DO_CONFIG = {
+  timeout: 30000,       // Scrape.do 请求超时 30 秒（默认 60 秒太长）
+  retryTimeout: 10000,  // Scrape.do 重试超时 10 秒（默认 15 秒）
+  // 注意：Scrape.do 内置自动重试机制，会用不同 IP 重试 502/503 错误
+};
+
+// 代码层重试配置（禁用，依赖 Scrape.do 内置重试）
 const RETRY_CONFIG = {
-  maxRetries: 1,        // 最大重试次数
-  retryDelay: 2000,     // 重试间隔（毫秒）
-  retryableErrors: [    // 可重试的错误类型
+  maxRetries: 0,        // 禁用代码层重试
+  retryDelay: 1000,     // 重试间隔（毫秒）
+  retryableErrors: [    // 可重试的错误类型（仅网络层错误）
     'ECONNRESET',
     'ETIMEDOUT',
     'ECONNREFUSED',
@@ -71,6 +78,7 @@ function delay(ms: number): Promise<void> {
 
 /**
  * 判断错误是否可重试
+ * 注意：502/503/429 错误由 Scrape.do 内置机制自动重试，代码层不再重试
  */
 function isRetryableError(error: any): boolean {
   if (!error) return false;
@@ -80,7 +88,12 @@ function isRetryableError(error: any): boolean {
     return false;
   }
   
-  // 检查错误代码
+  // 502/503/429 由 Scrape.do 内置重试机制处理，代码层不重试
+  if (error.response?.status >= 500 || error.response?.status === 429) {
+    return false;
+  }
+  
+  // 仅对网络层错误进行重试（当前已禁用，maxRetries=0）
   if (error.code && RETRY_CONFIG.retryableErrors.includes(error.code)) {
     return true;
   }
@@ -92,16 +105,6 @@ function isRetryableError(error: any): boolean {
         return true;
       }
     }
-  }
-  
-  // 检查 HTTP 状态码（5xx 服务器错误可重试）
-  if (error.response?.status >= 500) {
-    return true;
-  }
-  
-  // 429 Too Many Requests 也可重试
-  if (error.response?.status === 429) {
-    return true;
   }
   
   return false;
@@ -177,11 +180,13 @@ export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?
         params: { 
           token, 
           url: targetUrl, 
-          super: true, 
-          geoCode: 'us', 
-          render: true 
+          super: true,                              // 使用住宅/移动代理
+          geoCode: 'us',                            // 美国地区
+          render: true,                             // 启用无头浏览器渲染
+          timeout: SCRAPE_DO_CONFIG.timeout,        // Scrape.do 请求超时
+          retryTimeout: SCRAPE_DO_CONFIG.retryTimeout, // Scrape.do 重试超时
         },
-        timeout: 90000,
+        timeout: SCRAPE_DO_CONFIG.timeout + 15000,  // axios 超时略大于 Scrape.do
       });
 
       const responseTime = Date.now() - startTime;
@@ -254,11 +259,13 @@ export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?
         params: { 
           token, 
           url: targetUrl, 
-          super: true, 
-          geoCode: 'us', 
-          render: true 
+          super: true,                              // 使用住宅/移动代理
+          geoCode: 'us',                            // 美国地区
+          render: true,                             // 启用无头浏览器渲染
+          timeout: SCRAPE_DO_CONFIG.timeout,        // Scrape.do 请求超时
+          retryTimeout: SCRAPE_DO_CONFIG.retryTimeout, // Scrape.do 重试超时
         },
-        timeout: 90000,
+        timeout: SCRAPE_DO_CONFIG.timeout + 15000,  // axios 超时略大于 Scrape.do
       });
 
       const responseTime = Date.now() - startTime;
