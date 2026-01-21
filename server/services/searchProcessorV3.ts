@@ -740,7 +740,7 @@ export async function executeSearchV3(
     // 阶段 6: 并发批量处理数据 (优化版)
     // ═══════════════════════════════════════════════════════════════
     const toProcess = shuffledResults.slice(0, actualCount);
-    const CONCURRENT_BATCH_SIZE = 30; // 并发数量，根据 Scrape.do Business计划 40并发限制设置，留 10 余量
+    const CONCURRENT_BATCH_SIZE = 20; // 并发数量，根据 Scrape.do Business计划 40并发限制设置，留足余量避免限流
     
     addLog(`🚀 启用并发处理模式，并发数: ${CONCURRENT_BATCH_SIZE}`, 'info', 'process', '');
     
