@@ -13,8 +13,10 @@ import { toast } from "sonner";
 import { 
   User, Coins, Search, RefreshCw, Key, Ban, UserCheck,
   Clock, Mail, Calendar, Activity, CreditCard, History,
-  AlertTriangle, CheckCircle, XCircle, Send, Eye
+  AlertTriangle, CheckCircle, XCircle, Send, Eye,
+  Download, Filter, TrendingUp, TrendingDown, ArrowUpDown
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface UserDetailDialogProps {
@@ -31,6 +33,12 @@ export function UserDetailDialog({ userId, open, onOpenChange, onRefresh }: User
   const [newPassword, setNewPassword] = useState("");
   const [messageTitle, setMessageTitle] = useState("");
   const [messageContent, setMessageContent] = useState("");
+  
+  // 积分报表筛选状态（新增）
+  const [creditFilterType, setCreditFilterType] = useState<string>("all");
+  const [creditStartDate, setCreditStartDate] = useState<string>("");
+  const [creditEndDate, setCreditEndDate] = useState<string>("");
+  const [creditPage, setCreditPage] = useState(1);
 
   // 获取用户详情
   const { data: userDetail, isLoading, refetch } = trpc.admin.getUserDetail.useQuery(
@@ -44,10 +52,40 @@ export function UserDetailDialog({ userId, open, onOpenChange, onRefresh }: User
     { enabled: !!userId && open && activeTab === "searches" }
   );
 
-  // 获取用户积分记录
+  // 获取用户积分记录（保留原有查询作为备用）
   const { data: creditHistory, isLoading: creditLoading } = trpc.admin.getUserCreditHistory.useQuery(
     { userId: userId!, limit: 20 },
     { enabled: !!userId && open && activeTab === "credits" }
+  );
+
+  // 高级积分查询（新增）- 支持筛选
+  const { data: advancedCreditData, isLoading: advancedCreditLoading, refetch: refetchAdvancedCredit } = trpc.admin.getAdvancedCreditLogs.useQuery(
+    { 
+      userId: userId!, 
+      page: creditPage,
+      limit: 20,
+      type: creditFilterType !== 'all' ? creditFilterType : undefined,
+      startDate: creditStartDate || undefined,
+      endDate: creditEndDate || undefined,
+    },
+    { enabled: !!userId && open && activeTab === "credits" }
+  );
+
+  // 用户积分统计概览（新增）
+  const { data: creditStats, isLoading: creditStatsLoading } = trpc.admin.getUserCreditStats.useQuery(
+    { userId: userId! },
+    { enabled: !!userId && open && activeTab === "credits" }
+  );
+
+  // 导出积分记录（新增）
+  const { refetch: fetchExportData } = trpc.admin.exportUserCreditLogs.useQuery(
+    { 
+      userId: userId!,
+      type: creditFilterType !== 'all' ? creditFilterType : undefined,
+      startDate: creditStartDate || undefined,
+      endDate: creditEndDate || undefined,
+    },
+    { enabled: false } // 手动触发
   );
 
   // 获取用户登录记录
@@ -146,6 +184,50 @@ export function UserDetailDialog({ userId, open, onOpenChange, onRefresh }: User
       content: messageContent,
       type: "support",
     });
+  };
+
+  // 导出积分记录为 CSV（新增）
+  const handleExportCredits = async () => {
+    try {
+      const result = await fetchExportData();
+      if (result.data?.csv) {
+        // 创建 Blob 并下载
+        const blob = new Blob(["\uFEFF" + result.data.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `积分记录_用户${userId}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success("导出成功");
+      }
+    } catch (error) {
+      toast.error("导出失败");
+    }
+  };
+
+  // 积分类型标签映射（新增）
+  const creditTypeLabels: Record<string, string> = {
+    'recharge': '充值',
+    'search': '搜索消费',
+    'admin_add': '管理员增加',
+    'admin_deduct': '管理员扣除',
+    'refund': '退款',
+    'admin_adjust': '管理员调整',
+    'bonus': '赠送'
+  };
+
+  // 积分类型颜色映射（新增）
+  const creditTypeColors: Record<string, string> = {
+    'recharge': 'bg-green-500/20 text-green-400 border-green-500/30',
+    'search': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    'admin_add': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    'admin_deduct': 'bg-red-500/20 text-red-400 border-red-500/30',
+    'refund': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    'admin_adjust': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    'bonus': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
   };
 
   const user = userDetail?.user;
@@ -376,9 +458,141 @@ export function UserDetailDialog({ userId, open, onOpenChange, onRefresh }: User
                 </div>
               </TabsContent>
 
-              {/* 积分记录Tab */}
-              <TabsContent value="credits">
-                {creditLoading ? (
+              {/* 积分记录Tab - 增强版 */}
+              <TabsContent value="credits" className="space-y-4">
+                {/* 积分统计概览卡片 */}
+                {creditStatsLoading ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : creditStats && (
+                  <div className="grid grid-cols-4 gap-3">
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardContent className="pt-3 pb-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-slate-400">累计充值</p>
+                            <p className="text-lg font-bold text-green-400">+{creditStats.totalRecharge}</p>
+                          </div>
+                          <TrendingUp className="h-5 w-5 text-green-400/50" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardContent className="pt-3 pb-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-slate-400">累计消费</p>
+                            <p className="text-lg font-bold text-blue-400">-{creditStats.totalSearch}</p>
+                          </div>
+                          <TrendingDown className="h-5 w-5 text-blue-400/50" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardContent className="pt-3 pb-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-slate-400">累计退款</p>
+                            <p className="text-lg font-bold text-yellow-400">+{creditStats.totalRefund}</p>
+                          </div>
+                          <ArrowUpDown className="h-5 w-5 text-yellow-400/50" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-slate-800/50 border-slate-700">
+                      <CardContent className="pt-3 pb-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-slate-400">交易次数</p>
+                            <p className="text-lg font-bold text-slate-300">{creditStats.transactionCount}</p>
+                          </div>
+                          <History className="h-5 w-5 text-slate-400/50" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {/* 筛选和导出工具栏 */}
+                <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-800/30 rounded-lg border border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-slate-400" />
+                    <span className="text-sm text-slate-400">筛选:</span>
+                  </div>
+                  
+                  {/* 类型筛选 */}
+                  <Select value={creditFilterType} onValueChange={(v) => { setCreditFilterType(v); setCreditPage(1); }}>
+                    <SelectTrigger className="w-[130px] h-8 bg-slate-900 border-slate-600 text-sm">
+                      <SelectValue placeholder="类型" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-700">
+                      <SelectItem value="all">全部类型</SelectItem>
+                      <SelectItem value="recharge">充值</SelectItem>
+                      <SelectItem value="search">搜索消费</SelectItem>
+                      <SelectItem value="refund">退款</SelectItem>
+                      <SelectItem value="admin_add">管理员增加</SelectItem>
+                      <SelectItem value="admin_deduct">管理员扣除</SelectItem>
+                      <SelectItem value="bonus">赠送</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* 时间范围 */}
+                  <Input
+                    type="date"
+                    value={creditStartDate}
+                    onChange={(e) => { setCreditStartDate(e.target.value); setCreditPage(1); }}
+                    className="w-[130px] h-8 bg-slate-900 border-slate-600 text-sm"
+                    placeholder="开始日期"
+                  />
+                  <span className="text-slate-500">-</span>
+                  <Input
+                    type="date"
+                    value={creditEndDate}
+                    onChange={(e) => { setCreditEndDate(e.target.value); setCreditPage(1); }}
+                    className="w-[130px] h-8 bg-slate-900 border-slate-600 text-sm"
+                    placeholder="结束日期"
+                  />
+
+                  {/* 清除筛选 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCreditFilterType('all');
+                      setCreditStartDate('');
+                      setCreditEndDate('');
+                      setCreditPage(1);
+                    }}
+                    className="h-8 text-slate-400 hover:text-white"
+                  >
+                    清除
+                  </Button>
+
+                  {/* 导出按钮 */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCredits}
+                    className="h-8 ml-auto border-green-500/50 text-green-400 hover:bg-green-500/10"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    导出 CSV
+                  </Button>
+                </div>
+
+                {/* 筛选统计 */}
+                {advancedCreditData?.stats && (
+                  <div className="flex items-center gap-4 text-sm text-slate-400 px-1">
+                    <span>共 <span className="text-white font-medium">{advancedCreditData.total}</span> 条记录</span>
+                    <span>收入: <span className="text-green-400">+{advancedCreditData.stats.totalIn}</span></span>
+                    <span>支出: <span className="text-red-400">-{advancedCreditData.stats.totalOut}</span></span>
+                    <span>净变动: <span className={advancedCreditData.stats.netChange >= 0 ? "text-green-400" : "text-red-400"}>
+                      {advancedCreditData.stats.netChange >= 0 ? "+" : ""}{advancedCreditData.stats.netChange}
+                    </span></span>
+                  </div>
+                )}
+
+                {/* 积分记录表格 */}
+                {advancedCreditLoading ? (
                   <Skeleton className="h-40 w-full" />
                 ) : (
                   <div className="rounded-lg border border-slate-700 overflow-hidden">
@@ -390,37 +604,71 @@ export function UserDetailDialog({ userId, open, onOpenChange, onRefresh }: User
                           <TableHead className="text-slate-400">变动</TableHead>
                           <TableHead className="text-slate-400">余额</TableHead>
                           <TableHead className="text-slate-400">说明</TableHead>
+                          <TableHead className="text-slate-400">关联</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {creditHistory?.logs.map((log: any) => (
-                          <TableRow key={log.id} className="border-slate-700">
+                        {advancedCreditData?.logs.map((log: any) => (
+                          <TableRow key={log.id} className="border-slate-700 hover:bg-slate-800/50">
                             <TableCell className="text-slate-300 text-sm">
-                              {new Date(log.createdAt).toLocaleString()}
+                              {new Date(log.createdAt).toLocaleString('zh-CN')}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-xs">
-                                {log.type}
+                              <Badge variant="outline" className={`text-xs ${creditTypeColors[log.type] || ''}`}>
+                                {creditTypeLabels[log.type] || log.type}
                               </Badge>
                             </TableCell>
-                            <TableCell className={log.amount > 0 ? "text-green-400" : "text-red-400"}>
+                            <TableCell className={`font-medium ${log.amount > 0 ? "text-green-400" : "text-red-400"}`}>
                               {log.amount > 0 ? "+" : ""}{log.amount}
                             </TableCell>
                             <TableCell className="text-slate-300">{log.balanceAfter}</TableCell>
-                            <TableCell className="text-slate-400 text-sm max-w-[200px] truncate">
+                            <TableCell className="text-slate-400 text-sm max-w-[180px] truncate" title={log.description}>
                               {log.description}
+                            </TableCell>
+                            <TableCell className="text-slate-500 text-xs">
+                              {log.relatedOrderId && <span className="mr-2">订单:{log.relatedOrderId.slice(0,8)}...</span>}
+                              {log.relatedTaskId && <span>任务:{log.relatedTaskId.slice(0,8)}...</span>}
                             </TableCell>
                           </TableRow>
                         ))}
-                        {(!creditHistory?.logs || creditHistory.logs.length === 0) && (
+                        {(!advancedCreditData?.logs || advancedCreditData.logs.length === 0) && (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center text-slate-500 py-8">
+                            <TableCell colSpan={6} className="text-center text-slate-500 py-8">
                               暂无积分记录
                             </TableCell>
                           </TableRow>
                         )}
                       </TableBody>
                     </Table>
+                  </div>
+                )}
+
+                {/* 分页控件 */}
+                {advancedCreditData && advancedCreditData.total > 20 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-sm text-slate-400">
+                      第 {creditPage} 页，共 {Math.ceil(advancedCreditData.total / 20)} 页
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCreditPage(p => Math.max(1, p - 1))}
+                        disabled={creditPage <= 1}
+                        className="border-slate-600"
+                      >
+                        上一页
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCreditPage(p => p + 1)}
+                        disabled={creditPage >= Math.ceil(advancedCreditData.total / 20)}
+                        className="border-slate-600"
+                      >
+                        下一页
+                      </Button>
+                    </div>
                   </div>
                 )}
               </TabsContent>

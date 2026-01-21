@@ -99,6 +99,12 @@ import {
   replyFeedback,
   updateFeedbackStatus,
   getFeedbackById,
+  // 积分报表系统（新增）
+  getAdvancedCreditLogs,
+  getUserCreditStats,
+  getGlobalCreditReport,
+  exportUserCreditLogs,
+  getCreditAnomalies,
 } from "./db";
 // Apollo 相关处理器已移除
 import { previewSearch, executeSearchV3 } from "./services/searchProcessorV3";
@@ -1588,6 +1594,85 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "标记失败" });
         }
         return { success: true };
+      }),
+
+    // ============ 积分报表系统（新增） ============
+
+    /**
+     * 高级积分查询 - 支持多条件筛选
+     * 用于管理员查看用户详细积分记录
+     */
+    getAdvancedCreditLogs: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        page: z.number().optional(),
+        limit: z.number().optional(),
+        startDate: z.string().optional(),  // ISO 日期字符串
+        endDate: z.string().optional(),
+        type: z.string().optional(),       // 积分类型筛选
+        minAmount: z.number().optional(),  // 最小金额
+        maxAmount: z.number().optional(),  // 最大金额
+      }))
+      .query(async ({ input }) => {
+        return getAdvancedCreditLogs(input.userId, {
+          page: input.page,
+          limit: input.limit,
+          startDate: input.startDate ? new Date(input.startDate) : undefined,
+          endDate: input.endDate ? new Date(input.endDate) : undefined,
+          type: input.type,
+          minAmount: input.minAmount,
+          maxAmount: input.maxAmount,
+        });
+      }),
+
+    /**
+     * 获取用户积分统计概览
+     * 包含累计充值、消费、退款等汇总数据
+     */
+    getUserCreditStats: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ input }) => {
+        return getUserCreditStats(input.userId);
+      }),
+
+    /**
+     * 获取全局积分统计报表
+     * 平台级别的积分流水统计
+     */
+    getGlobalCreditReport: adminProcedure
+      .input(z.object({ days: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return getGlobalCreditReport(input?.days || 30);
+      }),
+
+    /**
+     * 导出用户积分记录为 CSV
+     * 返回 CSV 格式字符串，前端可直接下载
+     */
+    exportUserCreditLogs: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        type: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const csv = await exportUserCreditLogs(input.userId, {
+          startDate: input.startDate ? new Date(input.startDate) : undefined,
+          endDate: input.endDate ? new Date(input.endDate) : undefined,
+          type: input.type,
+        });
+        return { csv };
+      }),
+
+    /**
+     * 获取积分异常检测报告
+     * 检测大额变动等异常情况
+     */
+    getCreditAnomalies: adminProcedure
+      .input(z.object({ threshold: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return getCreditAnomalies(input?.threshold || 1000);
       }),
   }),
 

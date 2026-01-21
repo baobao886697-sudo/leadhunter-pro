@@ -1493,3 +1493,339 @@ export async function getFeedbackById(feedbackId: number): Promise<(UserFeedback
     userEmail: result[0].userEmail ?? undefined
   };
 }
+
+
+// ============ 积分报表系统（新增） ============
+
+/**
+ * 高级积分查询 - 支持多条件筛选
+ * @param userId 用户ID
+ * @param options 筛选选项
+ */
+export async function getAdvancedCreditLogs(
+  userId: number,
+  options: {
+    page?: number;
+    limit?: number;
+    startDate?: Date;
+    endDate?: Date;
+    type?: string;
+    minAmount?: number;
+    maxAmount?: number;
+  } = {}
+): Promise<{
+  logs: CreditLog[];
+  total: number;
+  stats: {
+    totalIn: number;      // 总收入（正数）
+    totalOut: number;     // 总支出（负数的绝对值）
+    netChange: number;    // 净变动
+    count: number;        // 记录数
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0, stats: { totalIn: 0, totalOut: 0, netChange: 0, count: 0 } };
+  
+  const { page = 1, limit = 50, startDate, endDate, type, minAmount, maxAmount } = options;
+  const offset = (page - 1) * limit;
+  
+  // 构建查询条件
+  let conditions: any[] = [eq(creditLogs.userId, userId)];
+  
+  if (startDate) {
+    conditions.push(gte(creditLogs.createdAt, startDate));
+  }
+  if (endDate) {
+    conditions.push(lte(creditLogs.createdAt, endDate));
+  }
+  if (type && type !== 'all') {
+    conditions.push(eq(creditLogs.type, type as any));
+  }
+  if (minAmount !== undefined) {
+    conditions.push(gte(creditLogs.amount, minAmount));
+  }
+  if (maxAmount !== undefined) {
+    conditions.push(lte(creditLogs.amount, maxAmount));
+  }
+  
+  const whereClause = and(...conditions);
+  
+  // 查询记录
+  const [logs, countResult] = await Promise.all([
+    db.select().from(creditLogs).where(whereClause).orderBy(desc(creditLogs.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(creditLogs).where(whereClause)
+  ]);
+  
+  // 计算统计数据
+  const statsResult = await db.select({
+    totalIn: sql<number>`COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0)`,
+    totalOut: sql<number>`COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0)`,
+    netChange: sql<number>`COALESCE(SUM(amount), 0)`
+  }).from(creditLogs).where(whereClause);
+  
+  return {
+    logs,
+    total: countResult[0]?.count || 0,
+    stats: {
+      totalIn: Number(statsResult[0]?.totalIn) || 0,
+      totalOut: Number(statsResult[0]?.totalOut) || 0,
+      netChange: Number(statsResult[0]?.netChange) || 0,
+      count: countResult[0]?.count || 0
+    }
+  };
+}
+
+/**
+ * 获取用户积分统计概览
+ * @param userId 用户ID
+ */
+export async function getUserCreditStats(userId: number): Promise<{
+  currentBalance: number;
+  totalRecharge: number;    // 累计充值
+  totalSearch: number;      // 累计搜索消费
+  totalRefund: number;      // 累计退款
+  totalBonus: number;       // 累计赠送
+  totalAdminAdjust: number; // 管理员调整
+  firstTransactionAt: Date | null;
+  lastTransactionAt: Date | null;
+  transactionCount: number;
+}> {
+  const db = await getDb();
+  if (!db) return {
+    currentBalance: 0, totalRecharge: 0, totalSearch: 0, totalRefund: 0,
+    totalBonus: 0, totalAdminAdjust: 0, firstTransactionAt: null, lastTransactionAt: null, transactionCount: 0
+  };
+  
+  // 获取用户当前余额
+  const user = await db.select({ credits: users.credits }).from(users).where(eq(users.id, userId)).limit(1);
+  const currentBalance = user[0]?.credits || 0;
+  
+  // 按类型统计积分变动
+  const typeStats = await db.select({
+    type: creditLogs.type,
+    total: sql<number>`COALESCE(SUM(amount), 0)`
+  }).from(creditLogs).where(eq(creditLogs.userId, userId)).groupBy(creditLogs.type);
+  
+  // 获取时间范围和总数
+  const timeStats = await db.select({
+    firstAt: sql<Date>`MIN(created_at)`,
+    lastAt: sql<Date>`MAX(created_at)`,
+    count: sql<number>`COUNT(*)`
+  }).from(creditLogs).where(eq(creditLogs.userId, userId));
+  
+  // 整理统计数据
+  const stats: Record<string, number> = {};
+  typeStats.forEach(s => {
+    stats[s.type] = Number(s.total) || 0;
+  });
+  
+  return {
+    currentBalance,
+    totalRecharge: stats['recharge'] || 0,
+    totalSearch: Math.abs(stats['search'] || 0),
+    totalRefund: stats['refund'] || 0,
+    totalBonus: stats['bonus'] || 0,
+    totalAdminAdjust: (stats['admin_add'] || 0) + (stats['admin_deduct'] || 0) + (stats['admin_adjust'] || 0),
+    firstTransactionAt: timeStats[0]?.firstAt || null,
+    lastTransactionAt: timeStats[0]?.lastAt || null,
+    transactionCount: Number(timeStats[0]?.count) || 0
+  };
+}
+
+/**
+ * 获取全局积分统计报表
+ * @param days 统计天数
+ */
+export async function getGlobalCreditReport(days: number = 30): Promise<{
+  daily: Array<{
+    date: string;
+    recharge: number;
+    search: number;
+    refund: number;
+    bonus: number;
+    netChange: number;
+  }>;
+  summary: {
+    totalRecharge: number;
+    totalSearch: number;
+    totalRefund: number;
+    totalBonus: number;
+    netChange: number;
+    activeUsers: number;
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { daily: [], summary: { totalRecharge: 0, totalSearch: 0, totalRefund: 0, totalBonus: 0, netChange: 0, activeUsers: 0 } };
+  
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  
+  // 按日期和类型统计
+  const dailyStats = await db.select({
+    date: sql<string>`DATE(created_at)`,
+    type: creditLogs.type,
+    total: sql<number>`COALESCE(SUM(amount), 0)`
+  })
+  .from(creditLogs)
+  .where(gte(creditLogs.createdAt, startDate))
+  .groupBy(sql`DATE(created_at)`, creditLogs.type)
+  .orderBy(sql`DATE(created_at)`);
+  
+  // 整理每日数据
+  const dailyMap = new Map<string, { recharge: number; search: number; refund: number; bonus: number; netChange: number }>();
+  
+  dailyStats.forEach(stat => {
+    const dateStr = String(stat.date);
+    if (!dailyMap.has(dateStr)) {
+      dailyMap.set(dateStr, { recharge: 0, search: 0, refund: 0, bonus: 0, netChange: 0 });
+    }
+    const day = dailyMap.get(dateStr)!;
+    const amount = Number(stat.total) || 0;
+    
+    switch (stat.type) {
+      case 'recharge':
+        day.recharge += amount;
+        break;
+      case 'search':
+        day.search += Math.abs(amount);
+        break;
+      case 'refund':
+        day.refund += amount;
+        break;
+      case 'bonus':
+        day.bonus += amount;
+        break;
+    }
+    day.netChange += amount;
+  });
+  
+  const daily = Array.from(dailyMap.entries()).map(([date, stats]) => ({ date, ...stats }));
+  
+  // 计算汇总
+  const summary = {
+    totalRecharge: daily.reduce((sum, d) => sum + d.recharge, 0),
+    totalSearch: daily.reduce((sum, d) => sum + d.search, 0),
+    totalRefund: daily.reduce((sum, d) => sum + d.refund, 0),
+    totalBonus: daily.reduce((sum, d) => sum + d.bonus, 0),
+    netChange: daily.reduce((sum, d) => sum + d.netChange, 0),
+    activeUsers: 0
+  };
+  
+  // 统计活跃用户数
+  const activeUsersResult = await db.select({
+    count: sql<number>`COUNT(DISTINCT user_id)`
+  }).from(creditLogs).where(gte(creditLogs.createdAt, startDate));
+  
+  summary.activeUsers = Number(activeUsersResult[0]?.count) || 0;
+  
+  return { daily, summary };
+}
+
+/**
+ * 导出用户积分记录为 CSV 格式
+ * @param userId 用户ID
+ * @param options 筛选选项
+ */
+export async function exportUserCreditLogs(
+  userId: number,
+  options: {
+    startDate?: Date;
+    endDate?: Date;
+    type?: string;
+  } = {}
+): Promise<string> {
+  const db = await getDb();
+  if (!db) return '';
+  
+  const { startDate, endDate, type } = options;
+  
+  // 构建查询条件
+  let conditions: any[] = [eq(creditLogs.userId, userId)];
+  
+  if (startDate) {
+    conditions.push(gte(creditLogs.createdAt, startDate));
+  }
+  if (endDate) {
+    conditions.push(lte(creditLogs.createdAt, endDate));
+  }
+  if (type && type !== 'all') {
+    conditions.push(eq(creditLogs.type, type as any));
+  }
+  
+  const whereClause = and(...conditions);
+  
+  // 查询所有符合条件的记录（不分页）
+  const logs = await db.select().from(creditLogs).where(whereClause).orderBy(desc(creditLogs.createdAt));
+  
+  // 生成 CSV 内容
+  const headers = ['ID', '时间', '类型', '变动金额', '变动后余额', '说明', '关联订单', '关联任务'];
+  const typeLabels: Record<string, string> = {
+    'recharge': '充值',
+    'search': '搜索消费',
+    'admin_add': '管理员增加',
+    'admin_deduct': '管理员扣除',
+    'refund': '退款',
+    'admin_adjust': '管理员调整',
+    'bonus': '赠送'
+  };
+  
+  const rows = logs.map(log => [
+    log.id,
+    new Date(log.createdAt).toLocaleString('zh-CN'),
+    typeLabels[log.type] || log.type,
+    log.amount > 0 ? `+${log.amount}` : log.amount,
+    log.balanceAfter,
+    log.description || '',
+    log.relatedOrderId || '',
+    log.relatedTaskId || ''
+  ]);
+  
+  // 组装 CSV
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+  ].join('\n');
+  
+  return csvContent;
+}
+
+/**
+ * 获取积分异常检测报告
+ * @param threshold 异常阈值（单次变动超过此值视为异常）
+ */
+export async function getCreditAnomalies(threshold: number = 1000): Promise<Array<{
+  userId: number;
+  userEmail: string;
+  logId: number;
+  amount: number;
+  type: string;
+  description: string;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // 查询大额变动记录
+  const anomalies = await db.select({
+    userId: creditLogs.userId,
+    userEmail: users.email,
+    logId: creditLogs.id,
+    amount: creditLogs.amount,
+    type: creditLogs.type,
+    description: creditLogs.description,
+    createdAt: creditLogs.createdAt
+  })
+  .from(creditLogs)
+  .leftJoin(users, eq(creditLogs.userId, users.id))
+  .where(or(
+    gte(creditLogs.amount, threshold),
+    lte(creditLogs.amount, -threshold)
+  ))
+  .orderBy(desc(creditLogs.createdAt))
+  .limit(100);
+  
+  return anomalies.map(a => ({
+    ...a,
+    userEmail: a.userEmail || 'Unknown'
+  }));
+}
