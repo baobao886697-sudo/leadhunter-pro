@@ -268,12 +268,12 @@ export default function SearchProgress() {
     logs.forEach(log => {
       if (log.message.includes('数据获取') || log.message.includes('获取数据')) result.apifyCalls++;
       if (log.message.includes('找到电话') || log.message.includes('获取到电话')) result.phonesFound++;
-      if (log.message.includes('验证通过') || log.message.includes('验证成功')) result.phonesVerified++;
+      if (log.message.includes('验证通过') || log.message.includes('验证成功') || log.message.includes('verification passed')) result.phonesVerified++;
       if (log.message.includes('验证失败')) result.verifyFailed++;
       if (log.message.includes('未找到电话') || log.message.includes('无电话')) result.excludedNoPhone++;
       if (log.message.includes('年龄') && log.message.includes('不在')) result.excludedAgeFilter++;
       if (log.message.includes('缓存命中') || log.message.includes('缓存')) result.cacheHits++;
-      if (log.message.includes('二次验证') && log.message.includes('通过')) result.scrapeDoVerified++;
+      if (log.message.includes('二次验证') && log.message.includes('通过') || log.message.includes('verification passed')) result.scrapeDoVerified++;
       if (log.message.includes('二次验证') && log.message.includes('失败')) result.scrapeDoFailed++;
       if (log.step) result.processedCount = Math.max(result.processedCount, log.step);
     });
