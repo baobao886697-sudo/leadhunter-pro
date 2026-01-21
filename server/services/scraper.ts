@@ -8,6 +8,8 @@ const SCRAPE_DO_CONFIG = {
   timeout: 15000,       // Scrape.do 请求超时 15 秒
   noRetry: true,        // 禁用 Scrape.do 内置重试，失败立即返回
   render: true,         // 启用无头浏览器渲染，确保获取完整页面内容
+  waitUntil: 'domcontentloaded', // 优化渲染等待策略，DOM加载完成即返回，无需等待所有资源
+  blockResources: true, // 阻止加载不必要的资源(CSS/图片)，加快渲染速度
 };
 
 // 代码层重试配置（禁用，依赖 Scrape.do 内置重试）
@@ -182,9 +184,11 @@ export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?
           url: targetUrl, 
           super: true,                              // 使用住宅/移动代理
           geoCode: 'us',                            // 美国地区
-          render: SCRAPE_DO_CONFIG.render,          // 关闭渲染提升速度
+          render: SCRAPE_DO_CONFIG.render,          // 启用渲染
           timeout: SCRAPE_DO_CONFIG.timeout,        // 15秒超时
           noRetry: SCRAPE_DO_CONFIG.noRetry,        // 禁用重试
+          waitUntil: SCRAPE_DO_CONFIG.waitUntil,    // DOM加载完成即返回
+          blockResources: SCRAPE_DO_CONFIG.blockResources, // 阻止加载不必要资源
         },
         timeout: 20000,  // axios 超时 20 秒
       });
@@ -261,9 +265,11 @@ export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?
           url: targetUrl, 
           super: true,                              // 使用住宅/移动代理
           geoCode: 'us',                            // 美国地区
-          render: SCRAPE_DO_CONFIG.render,          // 关闭渲染提升速度
+          render: SCRAPE_DO_CONFIG.render,          // 启用渲染
           timeout: SCRAPE_DO_CONFIG.timeout,        // 15秒超时
           noRetry: SCRAPE_DO_CONFIG.noRetry,        // 禁用重试
+          waitUntil: SCRAPE_DO_CONFIG.waitUntil,    // DOM加载完成即返回
+          blockResources: SCRAPE_DO_CONFIG.blockResources, // 阻止加载不必要资源
         },
         timeout: 20000,  // axios 超时 20 秒
       });

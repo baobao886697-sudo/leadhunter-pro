@@ -399,6 +399,7 @@ export async function searchPeople(
     // Actor ID: code_crafter/leads-finder
     const run = await client.actor('code_crafter/leads-finder').call(actorInput, {
       waitSecs: 300, // 最多等待5分钟
+      timeout: 300,  // Actor 运行超时限制(秒)，防止无限等待
     });
     
     console.log(`[Apify] Run completed: runId=${run.id}, status=${run.status}`);
