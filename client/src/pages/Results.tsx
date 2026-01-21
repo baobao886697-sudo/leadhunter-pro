@@ -782,10 +782,6 @@ export default function Results() {
                   <span className="text-green-400 font-mono">{displayStats.totalResults}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
-                  <span className="text-slate-400 text-sm">有电话</span>
-                  <span className="text-cyan-400 font-mono">{displayStats.resultsWithPhone}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
                   <span className="text-slate-400 text-sm">有邮箱</span>
                   <span className="text-purple-400 font-mono">{displayStats.resultsWithEmail}</span>
                 </div>
@@ -822,12 +818,6 @@ export default function Results() {
                 </div>
                 
                 {/* 排除原因 */}
-                {displayStats.excludedNoContact > 0 && (
-                  <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
-                    <span className="text-slate-400 text-sm">❌ 无联系方式</span>
-                    <span className="text-red-400 font-mono">{displayStats.excludedNoContact}</span>
-                  </div>
-                )}
                 {displayStats.excludedAgeFilter > 0 && (
                   <div className="flex justify-between items-center py-2 border-b border-slate-700/30">
                     <span className="text-slate-400 text-sm">❌ 年龄不符</span>
@@ -840,18 +830,7 @@ export default function Results() {
                     <span className="text-red-400 font-mono">{displayStats.excludedError}</span>
                   </div>
                 )}
-                
-                {/* 电话统计 */}
-                <div className="pt-2 border-t border-slate-700/50">
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-slate-400 text-sm">📱 有电话</span>
-                    <span className="text-cyan-400 font-mono">{displayStats.resultsWithPhone}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-slate-400 text-sm">📧 仅邮箱</span>
-                    <span className="text-purple-400 font-mono">{Math.max(0, displayStats.totalResults - displayStats.resultsWithPhone)}</span>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
           </div>
