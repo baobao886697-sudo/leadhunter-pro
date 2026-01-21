@@ -740,7 +740,7 @@ export async function executeSearchV3(
     // 阶段 6: 并发批量处理数据 (优化版)
     // ═══════════════════════════════════════════════════════════════
     const toProcess = shuffledResults.slice(0, actualCount);
-    const CONCURRENT_BATCH_SIZE = 8; // 并发数量，Scrape.do render=true 每请求消耗5并发槽位，40/5=8 为实际上限
+    const CONCURRENT_BATCH_SIZE = 16; // 并发数量，Scrape.do render=true 每请求消耗5并发槽位，80/5=16 为实际上限
     
     addLog(`🚀 启用并发处理模式，并发数: ${CONCURRENT_BATCH_SIZE}`, 'info', 'process', '');
     
