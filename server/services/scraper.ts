@@ -183,10 +183,8 @@ export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?
           super: true,                              // 使用住宅/移动代理
           geoCode: 'us',                            // 美国地区
           render: true,                             // 启用无头浏览器渲染
-          timeout: SCRAPE_DO_CONFIG.timeout,        // Scrape.do 请求超时
-          retryTimeout: SCRAPE_DO_CONFIG.retryTimeout, // Scrape.do 重试超时
         },
-        timeout: SCRAPE_DO_CONFIG.timeout + 15000,  // axios 超时略大于 Scrape.do
+        timeout: 45000,  // axios 超时 45 秒
       });
 
       const responseTime = Date.now() - startTime;
@@ -262,10 +260,8 @@ export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?
           super: true,                              // 使用住宅/移动代理
           geoCode: 'us',                            // 美国地区
           render: true,                             // 启用无头浏览器渲染
-          timeout: SCRAPE_DO_CONFIG.timeout,        // Scrape.do 请求超时
-          retryTimeout: SCRAPE_DO_CONFIG.retryTimeout, // Scrape.do 重试超时
         },
-        timeout: SCRAPE_DO_CONFIG.timeout + 15000,  // axios 超时略大于 Scrape.do
+        timeout: 45000,  // axios 超时 45 秒
       });
 
       const responseTime = Date.now() - startTime;
