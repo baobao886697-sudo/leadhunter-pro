@@ -311,16 +311,19 @@ export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?
 }
 
 /**
- * 主验证函数：极速模式 - 仅使用 TruePeopleSearch 单阶段验证
+ * 主验证函数：先尝试 TruePeopleSearch，失败后尝试 FastPeopleSearch
  * 验证逻辑：
- * 1. 调用 TruePeopleSearch
- * 2. 直接返回结果（不再调用 FastPeopleSearch）
+ * 1. 先调用 TruePeopleSearch
+ * 2. 如果 TPS 验证成功（verified=true 且 matchScore>=60），直接返回
+ * 3. 如果 TPS 失败，再调用 FastPeopleSearch
+ * 4. 如果 FPS 验证成功，返回 FPS 结果
+ * 5. 如果都失败，返回分数较高的结果
  */
 export async function verifyPhoneNumber(person: PersonToVerify, userId?: number): Promise<VerificationResult> {
   console.log(`[Scraper] Starting phone verification for ${person.firstName} ${person.lastName}, phone: ${person.phone}`);
   console.log(`[Scraper] Age range: ${person.minAge || 'default'} - ${person.maxAge || 'default'}`);
   
-  // 极速模式：仅使用 TruePeopleSearch 单阶段验证
+  // 第一阶段：TruePeopleSearch 电话号码反向搜索
   const tpsResult = await verifyWithTruePeopleSearch(person, userId);
   
   // 如果 API 积分耗尽，立即返回错误
@@ -329,14 +332,30 @@ export async function verifyPhoneNumber(person: PersonToVerify, userId?: number)
     return tpsResult;
   }
   
-  // 直接返回 TruePeopleSearch 结果
+  // 如果第一阶段验证成功（姓名匹配且年龄在范围内），直接返回
   if (tpsResult.verified && tpsResult.matchScore >= 60) {
     console.log(`[Scraper] TruePeopleSearch verification passed`);
-  } else {
-    console.log(`[Scraper] TruePeopleSearch verification failed (verified=${tpsResult.verified}, score=${tpsResult.matchScore})`);
+    return { ...tpsResult, source: 'TruePeopleSearch' };
+  }
+
+  // 第二阶段：FastPeopleSearch 电话号码反向搜索
+  console.log(`[Scraper] TruePeopleSearch failed (verified=${tpsResult.verified}, score=${tpsResult.matchScore}), trying FastPeopleSearch`);
+  const fpsResult = await verifyWithFastPeopleSearch(person, userId);
+  
+  // 如果 API 积分耗尽，立即返回错误
+  if (fpsResult.apiError === 'INSUFFICIENT_CREDITS') {
+    console.error(`[Scraper] API credits exhausted during FastPeopleSearch, stopping verification`);
+    return fpsResult;
   }
   
-  return { ...tpsResult, source: 'TruePeopleSearch' };
+  if (fpsResult.verified && fpsResult.matchScore >= 60) {
+    console.log(`[Scraper] FastPeopleSearch verification passed`);
+    return { ...fpsResult, source: 'FastPeopleSearch' };
+  }
+
+  // 返回分数较高的结果
+  console.log(`[Scraper] Both verifications failed, returning best result`);
+  return tpsResult.matchScore > fpsResult.matchScore ? tpsResult : fpsResult;
 }
 
 /**
