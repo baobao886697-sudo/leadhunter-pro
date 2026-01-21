@@ -1,5 +1,17 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+
+// 格式化电话号码 - 确保美国号码为11位（以1开头）
+function formatPhoneNumber(phone: string | undefined | null): string {
+  if (!phone) return "";
+  // 移除所有非数字字符
+  const digits = phone.replace(/\D/g, "");
+  // 如果是10位数字，在前面加1（美国国家代码）
+  if (digits.length === 10) {
+    return "1" + digits;
+  }
+  return digits;
+}
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { COOKIE_NAME } from "@shared/const";
@@ -475,7 +487,7 @@ export const appRouter = router({
             data.fullName || data.name || "",
             data.title || "",
             data.company || data.organization_name || "",
-            data.phone || data.phoneNumber || "",
+            formatPhoneNumber(data.phone || data.phoneNumber),
             data.email || "",
             data.linkedinUrl || data.linkedin_url || "",
           ];
@@ -516,7 +528,7 @@ export const appRouter = router({
             data.country || "",
             data.postalCode || data.postal_code || "",
             data.fullAddress || "",
-            data.phone || data.phoneNumber || "",
+            formatPhoneNumber(data.phone || data.phoneNumber),
             data.phoneType || "",
             data.carrier || "",
             data.phoneStatus || "",
@@ -562,7 +574,7 @@ export const appRouter = router({
             data.city || "",
             data.state || "",
             data.country || "",
-            data.phone || data.phoneNumber || "",
+            formatPhoneNumber(data.phone || data.phoneNumber),
             data.phoneType || "",
             data.phoneStatus || "",
             data.email || "",
