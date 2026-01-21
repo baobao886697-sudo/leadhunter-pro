@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
 import { Search, Coins, History, TrendingUp, Users, Phone, Clock, ArrowRight, Zap, Database, Shield, Sparkles } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ParticleNetwork } from "@/components/ParticleNetwork";
 
 // 定义搜索参数类型
 interface SearchParams {
@@ -50,8 +51,19 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-8 relative">
-        {/* 背景装饰 */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* 动态粒子网络背景 */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <ParticleNetwork 
+            particleCount={35}
+            connectionDistance={120}
+            speed={0.15}
+            particleColor="rgba(6, 182, 212, 0.5)"
+            lineColor="rgba(6, 182, 212, 0.08)"
+          />
+        </div>
+        
+        {/* 渐变光晕装饰 */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-[1]">
           <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px]" />
           <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px]" />
         </div>

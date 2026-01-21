@@ -24,6 +24,7 @@ import {
   FileText, FileSpreadsheet, Terminal, Info
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ParticleNetwork } from "@/components/ParticleNetwork";
 
 // 定义搜索结果数据类型
 interface ResultData {
@@ -526,43 +527,27 @@ export default function SearchProgress() {
   return (
     <DashboardLayout>
       <div className="p-6 max-w-7xl mx-auto relative">
-        {/* 动态背景装饰 */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          {/* 渐变光晕 */}
+        {/* 动态粒子网络背景 - 仅在运行时显示 */}
+        {isRunning && (
+          <div className="fixed inset-0 z-0 pointer-events-none">
+            <ParticleNetwork 
+              particleCount={40}
+              connectionDistance={100}
+              speed={0.2}
+              particleColor="rgba(6, 182, 212, 0.6)"
+              lineColor="rgba(6, 182, 212, 0.1)"
+            />
+          </div>
+        )}
+        
+        {/* 渐变光晕装饰 */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-[1]">
           <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px]" />
           <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px]" />
-          
-          {/* 动态粒子效果 - 仅在运行时显示 */}
           {isRunning && (
-            <>
-              {/* 浮动粒子 */}
-              <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-cyan-400/30 rounded-full animate-float-slow" />
-              <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-blue-400/20 rounded-full animate-float-medium" />
-              <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-400/25 rounded-full animate-float-fast" />
-              <div className="absolute top-1/2 right-1/3 w-1.5 h-1.5 bg-cyan-300/30 rounded-full animate-float-slow" style={{ animationDelay: '1s' }} />
-              <div className="absolute bottom-1/3 right-1/4 w-2.5 h-2.5 bg-blue-300/20 rounded-full animate-float-medium" style={{ animationDelay: '0.5s' }} />
-              <div className="absolute top-2/3 left-1/4 w-1.5 h-1.5 bg-purple-300/25 rounded-full animate-float-fast" style={{ animationDelay: '1.5s' }} />
-              
-              {/* 连接线效果 */}
-              <svg className="absolute inset-0 w-full h-full opacity-10">
-                <defs>
-                  <linearGradient id="line-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#06b6d4" />
-                    <stop offset="100%" stopColor="#8b5cf6" />
-                  </linearGradient>
-                </defs>
-                <line x1="20%" y1="30%" x2="40%" y2="50%" stroke="url(#line-gradient)" strokeWidth="1" className="animate-pulse" />
-                <line x1="60%" y1="20%" x2="80%" y2="40%" stroke="url(#line-gradient)" strokeWidth="1" className="animate-pulse" style={{ animationDelay: '0.5s' }} />
-                <line x1="30%" y1="60%" x2="50%" y2="80%" stroke="url(#line-gradient)" strokeWidth="1" className="animate-pulse" style={{ animationDelay: '1s' }} />
-                <line x1="70%" y1="50%" x2="90%" y2="70%" stroke="url(#line-gradient)" strokeWidth="1" className="animate-pulse" style={{ animationDelay: '1.5s' }} />
-              </svg>
-              
-              {/* 脉冲光环 */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                <div className="w-[600px] h-[600px] rounded-full border border-cyan-500/10 animate-ping-slow" />
-                <div className="absolute inset-0 w-[600px] h-[600px] rounded-full border border-purple-500/10 animate-ping-slow" style={{ animationDelay: '1s' }} />
-              </div>
-            </>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+              <div className="w-[600px] h-[600px] rounded-full border border-cyan-500/10 animate-ping-slow" />
+            </div>
           )}
         </div>
 

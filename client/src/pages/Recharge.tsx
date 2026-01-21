@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Coins, Copy, Clock, CheckCircle, XCircle, Loader2, QrCode, Wallet, Zap, AlertTriangle, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ParticleNetwork } from "@/components/ParticleNetwork";
 
 const PRESET_AMOUNTS = [100, 500, 1000, 5000];
 
@@ -221,8 +222,19 @@ export default function Recharge() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-8 relative">
-        {/* 背景装饰 */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* 动态粒子网络背景 */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <ParticleNetwork 
+            particleCount={30}
+            connectionDistance={100}
+            speed={0.12}
+            particleColor="rgba(234, 179, 8, 0.5)"
+            lineColor="rgba(234, 179, 8, 0.08)"
+          />
+        </div>
+        
+        {/* 渐变光晕装饰 */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-[1]">
           <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-yellow-500/5 rounded-full blur-[100px]" />
           <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px]" />
         </div>
