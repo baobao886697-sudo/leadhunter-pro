@@ -14,58 +14,21 @@ import { ParticleNetwork } from "@/components/ParticleNetwork";
 
 const PRESET_AMOUNTS = [100, 500, 1000, 5000];
 
-// 倒计时Hook
-function useCountdown(targetDate: Date | null) {
-  const [timeLeft, setTimeLeft] = useState<{ minutes: number; seconds: number } | null>(null);
-
-  useEffect(() => {
-    if (!targetDate) {
-      setTimeLeft(null);
-      return;
-    }
-
-    const calculateTimeLeft = () => {
-      const now = new Date().getTime();
-      const target = new Date(targetDate).getTime();
-      const diff = target - now;
-
-      if (diff <= 0) {
-        setTimeLeft(null);
-        return;
-      }
-
-      setTimeLeft({
-        minutes: Math.floor((diff / 1000 / 60) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-      });
-    };
-
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
-
-    return () => clearInterval(timer);
-  }, [targetDate]);
-
-  return timeLeft;
-}
-
 export default function Recharge() {
   const { user } = useAuth();
   const search = useSearch();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const params = new URLSearchParams(search);
   const initialAmount = params.get("amount");
   
   const [credits, setCredits] = useState(initialAmount ? Number(initialAmount) : 100);
-  const [activeOrder, setActiveOrder] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   
-  // 使用ref来追踪是否已经显示过成功提示，避免重复触发
-  const paidToastShownRef = useRef<Set<string>>(new Set());
   // 使用ref来追踪组件是否已挂载
   const isMountedRef = useRef(true);
-  // 使用ref来防止重复提交
-  const isSubmittingRef = useRef(false);
+  // 使用ref存储创建成功后需要跳转的订单ID
+  const pendingRedirectRef = useRef<string | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -74,7 +37,17 @@ export default function Recharge() {
     };
   }, []);
 
-  const { data: profile, refetch: refetchProfile } = trpc.user.profile.useQuery(undefined, { 
+  // 处理待跳转的订单 - 使用单独的effect来处理跳转
+  useEffect(() => {
+    if (pendingRedirectRef.current) {
+      const orderId = pendingRedirectRef.current;
+      pendingRedirectRef.current = null;
+      // 使用window.location.href进行跳转，完全避免React状态更新问题
+      window.location.href = `/payment/${orderId}`;
+    }
+  }, []);
+
+  const { data: profile } = trpc.user.profile.useQuery(undefined, { 
     enabled: !!user,
     refetchOnWindowFocus: false,
   });
@@ -99,48 +72,15 @@ export default function Recharge() {
 
   const orders = ordersData?.orders || [];
 
-  // 创建订单mutation - 不使用onSuccess/onError回调，避免在渲染过程中触发状态更新
+  // 创建订单mutation
   const createOrderMutation = trpc.recharge.create.useMutation();
-
-  // 使用单独的状态来控制订单查询
-  const orderQueryEnabled = Boolean(activeOrder && activeOrder.length > 0);
-  
-  const { data: orderDetail } = trpc.recharge.status.useQuery(
-    { orderId: activeOrder || "" },
-    { 
-      enabled: orderQueryEnabled,
-      refetchInterval: orderQueryEnabled ? 5000 : false,
-      refetchOnWindowFocus: false,
-    }
-  );
-
-  // 当订单状态变为paid时，刷新用户积分
-  useEffect(() => {
-    if (!orderDetail || !activeOrder) return;
-    if (orderDetail.status !== "paid") return;
-    if (paidToastShownRef.current.has(activeOrder)) return;
-    
-    paidToastShownRef.current.add(activeOrder);
-    
-    // 使用setTimeout延迟执行，避免在渲染过程中触发状态更新
-    const timer = setTimeout(() => {
-      if (isMountedRef.current) {
-        refetchProfile();
-        toast.success("充值成功！积分已到账");
-      }
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [orderDetail?.status, activeOrder, refetchProfile]);
-
-  const countdown = useCountdown(orderDetail?.expiresAt ? new Date(orderDetail.expiresAt) : null);
 
   // 根据配置计算 USDT 金额
   const usdtAmount = credits / creditsPerUsdt;
 
   const handleCreateOrder = useCallback(async () => {
     // 防止重复提交
-    if (isSubmittingRef.current) {
+    if (isCreating || createOrderMutation.isPending) {
       return;
     }
     
@@ -150,34 +90,23 @@ export default function Recharge() {
       return;
     }
     
-    if (createOrderMutation.isPending) return;
-    
-    // 设置提交标志
-    isSubmittingRef.current = true;
+    setIsCreating(true);
     setCreateError(null);
     
     try {
       const result = await createOrderMutation.mutateAsync({ credits, network: "TRC20" });
       
       if (!isMountedRef.current) {
-        isSubmittingRef.current = false;
         return;
       }
       
-      // 成功后直接跳转到支付详情页，避免在当前页面触发复杂的状态更新
-      toast.success("充值订单已创建");
-      
-      // 重置提交标志
-      isSubmittingRef.current = false;
-      
-      // 直接跳转到支付页面，这样可以完全避免无限循环问题
-      setLocation(`/payment/${result.orderId}`);
+      // 成功后直接使用window.location跳转，完全避免React状态更新
+      window.location.href = `/payment/${result.orderId}`;
       
     } catch (error: any) {
-      // 重置提交标志
-      isSubmittingRef.current = false;
-      
       if (!isMountedRef.current) return;
+      
+      setIsCreating(false);
       
       const errorMessage = error?.message || "创建订单失败";
       setCreateError(errorMessage);
@@ -186,20 +115,13 @@ export default function Recharge() {
       if (errorMessage.includes("login") || errorMessage.includes("10001") || errorMessage.includes("unauthorized")) {
         toast.error("登录已过期，请重新登录");
         setTimeout(() => {
-          if (isMountedRef.current) {
-            setLocation("/login");
-          }
+          window.location.href = "/login";
         }, 1000);
       } else {
         toast.error(errorMessage);
       }
     }
-  }, [credits, createOrderMutation, setLocation, minRechargeCredits]);
-
-  const copyToClipboard = useCallback((text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label}已复制`);
-  }, []);
+  }, [credits, createOrderMutation, isCreating, minRechargeCredits]);
 
   const getStatusBadge = useCallback((status: string) => {
     switch (status) {
@@ -218,18 +140,14 @@ export default function Recharge() {
     }
   }, []);
 
-  const handleClearActiveOrder = useCallback(() => {
-    setActiveOrder(null);
-  }, []);
-
-  const handleSelectOrder = useCallback((orderId: string) => {
-    // 直接跳转到支付详情页，而不是在当前页面显示
-    setLocation(`/payment/${orderId}`);
-  }, [setLocation]);
-
   const handleRefreshOrders = useCallback(() => {
     refetchOrders();
   }, [refetchOrders]);
+
+  const handleViewOrder = useCallback((orderId: string) => {
+    // 使用window.location跳转，避免React状态更新问题
+    window.location.href = `/payment/${orderId}`;
+  }, []);
 
   return (
     <DashboardLayout>
@@ -291,6 +209,7 @@ export default function Recharge() {
                         : "border-slate-700 text-slate-300 hover:border-yellow-500/50"
                     }`}
                     onClick={() => setCredits(amount)}
+                    disabled={isCreating}
                   >
                     {amount}
                   </Button>
@@ -307,6 +226,7 @@ export default function Recharge() {
                   min={minRechargeCredits}
                   step={100}
                   className="bg-slate-800/50 border-slate-700 text-white h-12"
+                  disabled={isCreating}
                 />
               </div>
 
@@ -330,10 +250,10 @@ export default function Recharge() {
               {/* 创建订单按钮 */}
               <Button
                 onClick={handleCreateOrder}
-                disabled={createOrderMutation.isPending || credits < minRechargeCredits}
+                disabled={isCreating || createOrderMutation.isPending || credits < minRechargeCredits}
                 className="w-full h-14 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-black font-bold text-lg"
               >
-                {createOrderMutation.isPending ? (
+                {isCreating || createOrderMutation.isPending ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                     创建中...
@@ -416,7 +336,7 @@ export default function Recharge() {
                 <div
                   key={order.id}
                   className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-slate-700/50 transition-colors"
-                  onClick={() => handleSelectOrder(order.orderId)}
+                  onClick={() => handleViewOrder(order.orderId)}
                 >
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-yellow-500/10 rounded-lg">
@@ -439,7 +359,7 @@ export default function Recharge() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setLocation(`/payment/${order.orderId}`);
+                        handleViewOrder(order.orderId);
                       }}
                       className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
                     >
