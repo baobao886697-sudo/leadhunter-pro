@@ -37,11 +37,11 @@ const SEARCH_LIMITS = [
   { value: 5000, label: "5000 条", description: "大批量" },
 ];
 
-// 积分费用常量
-const FUZZY_SEARCH_COST = 1;
-const FUZZY_PHONE_COST_PER_PERSON = 2;
-const EXACT_SEARCH_COST = 5;
-const EXACT_PHONE_COST_PER_PERSON = 10;
+// 积分费用默认值（当 API 未返回时使用）
+const DEFAULT_FUZZY_SEARCH_COST = 1;
+const DEFAULT_FUZZY_PHONE_COST_PER_PERSON = 2;
+const DEFAULT_EXACT_SEARCH_COST = 5;
+const DEFAULT_EXACT_PHONE_COST_PER_PERSON = 10;
 
 // 加载状态提示信息
 const LOADING_MESSAGES = [
@@ -94,6 +94,15 @@ export default function Search() {
   const [loadingProgress, setLoadingProgress] = useState(0);
 
   const { data: profile, refetch: refetchProfile } = trpc.user.profile.useQuery(undefined, { enabled: !!user });
+
+  // 获取积分配置
+  const { data: creditsConfig } = trpc.search.creditsConfig.useQuery(undefined, { enabled: !!user });
+  
+  // 动态积分值（优先使用 API 返回的配置，否则使用默认值）
+  const FUZZY_SEARCH_COST = creditsConfig?.fuzzy?.searchCredits ?? DEFAULT_FUZZY_SEARCH_COST;
+  const FUZZY_PHONE_COST_PER_PERSON = creditsConfig?.fuzzy?.creditsPerPerson ?? DEFAULT_FUZZY_PHONE_COST_PER_PERSON;
+  const EXACT_SEARCH_COST = creditsConfig?.exact?.searchCredits ?? DEFAULT_EXACT_SEARCH_COST;
+  const EXACT_PHONE_COST_PER_PERSON = creditsConfig?.exact?.creditsPerPerson ?? DEFAULT_EXACT_PHONE_COST_PER_PERSON;
 
   // 加载动画效果
   useEffect(() => {

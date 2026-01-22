@@ -107,7 +107,7 @@ import {
   getCreditAnomalies,
 } from "./db";
 // Apollo 相关处理器已移除
-import { previewSearch, executeSearchV3 } from "./services/searchProcessorV3";
+import { previewSearch, executeSearchV3, getSearchCreditsConfig } from "./services/searchProcessorV3";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -322,6 +322,22 @@ export const appRouter = router({
 
   // ============ 搜索路由 ============
   search: router({
+    // 获取积分配置 - 前端用于显示动态积分价格
+    creditsConfig: protectedProcedure
+      .query(async () => {
+        const config = await getSearchCreditsConfig();
+        return {
+          fuzzy: {
+            searchCredits: config.fuzzySearchCredits,
+            creditsPerPerson: config.fuzzyCreditsPerPerson,
+          },
+          exact: {
+            searchCredits: config.exactSearchCredits,
+            creditsPerPerson: config.exactCreditsPerPerson,
+          },
+        };
+      }),
+
     // 预览搜索 - 获取总数和预估费用
     preview: protectedProcedure
       .input(
@@ -373,9 +389,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // 检查积分 - 严格模式：必须足够支付全部预估费用
         const credits = await getUserCredits(ctx.user.id);
-        // 根据搜索模式动态计算积分费用
-        const searchCost = input.mode === 'exact' ? 5 : 1;
-        const phoneCostPerPerson = input.mode === 'exact' ? 10 : 2;
+        // 从数据库获取积分配置
+        const creditsConfig = await getSearchCreditsConfig();
+        const searchCost = input.mode === 'exact' ? creditsConfig.exactSearchCredits : creditsConfig.fuzzySearchCredits;
+        const phoneCostPerPerson = input.mode === 'exact' ? creditsConfig.exactCreditsPerPerson : creditsConfig.fuzzyCreditsPerPerson;
         const phoneCost = input.limit * phoneCostPerPerson;
         const totalCost = searchCost + phoneCost;
         

@@ -126,13 +126,39 @@ export interface SearchCacheData {
 
 // ============ 常量定义 ============
 
-const FUZZY_SEARCH_CREDITS = 1;
-const FUZZY_PHONE_CREDITS_PER_PERSON = 2;
-const EXACT_SEARCH_CREDITS = 5;
-const EXACT_PHONE_CREDITS_PER_PERSON = 10;
+// 默认积分值（当数据库配置不存在时使用）
+const DEFAULT_FUZZY_SEARCH_CREDITS = 1;
+const DEFAULT_FUZZY_PHONE_CREDITS_PER_PERSON = 2;
+const DEFAULT_EXACT_SEARCH_CREDITS = 5;
+const DEFAULT_EXACT_PHONE_CREDITS_PER_PERSON = 10;
 const VERIFY_CREDITS_PER_PHONE = 0;
 const CONCURRENT_VERIFY_LIMIT = 5;
 const CACHE_FULFILLMENT_THRESHOLD = 0.8;
+
+// 配置键名常量
+export const CONFIG_KEYS = {
+  FUZZY_SEARCH_CREDITS: 'FUZZY_SEARCH_CREDITS',
+  FUZZY_CREDITS_PER_PERSON: 'FUZZY_CREDITS_PER_PERSON',
+  EXACT_SEARCH_CREDITS: 'EXACT_SEARCH_CREDITS',
+  EXACT_CREDITS_PER_PERSON: 'EXACT_CREDITS_PER_PERSON',
+};
+
+// 获取积分配置的辅助函数
+export async function getSearchCreditsConfig() {
+  const [fuzzySearch, fuzzyPerPerson, exactSearch, exactPerPerson] = await Promise.all([
+    getConfig(CONFIG_KEYS.FUZZY_SEARCH_CREDITS),
+    getConfig(CONFIG_KEYS.FUZZY_CREDITS_PER_PERSON),
+    getConfig(CONFIG_KEYS.EXACT_SEARCH_CREDITS),
+    getConfig(CONFIG_KEYS.EXACT_CREDITS_PER_PERSON),
+  ]);
+  
+  return {
+    fuzzySearchCredits: fuzzySearch ? parseInt(fuzzySearch, 10) : DEFAULT_FUZZY_SEARCH_CREDITS,
+    fuzzyCreditsPerPerson: fuzzyPerPerson ? parseInt(fuzzyPerPerson, 10) : DEFAULT_FUZZY_PHONE_CREDITS_PER_PERSON,
+    exactSearchCredits: exactSearch ? parseInt(exactSearch, 10) : DEFAULT_EXACT_SEARCH_CREDITS,
+    exactCreditsPerPerson: exactPerPerson ? parseInt(exactPerPerson, 10) : DEFAULT_EXACT_PHONE_CREDITS_PER_PERSON,
+  };
+}
 
 // ============ 工具函数 ============
 
@@ -230,8 +256,10 @@ export async function previewSearch(
   ageMax?: number,
   mode: 'fuzzy' | 'exact' = 'fuzzy'
 ): Promise<SearchPreviewResult> {
-  const searchCredits = mode === 'fuzzy' ? FUZZY_SEARCH_CREDITS : EXACT_SEARCH_CREDITS;
-  const phoneCreditsPerPerson = mode === 'fuzzy' ? FUZZY_PHONE_CREDITS_PER_PERSON : EXACT_PHONE_CREDITS_PER_PERSON;
+  // 从数据库获取积分配置
+  const creditsConfig = await getSearchCreditsConfig();
+  const searchCredits = mode === 'fuzzy' ? creditsConfig.fuzzySearchCredits : creditsConfig.exactSearchCredits;
+  const phoneCreditsPerPerson = mode === 'fuzzy' ? creditsConfig.fuzzyCreditsPerPerson : creditsConfig.exactCreditsPerPerson;
   const user = await getUserById(userId);
   if (!user) {
     return {
@@ -321,8 +349,10 @@ export async function executeSearchV3(
   mode: 'fuzzy' | 'exact' = 'fuzzy',
   onProgress?: (progress: SearchProgress) => void
 ): Promise<SearchTask | undefined> {
-  const currentSearchCredits = mode === 'fuzzy' ? FUZZY_SEARCH_CREDITS : EXACT_SEARCH_CREDITS;
-  const currentPhoneCreditsPerPerson = mode === 'fuzzy' ? FUZZY_PHONE_CREDITS_PER_PERSON : EXACT_PHONE_CREDITS_PER_PERSON;
+  // 从数据库获取积分配置
+  const creditsConfig = await getSearchCreditsConfig();
+  const currentSearchCredits = mode === 'fuzzy' ? creditsConfig.fuzzySearchCredits : creditsConfig.exactSearchCredits;
+  const currentPhoneCreditsPerPerson = mode === 'fuzzy' ? creditsConfig.fuzzyCreditsPerPerson : creditsConfig.exactCreditsPerPerson;
   
   const startTime = Date.now();
   const logs: SearchLogEntry[] = [];

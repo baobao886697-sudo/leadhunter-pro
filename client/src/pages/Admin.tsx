@@ -1096,7 +1096,7 @@ export default function Admin() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {['SEARCH_CREDITS_PER_PERSON', 'PREVIEW_CREDITS', 'CACHE_TTL_DAYS'].map((key) => {
+                  {['FUZZY_SEARCH_CREDITS', 'FUZZY_CREDITS_PER_PERSON', 'EXACT_SEARCH_CREDITS', 'EXACT_CREDITS_PER_PERSON', 'CACHE_TTL_DAYS'].map((key) => {
                     const config = configs.find((c: any) => c.key === key);
                     return (
                       <div key={key} className="space-y-2">
