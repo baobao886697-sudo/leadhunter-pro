@@ -59,7 +59,7 @@ interface LogEntry {
   timestamp: string;
   time: string;
   level: 'info' | 'success' | 'warning' | 'error' | 'debug';
-  phase: 'init' | 'apify' | 'process' | 'verify' | 'complete';
+  phase: 'init' | 'search' | 'process' | 'verify' | 'complete';
   step?: number;
   total?: number;
   message: string;

@@ -799,10 +799,11 @@ export default function Search() {
                 <div className="text-sm text-slate-400">
                   <p className="text-cyan-400 font-medium mb-2">费用说明</p>
                   <ul className="space-y-1">
-                    <li>• 搜索费用：每次搜索 1 积分</li>
-                    <li>• 电话获取：每条结果 2 积分</li>
+                    <li>• 搜索费用：每次搜索 {searchMode === 'fuzzy' ? FUZZY_SEARCH_COST : EXACT_SEARCH_COST} 积分</li>
+                    <li>• 数据获取：每条结果 {searchMode === 'fuzzy' ? FUZZY_PHONE_COST_PER_PERSON : EXACT_PHONE_COST_PER_PERSON} 积分</li>
                     <li>• 电话验证：免费</li>
                     <li>• 实际消耗可能因结果数量有所浮动</li>
+                    {searchMode === 'exact' && <li className="text-purple-400">• 精准搜索无结果时退还搜索费用</li>}
                   </ul>
                 </div>
               </div>

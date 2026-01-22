@@ -278,7 +278,8 @@ export async function previewSearch(
   }
 
   const searchHash = generateSearchHash(searchName, searchTitle, searchState, requestedCount);
-  const cacheKey = `apify:${searchHash}`;
+  // 缓存键与 executeSearchV3 保持一致
+  const cacheKey = `search:${mode}:${searchHash}`;
   const cached = mode === 'fuzzy' ? await getCacheByKey(cacheKey) : null;
   
   let totalAvailable = 0;

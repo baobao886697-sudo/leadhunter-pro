@@ -76,21 +76,26 @@ async function triggerBrightDataCollection(
     // 构建搜索关键词
     const keyword = `${searchName} ${searchTitle} ${searchState}`;
     
-    const response = await fetch(`https://api.brightdata.com/datasets/v3/trigger`, {
+        const params = new URLSearchParams({
+      dataset_id: BRIGHT_DATA_DATASET_ID,
+      type: 'discover_new',
+      discover_by: 'keyword',
+      limit_per_input: limit.toString(),
+      format: 'json',
+      include_errors: 'false',
+    });
+
+    const body = JSON.stringify([{
+      keyword: keyword,
+    }]);
+
+    const response = await fetch(`https://api.brightdata.com/datasets/v3/trigger?${params.toString()}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${BRIGHT_DATA_API_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        dataset_id: BRIGHT_DATA_DATASET_ID,
-        endpoint: '/datasets/v3/trigger',
-        discover_by: 'keyword',
-        keyword: keyword,
-        limit_per_input: limit,
-        format: 'json',
-        include_errors: false,
-      }),
+      body: body,
     });
 
     if (!response.ok) {
