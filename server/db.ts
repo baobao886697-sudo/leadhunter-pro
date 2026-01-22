@@ -136,12 +136,16 @@ export async function getUserCredits(userId: number): Promise<number> {
   return user?.credits || 0;
 }
 
-export async function deductCredits(userId: number, amount: number, type: "search" | "admin_deduct", description: string, relatedTaskId?: string): Promise<boolean> {
+export async function deductCredits(userId: number, amount: number, type: "search" | "admin_deduct" | "refund", description: string, relatedTaskId?: string): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
   const user = await getUserById(userId);
-  if (!user || user.credits < amount) return false;
-  const newBalance = user.credits - amount;
+  if (!user) return false;
+  
+  // 支持负数金额（退款）
+  if (amount > 0 && user.credits < amount) return false;
+  
+  const newBalance = user.credits - amount; // 负数amount会增加余额
   await db.update(users).set({ credits: newBalance }).where(eq(users.id, userId));
   await db.insert(creditLogs).values({ userId, amount: -amount, balanceAfter: newBalance, type, description, relatedTaskId });
   return true;
@@ -1799,7 +1803,7 @@ export async function getCreditAnomalies(threshold: number = 1000): Promise<Arra
   logId: number;
   amount: number;
   type: string;
-  description: string;
+  description: string | null;
   createdAt: Date;
 }>> {
   const db = await getDb();

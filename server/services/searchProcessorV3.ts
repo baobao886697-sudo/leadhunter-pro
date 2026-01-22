@@ -479,7 +479,8 @@ export async function executeSearchV3(
 
     currentStep++;
     addLog(`💳 正在扣除搜索基础费用...`, 'info', 'init', '');
-    const searchDeducted = await deductCredits(userId, currentSearchCredits, 'search', `搜索: ${searchName} | ${searchTitle} | ${searchState}`, task.taskId);
+    const modeLabel = mode === 'fuzzy' ? '模糊搜索' : '精准搜索';
+    const searchDeducted = await deductCredits(userId, currentSearchCredits, 'search', `[${modeLabel}] ${searchName} | ${searchTitle} | ${searchState}`, task.taskId);
     if (!searchDeducted) throw new Error('扣除搜索积分失败');
     stats.creditsUsed += currentSearchCredits;
     addLog(`✅ 已扣除搜索费用: ${currentSearchCredits} 积分`, 'success', 'init', '✅');
@@ -577,6 +578,25 @@ export async function executeSearchV3(
     if (searchResults.length === 0) {
       addLog(`⚠️ 未找到匹配的结果`, 'warning', 'complete', '⚠️');
       addLog(`   请尝试调整搜索条件后重试`, 'info', 'complete', '');
+      
+      // 精准搜索无结果时，退还搜索基础费用
+      if (mode === 'exact') {
+        addLog(`💰 精准搜索无结果，正在退还搜索费用...`, 'info', 'complete', '');
+        const refunded = await deductCredits(
+          userId, 
+          -currentSearchCredits, // 负数表示退还
+          'refund', 
+          `精准搜索无结果退款: ${searchName} | ${searchTitle} | ${searchState}`, 
+          task.taskId
+        );
+        if (refunded) {
+          stats.creditsUsed -= currentSearchCredits;
+          addLog(`✅ 已退还搜索费用: ${currentSearchCredits} 积分`, 'success', 'complete', '✅');
+        } else {
+          addLog(`⚠️ 退还搜索费用失败，请联系客服`, 'warning', 'complete', '⚠️');
+        }
+      }
+      
       progress.status = 'completed';
       await updateProgress('搜索完成', 'completed', 'complete', 100);
       return getSearchTask(task.taskId);
@@ -606,7 +626,7 @@ export async function executeSearchV3(
       userId, 
       dataCreditsNeeded, 
       'search', 
-      `数据费用: ${actualCount} 条 × ${currentPhoneCreditsPerPerson} 积分`, 
+      `[${modeLabel}] 数据费用: ${actualCount} 条 × ${currentPhoneCreditsPerPerson} 积分`, 
       task.taskId
     );
     

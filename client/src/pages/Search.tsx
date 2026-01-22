@@ -625,7 +625,7 @@ export default function Search() {
                     >
                       <div className="text-lg font-bold">模糊搜索</div>
                       <div className="text-xs opacity-70">便宜、大批量</div>
-                      <div className="text-xs opacity-50 mt-1">~2 积分/条</div>
+                      <div className="text-xs opacity-50 mt-1">搜索费 {FUZZY_SEARCH_COST} + {FUZZY_PHONE_COST_PER_PERSON}/条</div>
                     </button>
                     <button
                       type="button"
@@ -638,8 +638,27 @@ export default function Search() {
                     >
                       <div className="text-lg font-bold">精准搜索</div>
                       <div className="text-xs opacity-70">实时、高质量</div>
-                      <div className="text-xs opacity-50 mt-1">~10 积分/条</div>
+                      <div className="text-xs opacity-50 mt-1">搜索费 {EXACT_SEARCH_COST} + {EXACT_PHONE_COST_PER_PERSON}/条</div>
                     </button>
+                  </div>
+                  {/* 动态积分费用提示 */}
+                  <div className={`p-3 rounded-lg border transition-all ${
+                    searchMode === 'fuzzy' 
+                      ? 'bg-cyan-500/10 border-cyan-500/30' 
+                      : 'bg-purple-500/10 border-purple-500/30'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Coins className={`h-4 w-4 ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`} />
+                      <span className={`text-sm font-medium ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`}>
+                        当前模式积分费用
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {searchMode === 'fuzzy' 
+                        ? `搜索费 ${FUZZY_SEARCH_COST} 积分 + 每条数据 ${FUZZY_PHONE_COST_PER_PERSON} 积分 = 预估 ${creditEstimate.totalCost} 积分`
+                        : `搜索费 ${EXACT_SEARCH_COST} 积分 + 每条数据 ${EXACT_PHONE_COST_PER_PERSON} 积分 = 预估 ${creditEstimate.totalCost} 积分`
+                      }
+                    </p>
                   </div>
                   <p className="text-xs text-slate-500">
                     💡 精准模式使用实时数据，电话号码更准确，但成本更高。
@@ -735,19 +754,38 @@ export default function Search() {
                 <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-red-400 font-medium">积分不足</p>
                       <p className="text-sm text-slate-400 mt-1">
-                        当前余额可搜索约 <span className="text-white font-mono">{creditEstimate.maxAffordable}</span> 条
+                        需要 <span className="text-white font-mono">{creditEstimate.totalCost}</span> 积分，
+                        当前余额 <span className="text-white font-mono">{creditEstimate.currentCredits}</span> 积分
                       </p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="mt-3 border-red-500/30 text-red-400 hover:bg-red-500/10"
-                        onClick={() => setLocation("/recharge")}
-                      >
-                        立即充值
-                      </Button>
+                      {creditEstimate.maxAffordable > 0 && (
+                        <p className="text-sm text-slate-400 mt-1">
+                          您最多可搜索 <span className="text-cyan-400 font-mono">{creditEstimate.maxAffordable}</span> 条数据
+                        </p>
+                      )}
+                      <div className="flex gap-2 mt-3">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                          onClick={() => setLocation("/recharge")}
+                        >
+                          <Coins className="mr-1.5 h-3.5 w-3.5" />
+                          去充值
+                        </Button>
+                        {creditEstimate.maxAffordable > 0 && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="border-slate-500/30 text-slate-400 hover:bg-slate-500/10"
+                            onClick={() => setSearchLimit(creditEstimate.maxAffordable)}
+                          >
+                            调整为 {creditEstimate.maxAffordable} 条
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -867,11 +905,44 @@ export default function Search() {
                 <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-red-400 font-medium">积分不足</p>
                       <p className="text-sm text-slate-400 mt-1">
-                        最多可搜索 <span className="text-white font-mono">{previewResult.maxAffordable}</span> 条
+                        需要 <span className="text-white font-mono">{previewResult.estimatedCredits}</span> 积分，
+                        当前余额 <span className="text-white font-mono">{previewResult.userCredits}</span> 积分
                       </p>
+                      {previewResult.maxAffordable > 0 && (
+                        <p className="text-sm text-slate-400 mt-1">
+                          您最多可搜索 <span className="text-cyan-400 font-mono">{previewResult.maxAffordable}</span> 条数据
+                        </p>
+                      )}
+                      <div className="flex gap-2 mt-3">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                          onClick={() => {
+                            setShowPreviewDialog(false);
+                            setLocation("/recharge");
+                          }}
+                        >
+                          <Coins className="mr-1.5 h-3.5 w-3.5" />
+                          去充值
+                        </Button>
+                        {previewResult.maxAffordable > 0 && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="border-slate-500/30 text-slate-400 hover:bg-slate-500/10"
+                            onClick={() => {
+                              setSearchLimit(previewResult.maxAffordable);
+                              setShowPreviewDialog(false);
+                            }}
+                          >
+                            调整为 {previewResult.maxAffordable} 条
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
