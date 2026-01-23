@@ -412,27 +412,26 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* 浮动卡片 - 人物信息 */}
+                {/* 浮动卡片 - 数据验证成功 */}
                 <div className="absolute -top-6 -right-6 p-4 rounded-xl bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 shadow-xl z-20">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700">
-                      <img src="/images/asian-woman-2.jpg" alt="Executive" className="w-full h-full object-cover" />
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-green-400" />
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-white">陈明达</div>
-                      <div className="text-xs text-slate-400">TechCorp 创始人</div>
+                      <div className="text-sm font-medium text-white">数据验证成功</div>
+                      <div className="text-xs text-slate-400">已找到 847 位匹配的决策者</div>
                     </div>
-                    <Phone className="w-4 h-4 text-green-400 ml-2" />
                   </div>
                 </div>
 
-                {/* 浮动卡片 - 全球覆盖 */}
+                {/* 浮动卡片 - 企业信赖 */}
                 <div className="absolute -bottom-6 -left-6 p-4 rounded-xl bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 shadow-xl z-20">
                   <div className="flex items-center gap-3">
-                    <Globe className="w-8 h-8 text-cyan-400" />
+                    <Building2 className="w-8 h-8 text-purple-400" />
                     <div>
-                      <div className="text-2xl font-bold text-white">195+</div>
-                      <div className="text-xs text-slate-400">覆盖国家</div>
+                      <div className="text-2xl font-bold text-white">10,000+</div>
+                      <div className="text-xs text-slate-400">企业信赖</div>
                     </div>
                   </div>
                 </div>
