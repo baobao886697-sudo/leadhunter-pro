@@ -101,9 +101,9 @@ const USE_CASES = [
 
 // 客户评价
 const TESTIMONIALS = [
-  { name: "张总", role: "某科技公司 CEO", content: "数据准确率非常高，大大提升了我们的销售效率。一个月内成交额增长了40%！", rating: 5, avatar: "/images/asian-man-1.jpg" },
-  { name: "李经理", role: "某投资机构 VP", content: "一手数据资源，帮助我们快速建立行业人脉网络。招聘效率提升了3倍。", rating: 5, avatar: "/images/asian-woman-1.jpg" },
-  { name: "王总监", role: "某猎头公司 总监", content: "多平台数据整合非常实用，节省了大量时间。强烈推荐给所有B2B企业！", rating: 5, avatar: "/images/asian-man-3.jpg" },
+  { name: "张总", role: "某科技公司 CEO", content: "数据准确率非常高，大大提升了我们的销售效率。一个月内成交额增长了40%！", rating: 5, avatar: "/images/customer-ceo.jpg" },
+  { name: "李经理", role: "某投资机构 VP", content: "一手数据资源，帮助我们快速建立行业人脉网络。招聘效率提升了3倍。", rating: 5, avatar: "/images/customer-vp.jpg" },
+  { name: "王总监", role: "某猎头公司 总监", content: "多平台数据整合非常实用，节省了大量时间。强烈推荐给所有B2B企业！", rating: 5, avatar: "/images/customer-director.jpg" },
 ];
 
 export default function Home() {

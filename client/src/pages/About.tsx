@@ -120,7 +120,7 @@ export default function About() {
           <div className="grid md:grid-cols-3 gap-8">
             <div className="p-8 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
               <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 bg-gradient-to-br from-cyan-500 to-purple-600">
-                <img src="/images/asian-man-1.jpg" alt="CEO" className="w-full h-full object-cover" />
+                <img src="/images/team-ceo.jpg" alt="CEO" className="w-full h-full object-cover" />
               </div>
               <h3 className="text-xl font-bold text-white mb-1">陈建华</h3>
               <div className="text-cyan-400 mb-4">创始人 & CEO</div>
@@ -128,7 +128,7 @@ export default function About() {
             </div>
             <div className="p-8 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
               <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-600">
-                <img src="/images/asian-woman-1.jpg" alt="CTO" className="w-full h-full object-cover" />
+                <img src="/images/team-cto.jpg" alt="CTO" className="w-full h-full object-cover" />
               </div>
               <h3 className="text-xl font-bold text-white mb-1">林雅婷</h3>
               <div className="text-purple-400 mb-4">联合创始人 & CTO</div>
@@ -136,7 +136,7 @@ export default function About() {
             </div>
             <div className="p-8 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
               <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 bg-gradient-to-br from-green-500 to-emerald-600">
-                <img src="/images/asian-man-3.jpg" alt="COO" className="w-full h-full object-cover" />
+                <img src="/images/team-coo.jpg" alt="COO" className="w-full h-full object-cover" />
               </div>
               <h3 className="text-xl font-bold text-white mb-1">王志强</h3>
               <div className="text-green-400 mb-4">首席运营官 COO</div>
