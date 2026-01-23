@@ -734,10 +734,10 @@ export default function Home() {
 
             {/* 链接 */}
             <div className="flex items-center gap-8 text-sm text-slate-500">
-              <Link href="/about" className="hover:text-cyan-400 transition-colors">关于我们</Link>
-              <Link href="/privacy" className="hover:text-cyan-400 transition-colors">隐私政策</Link>
-              <Link href="/terms" className="hover:text-cyan-400 transition-colors">服务条款</Link>
-              <Link href="/contact" className="hover:text-cyan-400 transition-colors">联系我们</Link>
+              <Link to="/about" className="hover:text-cyan-400 transition-colors cursor-pointer">关于我们</Link>
+              <Link to="/privacy" className="hover:text-cyan-400 transition-colors cursor-pointer">隐私政策</Link>
+              <Link to="/terms" className="hover:text-cyan-400 transition-colors cursor-pointer">服务条款</Link>
+              <Link to="/contact" className="hover:text-cyan-400 transition-colors cursor-pointer">联系我们</Link>
             </div>
 
             {/* 版权 */}
