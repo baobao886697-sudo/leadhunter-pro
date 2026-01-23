@@ -5,6 +5,22 @@
  */
 
 import { BrightDataProfile, PdlEnrichedProfile } from './brightdata';
+import { getConfig } from '../db';
+
+// 获取 PDL API Key，优先从数据库配置读取，否则使用环境变量
+async function getPdlApiKey(): Promise<string | null> {
+  try {
+    // 优先从数据库配置读取
+    const dbApiKey = await getConfig('PDL_API_KEY');
+    if (dbApiKey) {
+      return dbApiKey;
+    }
+  } catch (error) {
+    console.error('[PDL] Error getting API key from database:', error);
+  }
+  // 回退到环境变量
+  return process.env.PDL_API_KEY || null;
+}
 
 // PDL API 配置
 const PDL_API_BASE_URL = 'https://api.peopledatalabs.com/v5/person/enrich';
@@ -199,13 +215,16 @@ async function enrichSingleProfile(
 export async function enrichWithPDL(
   profiles: BrightDataProfile[]
 ): Promise<PdlEnrichedProfile[]> {
-  const apiKey = process.env.PDL_API_KEY;
+  // 优先从数据库配置读取 API Key，否则回退到环境变量
+  const apiKey = await getPdlApiKey();
 
   if (!apiKey) {
-    console.warn('[PDL] API key not found in environment variables (PDL_API_KEY). Skipping enrichment.');
+    console.warn('[PDL] API key not found (neither in database config nor environment variables). Skipping enrichment.');
     // 如果没有 API key，直接返回原始数据，仅转换类型
     return profiles.map(p => ({ ...p, phone_numbers: [], emails: [] }));
   }
+  
+  console.log('[PDL] Using API key from', process.env.PDL_API_KEY === apiKey ? 'environment variable' : 'database config');
 
   console.log(`[PDL] Starting enrichment for ${profiles.length} profiles (concurrent limit: ${CONCURRENT_LIMIT})`);
 
@@ -229,7 +248,8 @@ export async function enrichWithPDL(
  * 检查 PDL 服务是否可用
  */
 export async function checkPDLStatus(): Promise<boolean> {
-  const apiKey = process.env.PDL_API_KEY;
+  // 优先从数据库配置读取 API Key
+  const apiKey = await getPdlApiKey();
   
   if (!apiKey) {
     return false;

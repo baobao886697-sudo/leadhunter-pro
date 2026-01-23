@@ -334,17 +334,11 @@ export async function brightdataSearchPeople(
       return [];
     }
     
-    // 步骤 3: 使用 PDL 丰富电话号码（如果配置了 PDL）
-    const pdlApiKey = process.env.PDL_API_KEY;
-    let enrichedProfiles: PdlEnrichedProfile[] = profiles;
-    
-    if (pdlApiKey) {
-      console.log('[BrightData] Enriching with PDL for phone numbers...');
-      enrichedProfiles = await enrichWithPDL(profiles);
-      console.log(`[BrightData] PDL enrichment complete`);
-    } else {
-      console.log('[BrightData] PDL not configured, skipping phone enrichment');
-    }
+    // 步骤 3: 使用 PDL 丰富电话号码
+    // PDL API Key 现在优先从数据库配置读取，在 enrichWithPDL 函数内部处理
+    console.log('[BrightData] Enriching with PDL for phone numbers...');
+    const enrichedProfiles = await enrichWithPDL(profiles);
+    console.log(`[BrightData] PDL enrichment complete`);
     
     // 步骤 4: 转换为 LeadPerson 格式
     const leadPersons = enrichedProfiles.map(convertToLeadPerson);
