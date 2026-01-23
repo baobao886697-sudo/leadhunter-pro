@@ -258,7 +258,7 @@ export default function Admin() {
             <span className="font-bold text-white" style={{ fontFamily: 'Orbitron, sans-serif' }}>
               管理后台
             </span>
-            <p className="text-xs text-slate-500">云端寻踪 Pro</p>
+            <p className="text-xs text-slate-500">DataReach Pro</p>
           </div>
         </div>
 

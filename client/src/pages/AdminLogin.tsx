@@ -70,7 +70,7 @@ export default function AdminLogin() {
               管理员控制台
             </CardTitle>
             <CardDescription className="text-slate-400 mt-2">
-              云端寻踪 Pro 2.0 · 后台管理系统
+              DataReach Pro · 后台管理系统
             </CardDescription>
           </div>
         </CardHeader>

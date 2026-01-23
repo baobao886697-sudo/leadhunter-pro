@@ -403,7 +403,7 @@ export default function Search() {
             搜索专业人士
           </h1>
           <p className="text-slate-400 mt-2">
-            输入搜索条件，获取LinkedIn专业人士的验证联系方式
+            输入搜索条件，获取全球商业人士的验证联系方式
           </p>
         </div>
 

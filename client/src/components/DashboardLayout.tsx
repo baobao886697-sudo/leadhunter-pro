@@ -179,7 +179,7 @@ function DashboardLayoutContent({
                     <Target className="h-5 w-5 text-white" />
                   </div>
                   <span className="font-bold tracking-tight truncate bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent" style={{ fontFamily: 'Orbitron, sans-serif' }}>
-                    云端寻踪
+                    DataReach
                   </span>
                 </div>
               ) : null}
@@ -213,7 +213,7 @@ function DashboardLayoutContent({
               <div className="mx-3 mt-4 p-3 rounded-lg bg-gradient-to-br from-cyan-500/5 to-blue-500/5 border border-cyan-500/10 group-data-[collapsible=icon]:hidden">
                 <div className="text-xs font-medium text-cyan-400 mb-2">精准获客 · 拒绝无效数据</div>
                 <p className="text-[11px] text-gray-400 leading-relaxed">
-                  云端寻踪 Pro 专注于为您提供经过验证的高质量 LinkedIn 商业联系人信息。
+                  DataReach Pro 整合全球多平台数据，为您提供经过多重验证的高质量商业联系人信息。
                 </p>
                 <div className="mt-2 space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] text-gray-500">

@@ -87,7 +87,7 @@ export default function PaymentDetail() {
         backgroundColor: '#ffffff',
       });
       const link = document.createElement('a');
-      link.download = `云端寻踪-账单-${orderId}.png`;
+      link.download = `DataReach-账单-${orderId}.png`;
       link.href = dataUrl;
       link.click();
       toast.success("账单图片已下载");
@@ -107,7 +107,7 @@ export default function PaymentDetail() {
                        orderDetail.status === "pending" ? "待付款" : 
                        orderDetail.status === "expired" ? "已过期" : "已取消";
     
-    const text = `云端寻踪搜索助手 - 支付账单
+    const text = `DataReach搜索助手 - 支付账单
 订单编号: ${orderId}
 订单日期: ${date}
 订单状态: ${statusText}
@@ -327,7 +327,7 @@ export default function PaymentDetail() {
                   padding: "24px 20px", textAlign: "center", color: "#ffffff"
                 }}>
                   <h2 style={{ fontSize: "20px", fontWeight: "600", margin: "0 0 6px 0", letterSpacing: "1px" }}>
-                    云端寻踪搜索助手
+                    DataReach搜索助手
                   </h2>
                   <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.8)", margin: 0, letterSpacing: "2px" }}>
                     PAYMENT INVOICE
