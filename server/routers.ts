@@ -1136,6 +1136,7 @@ export const appRouter = router({
         { key: 'CACHE_TTL_DAYS', value: '180', description: '缓存有效期(天)' },
         { key: 'SEARCH_CREDITS_PER_PERSON', value: '2', description: '每条搜索结果消耗积分' },
         { key: 'PREVIEW_CREDITS', value: '1', description: '预览搜索消耗积分' },
+        { key: 'VERIFICATION_SCORE_THRESHOLD', value: '60', description: '电话验证通过分数阈值(0-100)' },
       ];
 
       for (const config of defaultConfigs) {

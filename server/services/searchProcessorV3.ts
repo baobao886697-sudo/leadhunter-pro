@@ -807,12 +807,18 @@ export async function executeSearchV3(
           stats.resultsWithPhone++;
           
           if (enableVerification) {
+            // 使用用户指定的年龄范围，如果未指定则使用默认值 50-79
+            const effectiveMinAge = ageMin || 50;
+            const effectiveMaxAge = ageMax || 79;
+            
             const personToVerify: PersonToVerify = {
               firstName: person.first_name || '',
               lastName: person.last_name || '',
               city: person.city || '',
               state: person.state || '',
-              phone: phoneNumber
+              phone: phoneNumber,
+              minAge: effectiveMinAge,
+              maxAge: effectiveMaxAge
             };
             
             stats.verifyApiCalls++;

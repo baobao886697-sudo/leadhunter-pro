@@ -1,6 +1,25 @@
 import axios from 'axios';
 import { getConfig, logApi } from '../db';
 
+// 默认验证分数阈值（可通过管理后台配置）
+const DEFAULT_VERIFICATION_THRESHOLD = 60;
+
+// 获取验证分数阈值
+async function getVerificationThreshold(): Promise<number> {
+  try {
+    const threshold = await getConfig('VERIFICATION_SCORE_THRESHOLD');
+    if (threshold) {
+      const value = parseInt(threshold, 10);
+      if (!isNaN(value) && value >= 0 && value <= 100) {
+        return value;
+      }
+    }
+  } catch (error) {
+    console.error('[Scraper] Error getting verification threshold:', error);
+  }
+  return DEFAULT_VERIFICATION_THRESHOLD;
+}
+
 const SCRAPE_DO_BASE = 'https://api.scrape.do';
 
 // Scrape.do 优化配置
@@ -159,7 +178,7 @@ function formatPhoneWithDashes(phone: string): string {
  * URL 格式：https://www.truepeoplesearch.com/resultphone?phoneno=4155480165
  * 支持重试机制
  */
-export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?: number): Promise<VerificationResult> {
+export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?: number, threshold: number = DEFAULT_VERIFICATION_THRESHOLD): Promise<VerificationResult> {
   const token = await getScrapeDoToken();
   const cleanPhone = person.phone.replace(/\D/g, '');
   const targetUrl = `https://www.truepeoplesearch.com/resultphone?phoneno=${cleanPhone}`;
@@ -198,7 +217,7 @@ export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?
       
       console.log(`[Scraper] TruePeopleSearch response received, length: ${html.length}`);
       
-      const result = parseTruePeopleSearchReverseResult(html, person);
+      const result = parseTruePeopleSearchReverseResult(html, person, threshold);
 
       await logApi('scrape_tps', targetUrl, { phone: cleanPhone, attempt }, response.status, responseTime, true, undefined, 0, userId);
 
@@ -240,7 +259,7 @@ export async function verifyWithTruePeopleSearch(person: PersonToVerify, userId?
  * URL 格式：https://www.fastpeoplesearch.com/415-548-0165（带连字符）
  * 支持重试机制
  */
-export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?: number): Promise<VerificationResult> {
+export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?: number, threshold: number = DEFAULT_VERIFICATION_THRESHOLD): Promise<VerificationResult> {
   const token = await getScrapeDoToken();
   const formattedPhone = formatPhoneWithDashes(person.phone);
   const targetUrl = `https://www.fastpeoplesearch.com/${formattedPhone}`;
@@ -279,7 +298,7 @@ export async function verifyWithFastPeopleSearch(person: PersonToVerify, userId?
       
       console.log(`[Scraper] FastPeopleSearch response received, length: ${html.length}`);
       
-      const result = parseFastPeopleSearchReverseResult(html, person);
+      const result = parseFastPeopleSearchReverseResult(html, person, threshold);
 
       await logApi('scrape_fps', targetUrl, { phone: formattedPhone, attempt }, response.status, responseTime, true, undefined, 0, userId);
 
@@ -329,8 +348,12 @@ export async function verifyPhoneNumber(person: PersonToVerify, userId?: number)
   console.log(`[Scraper] Starting phone verification for ${person.firstName} ${person.lastName}, phone: ${person.phone}`);
   console.log(`[Scraper] Age range: ${person.minAge || 'default'} - ${person.maxAge || 'default'}`);
   
+  // 获取可配置的验证分数阈值
+  const verificationThreshold = await getVerificationThreshold();
+  console.log(`[Scraper] Using verification threshold: ${verificationThreshold}`);
+  
   // 第一阶段：TruePeopleSearch 电话号码反向搜索
-  const tpsResult = await verifyWithTruePeopleSearch(person, userId);
+  const tpsResult = await verifyWithTruePeopleSearch(person, userId, verificationThreshold);
   
   // 如果 API 积分耗尽，立即返回错误
   if (tpsResult.apiError === 'INSUFFICIENT_CREDITS') {
@@ -339,14 +362,14 @@ export async function verifyPhoneNumber(person: PersonToVerify, userId?: number)
   }
   
   // 如果第一阶段验证成功（姓名匹配且年龄在范围内），直接返回
-  if (tpsResult.verified && tpsResult.matchScore >= 60) {
-    console.log(`[Scraper] TruePeopleSearch verification passed`);
+  if (tpsResult.verified && tpsResult.matchScore >= verificationThreshold) {
+    console.log(`[Scraper] TruePeopleSearch verification passed (score: ${tpsResult.matchScore} >= ${verificationThreshold})`);
     return { ...tpsResult, source: 'TruePeopleSearch' };
   }
 
   // 第二阶段：FastPeopleSearch 电话号码反向搜索
   console.log(`[Scraper] TruePeopleSearch failed (verified=${tpsResult.verified}, score=${tpsResult.matchScore}), trying FastPeopleSearch`);
-  const fpsResult = await verifyWithFastPeopleSearch(person, userId);
+  const fpsResult = await verifyWithFastPeopleSearch(person, userId, verificationThreshold);
   
   // 如果 API 积分耗尽，立即返回错误
   if (fpsResult.apiError === 'INSUFFICIENT_CREDITS') {
@@ -354,8 +377,8 @@ export async function verifyPhoneNumber(person: PersonToVerify, userId?: number)
     return fpsResult;
   }
   
-  if (fpsResult.verified && fpsResult.matchScore >= 60) {
-    console.log(`[Scraper] FastPeopleSearch verification passed`);
+  if (fpsResult.verified && fpsResult.matchScore >= verificationThreshold) {
+    console.log(`[Scraper] FastPeopleSearch verification passed (score: ${fpsResult.matchScore} >= ${verificationThreshold})`);
     return { ...fpsResult, source: 'FastPeopleSearch' };
   }
 
@@ -371,7 +394,7 @@ export async function verifyPhoneNumber(person: PersonToVerify, userId?: number)
  * - 年龄：<span class="">Age </span><span class="content-value">48</span>
  * - 地点：<span class="content-value">Redwood City, CA</span>
  */
-function parseTruePeopleSearchReverseResult(html: string, person: PersonToVerify): VerificationResult {
+function parseTruePeopleSearchReverseResult(html: string, person: PersonToVerify, threshold: number = DEFAULT_VERIFICATION_THRESHOLD): VerificationResult {
   const result: VerificationResult = { verified: false, source: 'TruePeopleSearch', matchScore: 0, details: {} };
 
   try {
@@ -474,9 +497,12 @@ function parseTruePeopleSearchReverseResult(html: string, person: PersonToVerify
 
     result.matchScore = Math.min(score, 100);
     
-    // 姓名匹配且分数足够高时验证通过
-    if (nameMatched && score >= 70) {
+    // 姓名匹配且分数达到阈值时验证通过
+    if (nameMatched && score >= threshold) {
       result.verified = true;
+      console.log(`[Scraper] TPS Verification passed: score ${score} >= threshold ${threshold}`);
+    } else {
+      console.log(`[Scraper] TPS Verification failed: nameMatched=${nameMatched}, score ${score} < threshold ${threshold}`);
     }
 
   } catch (error) {
@@ -494,7 +520,7 @@ function parseTruePeopleSearchReverseResult(html: string, person: PersonToVerify
  * - 年龄：<h3>Age:</h3> 48<br>
  * - 地点：<span class="grey">Washington, DC</span>
  */
-function parseFastPeopleSearchReverseResult(html: string, person: PersonToVerify): VerificationResult {
+function parseFastPeopleSearchReverseResult(html: string, person: PersonToVerify, threshold: number = DEFAULT_VERIFICATION_THRESHOLD): VerificationResult {
   const result: VerificationResult = { verified: false, source: 'FastPeopleSearch', matchScore: 0, details: {} };
 
   try {
@@ -616,9 +642,12 @@ function parseFastPeopleSearchReverseResult(html: string, person: PersonToVerify
 
     result.matchScore = Math.min(score, 100);
     
-    // 姓名匹配且分数足够高时验证通过
-    if (nameMatched && score >= 70) {
+    // 姓名匹配且分数达到阈值时验证通过
+    if (nameMatched && score >= threshold) {
       result.verified = true;
+      console.log(`[Scraper] FPS Verification passed: score ${score} >= threshold ${threshold}`);
+    } else {
+      console.log(`[Scraper] FPS Verification failed: nameMatched=${nameMatched}, score ${score} < threshold ${threshold}`);
     }
 
   } catch (error) {
