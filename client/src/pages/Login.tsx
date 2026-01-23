@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { 
   Loader2, Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles,
   Phone, Shield, Users, Zap, CheckCircle, Globe, Network,
-  Database, TrendingUp, Layers, Award
+  Database, TrendingUp, Layers, Award, AlertTriangle
 } from "lucide-react";
 import { ParticleNetwork } from "@/components/ParticleNetwork";
 
@@ -44,6 +44,9 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [deviceId, setDeviceId] = useState("");
+  // 新增：强制登录状态
+  const [showForceLogin, setShowForceLogin] = useState(false);
+  const [forceLoginMessage, setForceLoginMessage] = useState("");
 
   useEffect(() => {
     setDeviceId(getDeviceId());
@@ -53,19 +56,15 @@ export default function Login() {
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: () => {
       toast.success("登录成功");
+      setShowForceLogin(false);
       setLocation("/dashboard");
     },
     onError: (error) => {
       if (error.message.includes("其他设备")) {
-        toast.error(error.message, {
-          duration: 5000,
-          action: {
-            label: "强制登录",
-            onClick: () => {
-              forceLoginMutation.mutate({ email, password, deviceId, force: true });
-            },
-          },
-        });
+        // 显示强制登录提示
+        setForceLoginMessage(error.message);
+        setShowForceLogin(true);
+        toast.error("账户已在其他设备登录");
       } else {
         toast.error(error.message || "登录失败");
       }
@@ -75,16 +74,22 @@ export default function Login() {
   const forceLoginMutation = trpc.auth.login.useMutation({
     onSuccess: () => {
       toast.success("登录成功，其他设备已下线");
+      setShowForceLogin(false);
       setLocation("/dashboard");
     },
     onError: (error) => {
-      toast.error(error.message || "登录失败");
+      toast.error(error.message || "强制登录失败");
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowForceLogin(false);
     loginMutation.mutate({ email, password, deviceId });
+  };
+
+  const handleForceLogin = () => {
+    forceLoginMutation.mutate({ email, password, deviceId, force: true });
   };
 
   return (
@@ -210,6 +215,33 @@ export default function Login() {
               <h2 className="text-3xl font-bold text-white mb-2">欢迎回来</h2>
               <p className="text-slate-400">登录您的账户，开始探索全球人脉</p>
             </div>
+
+            {/* 强制登录提示 */}
+            {showForceLogin && (
+              <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-amber-200 text-sm mb-3">{forceLoginMessage}</p>
+                    <Button
+                      type="button"
+                      onClick={handleForceLogin}
+                      disabled={forceLoginMutation.isPending}
+                      className="w-full h-10 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg"
+                    >
+                      {forceLoginMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          强制登录中...
+                        </>
+                      ) : (
+                        "强制登录（踢掉其他设备）"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 登录表单（保持原有逻辑不变） */}
             <form onSubmit={handleSubmit} className="space-y-6">

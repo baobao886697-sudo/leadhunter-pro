@@ -1,5 +1,4 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,13 +6,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Target, Search, Phone, Shield, Zap, CheckCircle, ArrowRight, Sparkles, 
   Database, Globe, TrendingUp, Users, Building2, Linkedin, Twitter, 
   Facebook, Mail, MapPin, BarChart3, Lock, Clock, Award, Star,
-  ChevronRight, Play, Layers, Network, Cpu, Eye, EyeOff, ChevronDown
+  ChevronRight, Play, Layers, Network, Cpu, Eye, EyeOff, ChevronDown,
+  AlertTriangle, Loader2
 } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
 
 // 生成设备指纹（保持原有逻辑）
 function generateDeviceId(): string {
@@ -122,6 +122,10 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  
+  // 强制登录状态
+  const [showForceLogin, setShowForceLogin] = useState(false);
+  const [forceLoginMessage, setForceLoginMessage] = useState("");
 
   // 已登录用户自动跳转到仪表盘（保持原有逻辑）
   useEffect(() => {
@@ -138,18 +142,45 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // 登录 mutation（保持原有逻辑）
+  // 登录 mutation（支持强制登录）
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: () => {
       toast.success("登录成功！");
       setShowAuthModal(false);
+      setShowForceLogin(false);
       window.location.href = "/dashboard";
     },
     onError: (error) => {
-      toast.error(error.message || "登录失败");
+      if (error.message.includes("其他设备")) {
+        setForceLoginMessage(error.message);
+        setShowForceLogin(true);
+        toast.error("账户已在其他设备登录");
+      } else {
+        toast.error(error.message || "登录失败");
+      }
       setIsLoading(false);
     },
   });
+
+  // 强制登录 mutation
+  const forceLoginMutation = trpc.auth.login.useMutation({
+    onSuccess: () => {
+      toast.success("登录成功，其他设备已下线");
+      setShowAuthModal(false);
+      setShowForceLogin(false);
+      window.location.href = "/dashboard";
+    },
+    onError: (error) => {
+      toast.error(error.message || "强制登录失败");
+      setIsLoading(false);
+    },
+  });
+
+  const handleForceLogin = () => {
+    setIsLoading(true);
+    const deviceId = generateDeviceId();
+    forceLoginMutation.mutate({ email, password, deviceId, force: true });
+  };
 
   // 注册 mutation（保持原有逻辑）
   const registerMutation = trpc.auth.register.useMutation({
@@ -763,6 +794,33 @@ export default function Home() {
                   : '注册成为会员，获取一手商业数据'}
               </p>
             </DialogHeader>
+
+            {/* 强制登录提示 */}
+            {showForceLogin && authMode === 'login' && (
+              <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-amber-200 text-sm mb-3">{forceLoginMessage}</p>
+                    <Button
+                      type="button"
+                      onClick={handleForceLogin}
+                      disabled={isLoading}
+                      className="w-full h-10 text-sm bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          强制登录中...
+                        </>
+                      ) : (
+                        "强制登录（踢掉其他设备）"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="space-y-2">
