@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle, Linkedin, Rocket } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -30,7 +30,8 @@ import { NotificationCenter } from "./NotificationCenter";
 
 const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean }> = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/dashboard" },
-  { icon: Search, label: "开始搜索", path: "/search" },
+  { icon: Linkedin, label: "LinkedIn", path: "/search" },
+  { icon: Rocket, label: "正在开发", path: "/roadmap" },
   { icon: History, label: "历史记录", path: "/history" },
   { icon: Wallet, label: "积分充值", path: "/recharge" },
   { icon: MessageCircle, label: "联系我们", path: "/feedback" },
