@@ -68,26 +68,34 @@ export default function Dashboard() {
           <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px]" />
         </div>
 
-        {/* 欢迎区域 */}
+        {/* 欢迎区域 - 专业版 */}
         <div className="relative flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-5 h-5 text-cyan-400" />
-              <span className="text-sm text-cyan-400">欢迎回来</span>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs text-cyan-400 font-medium">账户活跃</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/50 border border-slate-700/50">
+                <Shield className="w-3 h-3 text-green-400" />
+                <span className="text-xs text-slate-400">数据安全加密</span>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold text-white" style={{ fontFamily: 'Orbitron, sans-serif' }}>
-              {profile?.name || profile?.email?.split("@")[0] || "用户"}
+            <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: 'Orbitron, sans-serif' }}>
+              Welcome, {profile?.name || profile?.email?.split("@")[0] || "User"}!
             </h1>
-            <p className="text-slate-400 mt-2">
-              开始搜索LinkedIn专业人士的联系方式
+            <p className="text-slate-400">
+              全球人脉资源平台 · 整合 10亿+ 商业联系人数据
             </p>
           </div>
-          <Link href="/search">
-            <Button size="lg" className="gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 border-0 rounded-xl px-8">
-              <Search className="h-5 w-5" />
-              开始搜索
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/search">
+              <Button size="lg" className="gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-cyan-500/25 border-0 rounded-xl px-8">
+                <Search className="h-5 w-5" />
+                开始搜索
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* 统计卡片 */}
@@ -160,6 +168,90 @@ export default function Dashboard() {
               </>
             )}
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500/50 via-emerald-500/50 to-transparent rounded-b-2xl" />
+          </div>
+        </div>
+
+        {/* 数据质量指标 & 快速入口 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+          {/* 数据质量指标 */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-purple-500/20">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-purple-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-white">数据质量</h3>
+                <p className="text-xs text-slate-500">Match Rate</p>
+              </div>
+            </div>
+            <div className="flex items-end gap-2 mb-3">
+              <span className="text-4xl font-bold text-purple-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>95%</span>
+              <span className="text-sm text-slate-500 mb-1">+</span>
+            </div>
+            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full w-[95%] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
+            </div>
+            <p className="text-xs text-slate-500 mt-2">多重验证确保数据准确性</p>
+          </div>
+
+          {/* 平台覆盖 */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-cyan-500/20">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+                <Users className="h-5 w-5 text-cyan-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-white">平台覆盖</h3>
+                <p className="text-xs text-slate-500">Data Sources</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">LinkedIn</span>
+                <span className="text-xs text-cyan-400 font-medium">6.5亿+</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">企业工商</span>
+                <span className="text-xs text-slate-500">即将上线</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Twitter/X</span>
+                <span className="text-xs text-slate-500">即将上线</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 快速入口 */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-green-500/20">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
+                <Zap className="h-5 w-5 text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-white">快速入口</h3>
+                <p className="text-xs text-slate-500">Quick Actions</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Link href="/search">
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer group transition-colors">
+                  <Search className="h-4 w-4 text-slate-500 group-hover:text-green-400" />
+                  <span className="text-sm text-slate-400 group-hover:text-white">新建搜索任务</span>
+                </div>
+              </Link>
+              <Link href="/history">
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer group transition-colors">
+                  <History className="h-4 w-4 text-slate-500 group-hover:text-green-400" />
+                  <span className="text-sm text-slate-400 group-hover:text-white">查看历史记录</span>
+                </div>
+              </Link>
+              <Link href="/recharge">
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer group transition-colors">
+                  <Coins className="h-4 w-4 text-slate-500 group-hover:text-green-400" />
+                  <span className="text-sm text-slate-400 group-hover:text-white">充值积分</span>
+                </div>
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -275,7 +367,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white">使用指南</h3>
-              <p className="text-sm text-slate-400">快速了解如何使用云端寻踪 Pro</p>
+              <p className="text-sm text-slate-400">快速了解如何使用 DataReach Pro</p>
             </div>
           </div>
           
