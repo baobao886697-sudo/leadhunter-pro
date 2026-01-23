@@ -396,9 +396,9 @@ export default function Home() {
                   <img 
                     src="/images/team-meeting.jpg" 
                     alt="Business Team Meeting" 
-                    className="w-full h-[400px] object-cover"
+                    className="w-full h-auto min-h-[350px] object-contain"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1a] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1a]/70 via-transparent to-transparent" />
                   <div className="absolute bottom-6 left-6 right-6">
                     <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/90 backdrop-blur-sm border border-slate-700/50">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
