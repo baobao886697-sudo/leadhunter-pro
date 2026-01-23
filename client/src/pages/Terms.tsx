@@ -223,7 +223,7 @@ export default function Terms() {
                 如果您对本服务条款有任何问题，请通过以下方式联系我们：
               </p>
               <div className="space-y-2 text-slate-300">
-                <p>📧 电子邮箱：legal@datareach.pro</p>
+                <p>📧 电子邮箱：admin@lhpro.lat</p>
                 <p>📍 地址：新加坡 莱佛士坊 1号 One Raffles Place Tower 2</p>
               </div>
             </div>

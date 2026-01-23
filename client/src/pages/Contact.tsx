@@ -69,7 +69,7 @@ export default function Contact() {
                 <Mail className="w-7 h-7 text-cyan-400" />
               </div>
               <h3 className="text-lg font-bold text-white mb-2">电子邮箱</h3>
-              <p className="text-cyan-400 font-medium">contact@datareach.pro</p>
+              <p className="text-cyan-400 font-medium">admin@lhpro.lat</p>
               <p className="text-slate-400 text-sm mt-1">24小时内回复</p>
             </div>
             <div className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center hover:border-purple-500/30 transition-colors">

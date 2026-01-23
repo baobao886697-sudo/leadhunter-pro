@@ -176,7 +176,7 @@ export default function Privacy() {
                 如果您对本隐私政策有任何问题或疑虑，请通过以下方式联系我们：
               </p>
               <div className="space-y-2 text-slate-300">
-                <p>📧 电子邮箱：privacy@datareach.pro</p>
+                <p>📧 电子邮箱：admin@lhpro.lat</p>
                 <p>📍 地址：新加坡 莱佛士坊 1号 One Raffles Place Tower 2</p>
               </div>
             </div>

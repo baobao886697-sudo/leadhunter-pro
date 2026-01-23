@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { 
@@ -734,10 +734,10 @@ export default function Home() {
 
             {/* 链接 */}
             <div className="flex items-center gap-8 text-sm text-slate-500">
-              <a href="#" className="hover:text-cyan-400 transition-colors">关于我们</a>
-              <a href="#" className="hover:text-cyan-400 transition-colors">隐私政策</a>
-              <a href="#" className="hover:text-cyan-400 transition-colors">服务条款</a>
-              <a href="#" className="hover:text-cyan-400 transition-colors">联系我们</a>
+              <Link href="/about" className="hover:text-cyan-400 transition-colors">关于我们</Link>
+              <Link href="/privacy" className="hover:text-cyan-400 transition-colors">隐私政策</Link>
+              <Link href="/terms" className="hover:text-cyan-400 transition-colors">服务条款</Link>
+              <Link href="/contact" className="hover:text-cyan-400 transition-colors">联系我们</Link>
             </div>
 
             {/* 版权 */}

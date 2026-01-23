@@ -162,7 +162,7 @@ export default function About() {
             <div className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
               <Mail className="w-10 h-10 text-purple-400 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-white mb-2">电子邮箱</h3>
-              <p className="text-slate-400 text-sm">contact@datareach.pro<br />support@datareach.pro</p>
+              <p className="text-slate-400 text-sm">admin@lhpro.lat<br />support@lhpro.lat</p>
             </div>
             <div className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center">
               <Phone className="w-10 h-10 text-green-400 mx-auto mb-4" />
