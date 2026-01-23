@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { 
   Target, Search, Phone, Shield, Zap, CheckCircle, ArrowRight, Sparkles, 
   Database, Globe, TrendingUp, Users, Building2, Linkedin, Twitter, 
