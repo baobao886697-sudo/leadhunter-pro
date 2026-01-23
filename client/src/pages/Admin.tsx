@@ -18,7 +18,7 @@ import {
   Database, AlertTriangle, CheckCircle, XCircle, Clock,
   Eye, Edit, Ban, UserCheck, Wallet, Copy, ExternalLink,
   Save, Trash2, Activity, Server, Zap, Megaphone, Mail,
-  BarChart3, MessageSquare
+  BarChart3, MessageSquare, UserSearch
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserDetailDialog } from "@/components/admin/UserDetailDialog";
@@ -273,6 +273,7 @@ export default function Admin() {
             { id: "announcements", label: "公告管理", icon: Megaphone },
             { id: "monitor", label: "系统监控", icon: BarChart3 },
             { id: "logs", label: "系统日志", icon: FileText },
+            { id: "tps", label: "TPS 配置", icon: UserSearch },
             { id: "settings", label: "系统配置", icon: Settings },
           ].map((item) => (
             <button
@@ -1033,6 +1034,201 @@ export default function Admin() {
                   </div>
                 )
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ============ TPS 配置 ============ */}
+        {activeTab === "tps" && (
+          <div className="relative space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <UserSearch className="w-5 h-5 text-cyan-400" />
+                  <span className="text-sm text-cyan-400">TruePeopleSearch</span>
+                </div>
+                <h1 className="text-3xl font-bold text-white" style={{ fontFamily: 'Orbitron, sans-serif' }}>
+                  TPS 配置
+                </h1>
+                <p className="text-slate-400 mt-1">管理 TruePeopleSearch 搜索功能的配置</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 积分消耗配置 */}
+              <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/50 border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Coins className="h-5 w-5 text-yellow-400" />
+                    积分消耗配置
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    设置 TPS 搜索的积分消耗
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {['TPS_SEARCH_CREDITS', 'TPS_DETAIL_CREDITS'].map((key) => {
+                    const config = configs.find((c: any) => c.key === key);
+                    const labels: Record<string, string> = {
+                      'TPS_SEARCH_CREDITS': '搜索页消耗（积分/页）',
+                      'TPS_DETAIL_CREDITS': '详情页消耗（积分/条）',
+                    };
+                    return (
+                      <div key={key} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-slate-300">{labels[key] || key}</Label>
+                          {config && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingConfig({ key, value: config.value, description: config.description || undefined })}
+                              className="text-slate-400 hover:text-white"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                        <Input
+                          value={config?.value || '0.3'}
+                          readOnly
+                          className="bg-slate-800 border-slate-700 text-white font-mono"
+                          placeholder="0.3"
+                        />
+                      </div>
+                    );
+                  })}
+                  <div className="pt-2 border-t border-slate-700">
+                    <p className="text-xs text-slate-500">
+                      默认值：搜索 0.3 积分/页，详情 0.3 积分/条<br/>
+                      示例：搜索 3 页 + 获取 10 条详情 = 0.9 + 3 = 3.9 积分
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* API 配置 */}
+              <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/50 border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Server className="h-5 w-5 text-blue-400" />
+                    API 配置
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Scrape.do API 设置
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {['TPS_SCRAPE_TOKEN', 'TPS_MAX_CONCURRENT', 'TPS_CACHE_DAYS'].map((key) => {
+                    const config = configs.find((c: any) => c.key === key);
+                    const labels: Record<string, string> = {
+                      'TPS_SCRAPE_TOKEN': 'Scrape.do API Token',
+                      'TPS_MAX_CONCURRENT': '最大并发数',
+                      'TPS_CACHE_DAYS': '缓存天数',
+                    };
+                    const defaults: Record<string, string> = {
+                      'TPS_SCRAPE_TOKEN': '***已配置***',
+                      'TPS_MAX_CONCURRENT': '40',
+                      'TPS_CACHE_DAYS': '30',
+                    };
+                    return (
+                      <div key={key} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-slate-300">{labels[key] || key}</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingConfig({ key, value: config?.value || '', description: config?.description || undefined })}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={key === 'TPS_SCRAPE_TOKEN' && config?.value ? '***已配置***' : (config?.value || defaults[key])}
+                          readOnly
+                          className="bg-slate-800 border-slate-700 text-white font-mono"
+                          placeholder={defaults[key]}
+                        />
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* 过滤配置 */}
+              <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/50 border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Target className="h-5 w-5 text-green-400" />
+                    默认过滤配置
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    搜索结果的默认过滤条件
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {['TPS_MIN_AGE', 'TPS_MAX_AGE', 'TPS_MIN_PHONE_YEAR'].map((key) => {
+                    const config = configs.find((c: any) => c.key === key);
+                    const labels: Record<string, string> = {
+                      'TPS_MIN_AGE': '最小年龄',
+                      'TPS_MAX_AGE': '最大年龄',
+                      'TPS_MIN_PHONE_YEAR': '电话最早年份',
+                    };
+                    const defaults: Record<string, string> = {
+                      'TPS_MIN_AGE': '25',
+                      'TPS_MAX_AGE': '65',
+                      'TPS_MIN_PHONE_YEAR': '2020',
+                    };
+                    return (
+                      <div key={key} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-slate-300">{labels[key] || key}</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingConfig({ key, value: config?.value || defaults[key], description: config?.description || undefined })}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={config?.value || defaults[key]}
+                          readOnly
+                          className="bg-slate-800 border-slate-700 text-white font-mono"
+                          placeholder={defaults[key]}
+                        />
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* 使用说明 */}
+              <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/50 border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-purple-400" />
+                    使用说明
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-slate-400">
+                  <p><strong className="text-white">积分计算公式：</strong></p>
+                  <p className="font-mono bg-slate-800 p-2 rounded">总消耗 = 搜索页数 × 搜索积分 + 详情数 × 详情积分</p>
+                  <p><strong className="text-white">推荐配置：</strong></p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>搜索积分：0.3（与 EXE 版本保持一致）</li>
+                    <li>详情积分：0.3（与 EXE 版本保持一致）</li>
+                    <li>最大并发：40（Scrape.do 推荐值）</li>
+                    <li>缓存天数：30（减少重复请求）</li>
+                  </ul>
+                  <p><strong className="text-white">注意事项：</strong></p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>修改 API Token 后需要重启服务</li>
+                    <li>并发数过高可能导致 429 错误</li>
+                  </ul>
+                </CardContent>
+              </Card>
             </div>
           </div>
         )}

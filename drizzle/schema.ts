@@ -286,3 +286,113 @@ export const userFeedbacks = mysqlTable("user_feedbacks", {
 
 export type UserFeedback = typeof userFeedbacks.$inferSelect;
 export type InsertUserFeedback = typeof userFeedbacks.$inferInsert;
+
+
+// ==================== TruePeopleSearch 相关表 ====================
+
+// TPS 配置表
+export const tpsConfig = mysqlTable("tps_config", {
+  id: int("id").autoincrement().primaryKey(),
+  searchCost: decimal("searchCost", { precision: 10, scale: 2 }).default("0.3").notNull(), // 每搜索页消耗积分
+  detailCost: decimal("detailCost", { precision: 10, scale: 2 }).default("0.3").notNull(), // 每详情页消耗积分
+  maxConcurrent: int("maxConcurrent").default(40).notNull(), // 最大并发数
+  cacheDays: int("cacheDays").default(30).notNull(), // 缓存天数
+  scrapeDoToken: varchar("scrapeDoToken", { length: 100 }), // Scrape.do API Token
+  maxPages: int("maxPages").default(25).notNull(), // 最大搜索页数
+  batchDelay: int("batchDelay").default(200).notNull(), // 批次间延迟(ms)
+  enabled: boolean("enabled").default(true).notNull(), // 是否启用
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TpsConfig = typeof tpsConfig.$inferSelect;
+export type InsertTpsConfig = typeof tpsConfig.$inferInsert;
+
+// TPS 详情页缓存表
+export const tpsDetailCache = mysqlTable("tps_detail_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  detailLink: varchar("detailLink", { length: 500 }).notNull().unique(),
+  data: json("data").$type<{
+    name: string;
+    firstName: string;
+    lastName: string;
+    age: number;
+    city: string;
+    state: string;
+    location: string;
+    phone: string;
+    phoneType: string;
+    carrier: string;
+    reportYear: number | null;
+    isPrimary: boolean;
+    propertyValue: number;
+    yearBuilt: number | null;
+    isDeceased: boolean;
+  }>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+});
+
+export type TpsDetailCache = typeof tpsDetailCache.$inferSelect;
+export type InsertTpsDetailCache = typeof tpsDetailCache.$inferInsert;
+
+// TPS 搜索任务表
+export const tpsSearchTasks = mysqlTable("tps_search_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: varchar("taskId", { length: 32 }).notNull().unique(),
+  userId: int("userId").notNull(),
+  mode: mysqlEnum("mode", ["nameOnly", "nameLocation"]).default("nameOnly").notNull(),
+  names: json("names").$type<string[]>().notNull(),
+  locations: json("locations").$type<string[]>(),
+  filters: json("filters").$type<{
+    minAge?: number;
+    maxAge?: number;
+    minYear?: number;
+    minPropertyValue?: number;
+    excludeTMobile?: boolean;
+    excludeComcast?: boolean;
+    excludeLandline?: boolean;
+  }>(),
+  totalSubTasks: int("totalSubTasks").default(0).notNull(), // 总子任务数
+  completedSubTasks: int("completedSubTasks").default(0).notNull(), // 已完成子任务数
+  totalResults: int("totalResults").default(0).notNull(), // 总结果数
+  searchPageRequests: int("searchPageRequests").default(0).notNull(), // 搜索页请求数
+  detailPageRequests: int("detailPageRequests").default(0).notNull(), // 详情页请求数
+  cacheHits: int("cacheHits").default(0).notNull(), // 缓存命中数
+  creditsUsed: decimal("creditsUsed", { precision: 10, scale: 2 }).default("0").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "cancelled"]).default("pending").notNull(),
+  progress: int("progress").default(0).notNull(), // 进度百分比
+  logs: json("logs").$type<Array<{ timestamp: string; message: string }>>(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+});
+
+export type TpsSearchTask = typeof tpsSearchTasks.$inferSelect;
+export type InsertTpsSearchTask = typeof tpsSearchTasks.$inferInsert;
+
+// TPS 搜索结果表
+export const tpsSearchResults = mysqlTable("tps_search_results", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: int("taskId").notNull(),
+  subTaskIndex: int("subTaskIndex").default(0).notNull(), // 子任务索引
+  name: varchar("name", { length: 200 }),
+  searchName: varchar("searchName", { length: 200 }), // 搜索的姓名
+  searchLocation: varchar("searchLocation", { length: 200 }), // 搜索的地点
+  age: int("age"),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 50 }),
+  location: varchar("location", { length: 200 }),
+  phone: varchar("phone", { length: 50 }),
+  phoneType: varchar("phoneType", { length: 50 }),
+  carrier: varchar("carrier", { length: 100 }),
+  reportYear: int("reportYear"),
+  isPrimary: boolean("isPrimary").default(false),
+  propertyValue: int("propertyValue").default(0),
+  yearBuilt: int("yearBuilt"),
+  detailLink: varchar("detailLink", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TpsSearchResult = typeof tpsSearchResults.$inferSelect;
+export type InsertTpsSearchResult = typeof tpsSearchResults.$inferInsert;

@@ -22,6 +22,9 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Contact from "./pages/Contact";
 import Roadmap from "./pages/Roadmap";
+import TpsSearch from "./pages/TpsSearch";
+import TpsTask from "./pages/TpsTask";
+import TpsHistory from "./pages/TpsHistory";
 
 function Router() {
   return (
@@ -38,6 +41,9 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/feedback" component={Feedback} />
       <Route path="/roadmap" component={Roadmap} />
+      <Route path="/tps" component={TpsSearch} />
+      <Route path="/tps/task/:taskId" component={TpsTask} />
+      <Route path="/tps/history" component={TpsHistory} />
       <Route path="/about" component={About} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />

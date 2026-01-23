@@ -17,6 +17,7 @@ import crypto from "crypto";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { tpsRouter } from "./tps/router";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { sdk } from "./_core/sdk";
 import { validateAdminCredentials, generateAdminToken, verifyAdminToken, getAdminTokenFromHeader } from "./_core/adminAuth";
@@ -134,6 +135,7 @@ const adminProcedure = publicProcedure.use(({ ctx, next }) => {
 
 export const appRouter = router({
   system: systemRouter,
+  tps: tpsRouter,  // TruePeopleSearch 路由
 
   // ============ 认证路由 ============
   auth: router({
