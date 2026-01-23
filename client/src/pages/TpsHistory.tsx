@@ -4,7 +4,6 @@
 
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -37,10 +36,7 @@ export default function TpsHistory() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
   
-  const { data, isLoading } = useQuery({
-    queryKey: ["tps", "history", page],
-    queryFn: () => trpc.tps.getHistory.query({ page, pageSize }),
-  });
+  const { data, isLoading } = trpc.tps.getHistory.useQuery({ page, pageSize });
   
   const getStatusBadge = (status: string) => {
     switch (status) {

@@ -2,9 +2,8 @@
  * TruePeopleSearch 任务详情页面
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -50,29 +49,29 @@ export default function TpsTask() {
   const pageSize = 50;
   
   // 获取任务状态
-  const { data: task, refetch: refetchTask } = useQuery({
-    queryKey: ["tps", "task", taskId],
-    queryFn: () => trpc.tps.getTaskStatus.query({ taskId: taskId! }),
-    enabled: !!taskId,
-    refetchInterval: (data) => {
-      // 任务进行中时自动刷新
-      if (data?.status === "running" || data?.status === "pending") {
-        return 2000;
-      }
-      return false;
-    },
-  });
+  const { data: task, refetch: refetchTask } = trpc.tps.getTaskStatus.useQuery(
+    { taskId: taskId! },
+    {
+      enabled: !!taskId,
+      refetchInterval: (query) => {
+        // 任务进行中时自动刷新
+        const data = query.state.data;
+        if (data?.status === "running" || data?.status === "pending") {
+          return 2000;
+        }
+        return false;
+      },
+    }
+  );
   
   // 获取搜索结果
-  const { data: results, refetch: refetchResults } = useQuery({
-    queryKey: ["tps", "results", taskId, page],
-    queryFn: () => trpc.tps.getTaskResults.query({ taskId: taskId!, page, pageSize }),
-    enabled: !!taskId && task?.status === "completed",
-  });
+  const { data: results, refetch: refetchResults } = trpc.tps.getTaskResults.useQuery(
+    { taskId: taskId!, page, pageSize },
+    { enabled: !!taskId && task?.status === "completed" }
+  );
   
   // 导出 CSV
-  const exportMutation = useMutation({
-    mutationFn: () => trpc.tps.exportResults.mutate({ taskId: taskId! }),
+  const exportMutation = trpc.tps.exportResults.useMutation({
     onSuccess: (data) => {
       // 创建下载
       const blob = new Blob([data.csv], { type: "text/csv;charset=utf-8;" });
@@ -148,7 +147,7 @@ export default function TpsTask() {
             {task?.status === "completed" && (
               <Button
                 variant="outline"
-                onClick={() => exportMutation.mutate()}
+                onClick={() => exportMutation.mutate({ taskId: taskId! })}
                 disabled={exportMutation.isPending}
                 className="border-gray-700 hover:bg-gray-800"
               >
