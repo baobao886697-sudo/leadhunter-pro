@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle, Linkedin, Rocket } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle, Linkedin, Rocket, UserCircle } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -247,9 +247,9 @@ function DashboardLayoutContent({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium">
-                      {user?.name?.charAt(0).toUpperCase()}
+                  <Avatar className="h-9 w-9 border shrink-0 bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
+                    <AvatarFallback className="text-xs font-medium bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
+                      {user?.name?.charAt(0).toUpperCase() || <UserCircle className="h-5 w-5 text-cyan-400" />}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
