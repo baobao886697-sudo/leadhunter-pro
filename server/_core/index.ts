@@ -490,17 +490,27 @@ async function ensureTables() {
     `);
     console.log("[Database] TPS search tasks table ready");
     
-    // 添加缺失的字段（如果表已存在）
-    try {
-      await db.execute(sql`ALTER TABLE tps_search_tasks ADD COLUMN IF NOT EXISTS searchPageRequests INT NOT NULL DEFAULT 0`);
-      await db.execute(sql`ALTER TABLE tps_search_tasks ADD COLUMN IF NOT EXISTS detailPageRequests INT NOT NULL DEFAULT 0`);
-      await db.execute(sql`ALTER TABLE tps_search_tasks ADD COLUMN IF NOT EXISTS cacheHits INT NOT NULL DEFAULT 0`);
-      await db.execute(sql`ALTER TABLE tps_search_tasks ADD COLUMN IF NOT EXISTS logs JSON`);
-      await db.execute(sql`ALTER TABLE tps_search_tasks ADD COLUMN IF NOT EXISTS startedAt TIMESTAMP NULL`);
-      console.log("[Database] TPS search tasks columns synced");
-    } catch (e) {
-      // 忽略字段已存在的错误
+    // 添加缺失的字段（如果表已存在）- MySQL 兼容语法
+    const columnsToAdd = [
+      { name: 'searchPageRequests', definition: 'INT NOT NULL DEFAULT 0' },
+      { name: 'detailPageRequests', definition: 'INT NOT NULL DEFAULT 0' },
+      { name: 'cacheHits', definition: 'INT NOT NULL DEFAULT 0' },
+      { name: 'logs', definition: 'JSON' },
+      { name: 'startedAt', definition: 'TIMESTAMP NULL' },
+    ];
+    
+    for (const col of columnsToAdd) {
+      try {
+        await db.execute(sql.raw(`ALTER TABLE tps_search_tasks ADD COLUMN ${col.name} ${col.definition}`));
+        console.log(`[Database] Added column ${col.name} to tps_search_tasks`);
+      } catch (e: any) {
+        // 忽略字段已存在的错误 (MySQL error code 1060: Duplicate column name)
+        if (!e.message?.includes('Duplicate column')) {
+          console.warn(`[Database] Failed to add column ${col.name}:`, e.message);
+        }
+      }
     }
+    console.log("[Database] TPS search tasks columns sync completed");
     
     // 21. TPS 搜索结果表
     await db.execute(sql`
