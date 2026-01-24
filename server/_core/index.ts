@@ -521,20 +521,47 @@ async function ensureTables() {
         name VARCHAR(200),
         searchName VARCHAR(200),
         searchLocation VARCHAR(200),
-        firstName VARCHAR(100),
-        lastName VARCHAR(100),
         age INT,
         city VARCHAR(100),
         state VARCHAR(50),
-        phones JSON,
-        addresses JSON,
-        propertyValue INT,
+        location VARCHAR(200),
+        phone VARCHAR(50),
+        phoneType VARCHAR(50),
+        carrier VARCHAR(100),
+        reportYear INT,
+        isPrimary BOOLEAN DEFAULT FALSE,
+        propertyValue INT DEFAULT 0,
+        yearBuilt INT,
         detailLink VARCHAR(500),
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
         INDEX idx_taskId (taskId)
       )
     `);
     console.log("[Database] TPS search results table ready");
+    
+    // 添加缺失的字段到 tps_search_results 表（MySQL 兼容语法）
+    const resultsColumnsToAdd = [
+      { name: 'location', definition: 'VARCHAR(200)' },
+      { name: 'phone', definition: 'VARCHAR(50)' },
+      { name: 'phoneType', definition: 'VARCHAR(50)' },
+      { name: 'carrier', definition: 'VARCHAR(100)' },
+      { name: 'reportYear', definition: 'INT' },
+      { name: 'isPrimary', definition: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'yearBuilt', definition: 'INT' },
+    ];
+    
+    for (const col of resultsColumnsToAdd) {
+      try {
+        await db.execute(sql.raw(`ALTER TABLE tps_search_results ADD COLUMN ${col.name} ${col.definition}`));
+        console.log(`[Database] Added column ${col.name} to tps_search_results`);
+      } catch (e: any) {
+        // 忽略字段已存在的错误
+        if (!e.message?.includes('Duplicate column')) {
+          console.warn(`[Database] Failed to add column ${col.name}:`, e.message);
+        }
+      }
+    }
+    console.log("[Database] TPS search results columns sync completed");
     
     // ========== 初始化默认数据 ==========
     
