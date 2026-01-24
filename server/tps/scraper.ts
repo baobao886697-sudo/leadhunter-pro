@@ -729,14 +729,26 @@ export async function fetchDetailsInBatch(
   // 检查缓存
   let cachedDetails = new Map<string, TpsDetailResult>();
   if (getCachedDetails) {
-    cachedDetails = await getCachedDetails(uniqueLinks);
+    const rawCached = await getCachedDetails(uniqueLinks);
+    
+    // 验证缓存数据完整性：必须有 phone 字段才算有效缓存
+    for (const [link, data] of rawCached) {
+      if (data && data.phone && data.phone.trim() !== '') {
+        cachedDetails.set(link, data);
+      }
+    }
+    
     stats.cacheHits = cachedDetails.size;
+    const invalidCacheCount = rawCached.size - cachedDetails.size;
+    
     if (cachedDetails.size > 0) {
-      onProgress?.(`💾 缓存命中 ${cachedDetails.size} 条`);
+      onProgress?.(`💾 有效缓存命中 ${cachedDetails.size} 条${invalidCacheCount > 0 ? `，无效缓存 ${invalidCacheCount} 条将重新获取` : ''}`);
+    } else if (invalidCacheCount > 0) {
+      onProgress?.(`⚠️ ${invalidCacheCount} 条缓存数据不完整，将重新获取`);
     }
   }
   
-  // 需要获取的链接
+  // 需要获取的链接（包括无效缓存的链接）
   const linksToFetch = uniqueLinks.filter(link => !cachedDetails.has(link));
   
   // 构建链接到任务的映射
