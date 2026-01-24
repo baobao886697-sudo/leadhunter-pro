@@ -1,53 +1,17 @@
-/**
- * TruePeopleSearch 爬虫服务
- * 
- * 基于 EXE 版本的 scraper.js 移植，适配 DataReach Pro Web 平台
- * 
- * 功能：
- * - 通过 Scrape.do 代理访问 TruePeopleSearch
- * - 解析搜索页和详情页
- * - 支持统一队列模式（40 并发统一消费）
- * - 过滤和去重
- * - 2+2 延后重试机制（与 EXE 客户端一致）
- * 
- * v3.2 更新:
- * - 新增分离的搜索和详情抓取函数（支持统一队列模式）
- * - 保留原有 fullSearch 函数（向后兼容）
- * - 40 并发统一消费详情队列，最大化并发利用率
- */
-
 import * as cheerio from 'cheerio';
 
-// ==================== 配置 ====================
+// ==================== 配置常量 ====================
+
 export const TPS_CONFIG = {
-  SCRAPEDO_BASE: 'https://api.scrape.do',
-  TPS_BASE: 'https://www.truepeoplesearch.com',
-  RESULTS_PER_PAGE: 10,
-  MAX_SAFE_PAGES: 25,
-  MAX_RECORDS: 250,
-  REQUEST_TIMEOUT: 30000,
-  BATCH_DELAY: 200,  // 批次延迟 200ms（稳定优先）
-  // 统一队列并发配置
-  TOTAL_CONCURRENCY: 40,    // 总并发数（与 Scrape.do 账户限制匹配）
-  TASK_CONCURRENCY: 4,      // 搜索任务并发数
-  SCRAPEDO_CONCURRENCY: 10, // 每任务详情并发（向后兼容）
-  // 重试配置（与 EXE 客户端一致）
-  IMMEDIATE_RETRIES: 2,       // 即时重试次数
-  IMMEDIATE_RETRY_DELAY: 1000, // 即时重试延迟 (1秒)
-  DEFERRED_RETRIES: 2,        // 延后重试次数
-  DEFERRED_RETRY_DELAY: 2000, // 延后重试延迟 (2秒)
+  TASK_CONCURRENCY: 4,      // 同时执行的搜索任务数
+  SCRAPEDO_CONCURRENCY: 10, // 每个任务的 Scrape.do 并发数
+  TOTAL_CONCURRENCY: 40,    // 总并发数 (4 * 10)
+  MAX_SAFE_PAGES: 25,       // 最大搜索页数
+  SEARCH_COST: 0.3,         // 搜索页成本
+  DETAIL_COST: 0.3,         // 详情页成本
 };
 
 // ==================== 类型定义 ====================
-export interface TpsFilters {
-  minAge?: number;
-  maxAge?: number;
-  minYear?: number;
-  minPropertyValue?: number;
-  excludeTMobile?: boolean;
-  excludeComcast?: boolean;
-  excludeLandline?: boolean;
-}
 
 export interface TpsSearchResult {
   name: string;
@@ -69,187 +33,149 @@ export interface TpsDetailResult {
   isPrimary?: boolean;
   propertyValue?: number;
   yearBuilt?: number;
-  detailLink: string;
+  detailLink?: string;
 }
 
-export interface TpsSearchOptions {
-  maxPages: number;
-  filters: TpsFilters;
-  concurrency: number;
-  onProgress?: (message: string) => void;
-  getCachedDetails?: (links: string[]) => Promise<Map<string, TpsDetailResult>>;
-  setCachedDetails?: (items: Array<{ link: string; data: TpsDetailResult }>) => Promise<void>;
+export interface TpsFilters {
+  minAge?: number;
+  maxAge?: number;
+  minYear?: number;
+  minPropertyValue?: number;
+  excludeTMobile?: boolean;
+  excludeComcast?: boolean;
+  excludeLandline?: boolean;
 }
 
-// 统一队列模式的详情任务
 export interface DetailTask {
+  detailLink: string;
+  searchName: string;
+  searchLocation: string;
   searchResult: TpsSearchResult;
-  subTaskIndex: number;
-  name: string;
-  location: string;
 }
 
-// ==================== 辅助函数 ====================
+// ==================== 搜索页解析 ====================
 
 /**
- * 通过 Scrape.do 代理获取页面
+ * 解析搜索结果页面，提取人员列表
  * 
- * 支持即时重试（2次）和延后重试标记
+ * 选择器说明：
+ * - .card-summary: 每个搜索结果卡片
+ * - .h4, .content-header: 姓名（两种可能的选择器）
+ * - .content-value: 年龄
+ * - a[href*="/find/person/"]: 详情页链接
  */
-export async function fetchViaProxy(
-  url: string,
-  token: string,
-  retryCount: number = 0
-): Promise<{ html: string | null; status: number; shouldDeferRetry: boolean }> {
-  const encodedUrl = encodeURIComponent(url);
-  // 添加 timeout=30000 参数，与应用层超时保持一致
-  const apiUrl = `${TPS_CONFIG.SCRAPEDO_BASE}/?token=${token}&url=${encodedUrl}&super=true&geoCode=us&timeout=30000`;
-  
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TPS_CONFIG.REQUEST_TIMEOUT);
-  
-  try {
-    const response = await fetch(apiUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.status === 429) {
-      // 429 限流：尝试即时重试
-      if (retryCount < TPS_CONFIG.IMMEDIATE_RETRIES) {
-        await new Promise(resolve => setTimeout(resolve, TPS_CONFIG.IMMEDIATE_RETRY_DELAY));
-        return fetchViaProxy(url, token, retryCount + 1);
-      }
-      // 即时重试用尽，标记为需要延后重试
-      return { html: null, status: 429, shouldDeferRetry: true };
-    }
-    
-    if (!response.ok) {
-      return { html: null, status: response.status, shouldDeferRetry: false };
-    }
-    
-    const html = await response.text();
-    return { html, status: 200, shouldDeferRetry: false };
-    
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    
-    if (error.name === 'AbortError') {
-      // 超时：尝试即时重试
-      if (retryCount < TPS_CONFIG.IMMEDIATE_RETRIES) {
-        return fetchViaProxy(url, token, retryCount + 1);
-      }
-      return { html: null, status: 408, shouldDeferRetry: true };
-    }
-    
-    return { html: null, status: 500, shouldDeferRetry: false };
-  }
-}
-
-/**
- * 解析搜索结果页
- * 
- * 使用两种方法提取年龄（DOM + 正则），与 EXE 客户端一致
- */
-export function parseSearchPage(html: string): { results: TpsSearchResult[]; totalRecords: number } {
+export function parseSearchPage(html: string): TpsSearchResult[] {
   const $ = cheerio.load(html);
   const results: TpsSearchResult[] = [];
   
-  // 获取总记录数（使用多个选择器，与 EXE 客户端一致）
-  let totalRecords = 0;
-  const recordCountSelectors = [
-    '.record-count .col-7',
-    '.record-count .col',
-    '.search-results-header',
-    '.results-header'
-  ];
+  // 调试日志
+  const cardCount = $('.card-summary').length;
+  console.log(`[parseSearchPage] 找到 ${cardCount} 个 card-summary`);
   
-  for (const selector of recordCountSelectors) {
-    const text = $(selector).first().text();
-    const match = text.match(/(\d+)\s*(?:records?|results?)/i);
-    if (match) {
-      totalRecords = parseInt(match[1], 10);
-      break;
-    }
-  }
-  
-  // 解析搜索结果卡片
-  // 尝试多种选择器来匹配卡片
-  const cardSelectors = ['.card-summary', '.person-card', '.search-result-card', '[data-detail-link]'];
-  let $cards = $();
-  
-  for (const selector of cardSelectors) {
-    $cards = $(selector);
-    if ($cards.length > 0) break;
-  }
-  
-  // 如果没有找到卡片，记录调试信息
-  if ($cards.length === 0) {
-    console.log('[TPS Debug] No cards found. Page structure:', {
-      bodyLength: $('body').text().length,
-      hasCloudflare: $('body').text().includes('Cloudflare'),
-      hasVerifying: $('body').text().includes('Verifying'),
-      firstDivClasses: $('div').first().attr('class'),
-    });
-  }
-  
-  $cards.each((_, card) => {
+  $('.card-summary').each((index, card) => {
     const $card = $(card);
     
-    // 获取姓名（多种选择器，按优先级尝试）
-    // TPS 有两种卡片结构：.h4 和 .content-header
-    let name = $card.find('.h4').first().text().trim();
-    if (!name) name = $card.find('.content-header').first().text().trim();
-    if (!name) name = $card.find('.name, .person-name, h4, h3').first().text().trim();
-    if (!name) return;
+    // 提取姓名 - 尝试多种选择器
+    let name = '';
+    const h4Elem = $card.find('.h4').first();
+    if (h4Elem.length && h4Elem.text().trim()) {
+      name = h4Elem.text().trim();
+    } else {
+      // 备用选择器：.content-header
+      const headerElem = $card.find('.content-header').first();
+      if (headerElem.length) {
+        name = headerElem.text().trim();
+      }
+    }
     
-    // 获取年龄（两种方法，与 EXE 客户端一致）
-    let age: number | undefined;
-    
-    // 方法 1: DOM 选择器
+    // 提取年龄
     const ageText = $card.find('.content-value').first().text().trim();
-    if (ageText) {
-      const ageMatch = ageText.match(/Age\s*(\d+)/i);
-      if (ageMatch) {
-        age = parseInt(ageMatch[1], 10);
-      }
-    }
+    const ageMatch = ageText.match(/(\d+)/);
+    const age = ageMatch ? parseInt(ageMatch[1], 10) : undefined;
     
-    // 方法 2: 正则匹配整个卡片文本（备用）
-    if (!age) {
-      const cardText = $card.text();
-      const ageMatch = cardText.match(/Age\s*(\d+)/i);
-      if (ageMatch) {
-        age = parseInt(ageMatch[1], 10);
-      }
-    }
-    
-    // 获取位置
+    // 提取位置
     const location = $card.find('.content-value').eq(1).text().trim() || '';
     
-    // 获取详情链接（多种选择器）
-    let detailLink = $card.find('a[href*="/find/person/"]').first().attr('href') || '';
-    if (!detailLink) detailLink = $card.find('a[href*="/person/"]').first().attr('href') || '';
-    if (!detailLink) detailLink = $card.attr('data-detail-link') || '';
-    if (!detailLink) detailLink = $card.find('a').first().attr('href') || '';
+    // 提取详情链接
+    const detailLink = $card.find('a[href*="/find/person/"]').first().attr('href') || '';
     
-    // 过滤无效链接
-    if (detailLink && !detailLink.includes('#') && detailLink !== '/') {
+    // 调试日志（只打印前3个）
+    if (index < 3) {
+      console.log(`[parseSearchPage] [${index + 1}] 姓名: ${name}, 年龄: ${age}, 位置: ${location?.substring(0, 30)}, 链接: ${detailLink}`);
+    }
+    
+    if (detailLink) {
       results.push({ name, age, location, detailLink });
     }
   });
   
-  return { results, totalRecords };
+  console.log(`[parseSearchPage] 解析出 ${results.length} 条结果`);
+  return results;
 }
 
 /**
- * 解析详情页
+ * 搜索页年龄初筛
  * 
- * 使用两种方法提取电话类型和运营商（DOM + 正则），与 EXE 客户端一致
+ * 注意：搜索页的年龄可能不准确，这里只做宽松过滤
+ * 详细过滤在详情页解析后进行
+ * 
+ * 过滤逻辑：
+ * - 如果设置了最小年龄，搜索页年龄小于 (minAge - 5) 的过滤掉
+ * - 如果设置了最大年龄，搜索页年龄大于 (maxAge + 5) 的过滤掉
+ * - 没有年龄信息的保留（在详情页再确认）
+ */
+export function preFilterByAge(results: TpsSearchResult[], filters: TpsFilters): TpsSearchResult[] {
+  if (!filters.minAge && !filters.maxAge) {
+    return results;
+  }
+  
+  const beforeCount = results.length;
+  const filtered = results.filter(r => {
+    // 没有年龄信息的保留
+    if (r.age === undefined) return true;
+    
+    // 宽松过滤（允许 ±5 岁误差）
+    if (filters.minAge !== undefined && r.age < filters.minAge - 5) return false;
+    if (filters.maxAge !== undefined && r.age > filters.maxAge + 5) return false;
+    
+    return true;
+  });
+  
+  const afterCount = filtered.length;
+  console.log(`[preFilterByAge] 初筛前: ${beforeCount}, 初筛后: ${afterCount}, 过滤: ${beforeCount - afterCount}`);
+  
+  return filtered;
+}
+
+// ==================== 详情页解析（核心修复） ====================
+
+/**
+ * 解析详情页，提取完整的人员信息
+ * 
+ * 【重要】TPS 详情页 HTML 结构说明：
+ * 
+ * 1. 电话号码容器：
+ *    <div class="col-12 col-md-6 mb-3">
+ *      <a class="dt-hd link-to-more olnk" data-link-to-more="phone" href="/find/phone/9044159425">
+ *        <span>(904) 415-9425</span>
+ *      </a>
+ *      -Wireless
+ *      <div class="mt-1 dt-ln">
+ *        <span class="dt-sb"><b>Possible Primary Phone</b></span><br/>
+ *        <span class="dt-sb">Last reported Dec 2025</span><br/>
+ *        <span class="dt-sb">Powertel Jacksonville Licenses</span>
+ *      </div>
+ *    </div>
+ * 
+ * 2. 地址容器：
+ *    <div class="col-12 col-md-6 mb-3">
+ *      <a data-link-to-more="address" href="/find/address/...">
+ *        <span>123 Main St</span>
+ *      </a>
+ *      <div class="mt-1 dt-ln">
+ *        <span class="dt-sb">Philadelphia, PA 19138</span>
+ *      </div>
+ *    </div>
  */
 export function parseDetailPage(html: string, searchResult: TpsSearchResult): TpsDetailResult[] {
   const $ = cheerio.load(html);
@@ -259,104 +185,105 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
   const name = searchResult.name;
   const age = searchResult.age;
   
-  // 解析位置
+  // ==================== 解析位置 ====================
   let city = '';
   let state = '';
-  const locationText = $('.location, .address').first().text().trim();
-  if (locationText) {
-    const parts = locationText.split(',').map(s => s.trim());
-    if (parts.length >= 2) {
-      city = parts[0];
-      state = parts[1].split(' ')[0];
+  
+  // 方法1：从页面标题解析（格式：John Smith, Age 58 in Matthews, NC）
+  const title = $('title').text();
+  const titleMatch = title.match(/in\s+([^,]+),\s*([A-Z]{2})/);
+  if (titleMatch) {
+    city = titleMatch[1].trim();
+    state = titleMatch[2].trim();
+  }
+  
+  // 方法2：从当前地址区域解析
+  if (!city || !state) {
+    const currentAddressSection = $('[data-link-to-more="address"]').first().parent();
+    const addressText = currentAddressSection.find('.dt-ln, .dt-sb').text();
+    const addressMatch = addressText.match(/([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5})/);
+    if (addressMatch) {
+      city = city || addressMatch[1].trim();
+      state = state || addressMatch[2].trim();
     }
   }
   
-  // 获取房产信息
+  // ==================== 获取房产信息 ====================
   let propertyValue: number | undefined;
   let yearBuilt: number | undefined;
   
-  $('.property-value, [data-property-value]').each((_, el) => {
-    const text = $(el).text();
-    const valueMatch = text.match(/\$[\d,]+/);
-    if (valueMatch) {
-      propertyValue = parseInt(valueMatch[0].replace(/[$,]/g, ''), 10);
-    }
-  });
+  // 从页面文本中提取房产价值
+  const pageText = $('body').text();
+  const propertyMatch = pageText.match(/(?:property|home)\s*value[:\s]*\$?([\d,]+)/i);
+  if (propertyMatch) {
+    propertyValue = parseInt(propertyMatch[1].replace(/,/g, ''), 10);
+  }
   
-  $('.year-built, [data-year-built]').each((_, el) => {
-    const text = $(el).text();
-    const yearMatch = text.match(/\b(19|20)\d{2}\b/);
-    if (yearMatch) {
-      yearBuilt = parseInt(yearMatch[0], 10);
-    }
-  });
+  const yearBuiltMatch = pageText.match(/(?:year\s*built|built\s*in)[:\s]*(\d{4})/i);
+  if (yearBuiltMatch) {
+    yearBuilt = parseInt(yearBuiltMatch[1], 10);
+  }
   
-  // 解析电话号码
-  $('[data-link-to-more="phone"]').each((_, phoneSection) => {
-    const $section = $(phoneSection);
+  // ==================== 解析电话号码（核心修复） ====================
+  // 查找所有包含电话的 col-12 col-md-6 mb-3 容器
+  $('.col-12.col-md-6.mb-3').each((_, container) => {
+    const $container = $(container);
     
-    // 获取电话号码
-    const phone = $section.find('.content-value').first().text().trim().replace(/\D/g, '');
+    // 检查是否包含电话链接
+    const phoneLink = $container.find('a[data-link-to-more="phone"]');
+    if (!phoneLink.length) return;
+    
+    // 提取电话号码（从 href 或文本）
+    let phone = '';
+    const href = phoneLink.attr('href') || '';
+    const hrefMatch = href.match(/\/find\/phone\/(\d+)/);
+    if (hrefMatch) {
+      phone = hrefMatch[1];
+    } else {
+      // 从文本中提取
+      const phoneText = phoneLink.text().replace(/\D/g, '');
+      if (phoneText.length >= 10) {
+        phone = phoneText;
+      }
+    }
+    
     if (!phone || phone.length < 10) return;
     
-    // 获取电话类型（两种方法）
+    // 提取电话类型（Wireless/Landline/VoIP）
     let phoneType = '';
+    const containerText = $container.text();
     
-    // 方法 1: DOM 选择器
-    const typeEl = $section.find('.phone-type, .type').first();
-    if (typeEl.length) {
-      phoneType = typeEl.text().trim();
+    if (containerText.includes('Wireless') || containerText.includes('wireless')) {
+      phoneType = 'Wireless';
+    } else if (containerText.includes('Landline') || containerText.includes('landline')) {
+      phoneType = 'Landline';
+    } else if (containerText.includes('VoIP') || containerText.includes('voip')) {
+      phoneType = 'VoIP';
     }
     
-    // 方法 2: 文本判断（备用）
-    if (!phoneType) {
-      const sectionText = $section.text().toLowerCase();
-      if (sectionText.includes('wireless') || sectionText.includes('mobile') || sectionText.includes('cell')) {
-        phoneType = 'Wireless';
-      } else if (sectionText.includes('landline') || sectionText.includes('land line')) {
-        phoneType = 'Landline';
-      } else if (sectionText.includes('voip')) {
-        phoneType = 'VoIP';
-      }
-    }
-    
-    // 获取运营商（两种方法）
+    // 提取运营商（在 dt-ln 或 dt-sb 中）
     let carrier = '';
-    
-    // 方法 1: DOM 选择器
-    const carrierEl = $section.find('.carrier, .provider').first();
-    if (carrierEl.length) {
-      carrier = carrierEl.text().trim();
-    }
-    
-    // 方法 2: 正则匹配（备用）
-    if (!carrier) {
-      const sectionText = $section.text();
-      const carrierPatterns = [
-        /(?:carrier|provider)[:\s]*([A-Za-z\s]+?)(?:\s*-|\s*\(|$)/i,
-        /(T-Mobile|AT&T|Verizon|Sprint|Comcast|Spectrum|Xfinity)/i
-      ];
-      for (const pattern of carrierPatterns) {
-        const match = sectionText.match(pattern);
-        if (match) {
-          carrier = match[1].trim();
-          break;
+    const dtLn = $container.find('.dt-ln, .dt-sb');
+    dtLn.each((_, el) => {
+      const text = $(el).text().trim();
+      // 运营商通常是最后一行，不包含 "reported" 或 "Primary"
+      if (text && !text.includes('reported') && !text.includes('Primary') && !text.includes('Phone')) {
+        // 检查是否像运营商名称（包含字母，可能有空格）
+        if (/^[A-Za-z\s]+$/.test(text) && text.length > 3) {
+          carrier = text;
         }
       }
-    }
+    });
     
-    // 获取报告年份
+    // 提取报告年份
     let reportYear: number | undefined;
-    const yearText = $section.find('.report-date, .date').first().text();
-    const yearMatch = yearText.match(/\b(20\d{2})\b/);
-    if (yearMatch) {
-      reportYear = parseInt(yearMatch[1], 10);
+    const reportMatch = containerText.match(/(?:reported|last\s+seen)[:\s]*(?:[A-Za-z]+\s+)?(\d{4})/i);
+    if (reportMatch) {
+      reportYear = parseInt(reportMatch[1], 10);
     }
     
     // 判断是否为主号
-    const isPrimary = $section.hasClass('primary') || 
-                      $section.find('.primary').length > 0 ||
-                      $section.text().toLowerCase().includes('primary');
+    const isPrimary = containerText.toLowerCase().includes('primary');
     
     results.push({
       name,
@@ -375,7 +302,42 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
     });
   });
   
-  // 如果没有找到电话，返回基本信息
+  // ==================== 备用方法：正则提取 ====================
+  // 如果 DOM 方法没有找到电话，使用正则从整个页面提取
+  if (results.length === 0) {
+    const phonePattern = /\((\d{3})\)\s*(\d{3})-(\d{4})/g;
+    const phones = new Set<string>();
+    let match;
+    
+    while ((match = phonePattern.exec(html)) !== null) {
+      const phone = match[1] + match[2] + match[3];
+      phones.add(phone);
+    }
+    
+    // 提取电话类型
+    let phoneType = '';
+    if (html.includes('Wireless')) phoneType = 'Wireless';
+    else if (html.includes('Landline')) phoneType = 'Landline';
+    else if (html.includes('VoIP')) phoneType = 'VoIP';
+    
+    // 为每个电话创建结果
+    phones.forEach(phone => {
+      results.push({
+        name,
+        age,
+        city,
+        state,
+        location: city && state ? `${city}, ${state}` : (city || state || ''),
+        phone,
+        phoneType,
+        propertyValue,
+        yearBuilt,
+        detailLink: searchResult.detailLink,
+      });
+    });
+  }
+  
+  // 如果仍然没有找到电话，返回基本信息
   if (results.length === 0) {
     results.push({
       name,
@@ -387,8 +349,11 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
     });
   }
   
+  console.log(`[parseDetailPage] 解析出 ${results.length} 条电话记录`);
   return results;
 }
+
+// ==================== 过滤逻辑 ====================
 
 /**
  * 检查结果是否应该被包含（过滤逻辑）
@@ -420,8 +385,8 @@ export function shouldIncludeResult(result: TpsDetailResult, filters: TpsFilters
   
   // T-Mobile 过滤
   if (filters.excludeTMobile && result.carrier) {
-    if (result.carrier.toLowerCase().includes('t-mobile') || 
-        result.carrier.toLowerCase().includes('tmobile')) {
+    const carrierLower = result.carrier.toLowerCase();
+    if (carrierLower.includes('t-mobile') || carrierLower.includes('tmobile')) {
       return false;
     }
   }
@@ -429,14 +394,12 @@ export function shouldIncludeResult(result: TpsDetailResult, filters: TpsFilters
   // Comcast/Spectrum 过滤
   if (filters.excludeComcast && result.carrier) {
     const carrierLower = result.carrier.toLowerCase();
-    if (carrierLower.includes('comcast') || 
-        carrierLower.includes('spectrum') ||
-        carrierLower.includes('xfinity')) {
+    if (carrierLower.includes('comcast') || carrierLower.includes('spectrum') || carrierLower.includes('xfinity')) {
       return false;
     }
   }
   
-  // 固话过滤（修复：不区分大小写）
+  // 固话过滤
   if (filters.excludeLandline && result.phoneType) {
     if (result.phoneType.toLowerCase() === 'landline') {
       return false;
@@ -446,673 +409,166 @@ export function shouldIncludeResult(result: TpsDetailResult, filters: TpsFilters
   return true;
 }
 
-/**
- * 批量获取页面（固定并发）
- * 
- * 使用固定的并发数，稳定可靠
- */
-async function fetchBatch(
-  urls: string[],
-  token: string,
-  concurrency: number,
-  onProgress?: (message: string) => void
-): Promise<{ results: Map<string, string>; deferredUrls: string[] }> {
-  const results = new Map<string, string>();
-  const deferredUrls: string[] = [];
-  
-  // 分批处理
-  for (let i = 0; i < urls.length; i += concurrency) {
-    const batch = urls.slice(i, i + concurrency);
-    
-    const batchPromises = batch.map(async (url) => {
-      const { html, status, shouldDeferRetry } = await fetchViaProxy(url, token);
-      
-      if (html) {
-        results.set(url, html);
-      } else if (shouldDeferRetry) {
-        deferredUrls.push(url);
-      }
-      
-      return { url, status };
-    });
-    
-    await Promise.all(batchPromises);
-    
-    // 批次间延迟
-    if (i + concurrency < urls.length) {
-      await new Promise(resolve => setTimeout(resolve, TPS_CONFIG.BATCH_DELAY));
-    }
-  }
-  
-  return { results, deferredUrls };
-}
+// ==================== 分离的搜索和详情函数（统一队列模式） ====================
 
 /**
- * 执行延后重试
- * 
- * 在所有请求完成后，对 429 失败的请求进行延后重试
- * 最多重试 2 次，每次间隔 2 秒
- */
-async function executeDeferredRetry(
-  urls: string[],
-  token: string,
-  concurrency: number,
-  onProgress?: (message: string) => void
-): Promise<Map<string, string>> {
-  const results = new Map<string, string>();
-  let remainingUrls = [...urls];
-  
-  for (let retry = 0; retry < TPS_CONFIG.DEFERRED_RETRIES && remainingUrls.length > 0; retry++) {
-    onProgress?.(`🔄 延后重试 ${retry + 1}/${TPS_CONFIG.DEFERRED_RETRIES}，${remainingUrls.length} 个请求`);
-    
-    // 等待延后重试延迟
-    await new Promise(resolve => setTimeout(resolve, TPS_CONFIG.DEFERRED_RETRY_DELAY));
-    
-    // 降低并发进行重试
-    const retryConcurrency = Math.max(1, Math.floor(concurrency / 2));
-    const { results: retryResults, deferredUrls } = await fetchBatch(
-      remainingUrls,
-      token,
-      retryConcurrency,
-      onProgress
-    );
-    
-    // 合并结果
-    for (const [url, html] of retryResults) {
-      results.set(url, html);
-    }
-    
-    remainingUrls = deferredUrls;
-  }
-  
-  if (remainingUrls.length > 0) {
-    onProgress?.(`⚠️ ${remainingUrls.length} 个请求在延后重试后仍然失败`);
-  }
-  
-  return results;
-}
-
-// ==================== 统一队列模式函数（新增） ====================
-
-/**
- * 仅执行搜索阶段（不获取详情）
- * 
- * 用于统一队列模式：先收集所有搜索结果，再统一获取详情
- * 
- * @param name 搜索姓名
- * @param location 搜索地点（可选）
- * @param token Scrape.do API token
- * @param maxPages 最大页数
- * @param filters 过滤条件（用于年龄初筛）
- * @param onProgress 进度回调
+ * 仅执行搜索，返回详情任务列表
+ * 用于统一队列模式的第一阶段
  */
 export async function searchOnly(
   name: string,
   location: string,
-  token: string,
   maxPages: number,
   filters: TpsFilters,
+  fetchPage: (url: string) => Promise<string>,
   onProgress?: (message: string) => void
-): Promise<{
-  success: boolean;
-  searchResults: TpsSearchResult[];
-  stats: {
-    searchPageRequests: number;
-    filteredOut: number;
-  };
-  error?: string;
-}> {
-  const stats = {
-    searchPageRequests: 0,
-    filteredOut: 0,
-  };
+): Promise<{ searchResults: TpsSearchResult[]; pagesSearched: number; detailTasks: DetailTask[] }> {
+  const baseUrl = 'https://www.truepeoplesearch.com/results';
+  const allResults: TpsSearchResult[] = [];
+  let pagesSearched = 0;
   
-  try {
-    // 构建搜索 URL
-    const searchParams = new URLSearchParams();
-    searchParams.set('name', name);
-    if (location) {
-      searchParams.set('citystatezip', location);
+  for (let page = 1; page <= maxPages; page++) {
+    const params = new URLSearchParams();
+    params.set('name', name);
+    if (location) params.set('citystatezip', location);
+    if (page > 1) params.set('page', page.toString());
+    
+    const url = `${baseUrl}?${params.toString()}`;
+    onProgress?.(`搜索 ${name} @ ${location || '全国'} 第 ${page}/${maxPages} 页...`);
+    
+    try {
+      const html = await fetchPage(url);
+      pagesSearched++;
+      
+      const results = parseSearchPage(html);
+      if (results.length === 0) {
+        onProgress?.(`第 ${page} 页无结果，停止搜索`);
+        break;
+      }
+      
+      // 年龄初筛
+      const filtered = preFilterByAge(results, filters);
+      allResults.push(...filtered);
+      
+      onProgress?.(`第 ${page} 页: 找到 ${results.length} 条，初筛后 ${filtered.length} 条`);
+    } catch (error) {
+      onProgress?.(`第 ${page} 页搜索失败: ${error}`);
+      // 继续下一页
     }
-    
-    const baseSearchUrl = `${TPS_CONFIG.TPS_BASE}/results?${searchParams.toString()}`;
-    
-    // 获取第一页（确定总记录数）
-    onProgress?.(`📄 获取搜索结果第 1 页...`);
-    const { html: firstPageHtml, status: firstPageStatus } = await fetchViaProxy(baseSearchUrl, token);
-    stats.searchPageRequests++;
-    
-    if (!firstPageHtml) {
-      return {
-        success: false,
-        searchResults: [],
-        stats,
-        error: `获取第一页失败，状态码: ${firstPageStatus}`,
-      };
-    }
-    
-    const { results: firstPageResults, totalRecords } = parseSearchPage(firstPageHtml);
-    onProgress?.(`📊 找到 ${totalRecords} 条记录`);
-    
-    // 计算需要获取的页数
-    const totalPages = Math.min(
-      maxPages,
-      Math.ceil(totalRecords / TPS_CONFIG.RESULTS_PER_PAGE)
-    );
-    
-    // 收集所有搜索结果
-    let allSearchResults = [...firstPageResults];
-    
-    // 获取剩余搜索页（使用较低并发，因为搜索页数量有限）
-    if (totalPages > 1) {
-      const remainingPageUrls: string[] = [];
-      for (let page = 2; page <= totalPages; page++) {
-        remainingPageUrls.push(`${baseSearchUrl}&page=${page}`);
-      }
-      
-      onProgress?.(`📄 获取剩余 ${remainingPageUrls.length} 页搜索结果...`);
-      
-      // 搜索页使用较低并发（5），因为数量有限且需要快速完成
-      const { results: pageResults, deferredUrls } = await fetchBatch(
-        remainingPageUrls,
-        token,
-        5,
-        onProgress
-      );
-      
-      stats.searchPageRequests += remainingPageUrls.length;
-      
-      // 解析搜索结果
-      for (const [url, html] of pageResults) {
-        const { results } = parseSearchPage(html);
-        allSearchResults.push(...results);
-      }
-      
-      // 延后重试
-      if (deferredUrls.length > 0) {
-        const retryResults = await executeDeferredRetry(deferredUrls, token, 5, onProgress);
-        
-        for (const [url, html] of retryResults) {
-          const { results } = parseSearchPage(html);
-          allSearchResults.push(...results);
-        }
-      }
-    }
-    
-    // 搜索页初筛（年龄过滤 + 已故人员过滤）
-    // 注意：如果搜索页没有解析到年龄，会保留该记录，在详情页再次过滤
-    // 这样可以避免遗漏潜在符合条件的记录，同时详情页的 shouldIncludeResult 会进行二次过滤
-    let filteredOutInSearch = 0;
-    const filteredSearchResults = allSearchResults.filter(result => {
-      // 跳过已故人员（姓名包含 deceased）
-      if (result.name.toLowerCase().includes('deceased')) {
-        filteredOutInSearch++;
-        return false;
-      }
-      
-      // 年龄初筛：只有当搜索页有年龄信息时才过滤
-      // 如果没有年龄信息，保留该记录，在详情页再次验证
-      if (result.age !== undefined) {
-        if (filters.minAge !== undefined && result.age < filters.minAge) {
-          filteredOutInSearch++;
-          return false;
-        }
-        if (filters.maxAge !== undefined && result.age > filters.maxAge) {
-          filteredOutInSearch++;
-          return false;
-        }
-      }
-      // 没有年龄信息的记录保留，等详情页进一步过滤
-      
-      return true;
-    });
-    
-    stats.filteredOut += filteredOutInSearch;
-    onProgress?.(`🔍 初筛后 ${filteredSearchResults.length} 条记录（过滤 ${filteredOutInSearch} 条）`);
-    
-    return {
-      success: true,
-      searchResults: filteredSearchResults,
-      stats,
-    };
-    
-  } catch (error: any) {
-    return {
-      success: false,
-      searchResults: [],
-      stats,
-      error: error.message,
-    };
   }
+  
+  // 去重并创建详情任务
+  const seenLinks = new Set<string>();
+  const detailTasks: DetailTask[] = [];
+  
+  for (const result of allResults) {
+    if (result.detailLink && !seenLinks.has(result.detailLink)) {
+      seenLinks.add(result.detailLink);
+      detailTasks.push({
+        detailLink: result.detailLink,
+        searchName: name,
+        searchLocation: location,
+        searchResult: result,
+      });
+    }
+  }
+  
+  onProgress?.(`搜索完成: ${allResults.length} 条结果，${detailTasks.length} 个唯一详情链接`);
+  
+  return { searchResults: allResults, pagesSearched, detailTasks };
 }
 
 /**
- * 批量获取详情页（用于统一队列模式）
- * 
- * 使用指定的并发数获取详情页
- * 
- * @param tasks 详情任务列表
- * @param token Scrape.do API token
- * @param concurrency 并发数
- * @param filters 过滤条件
- * @param onProgress 进度回调
- * @param getCachedDetails 缓存读取函数
- * @param setCachedDetails 缓存写入函数
+ * 批量获取详情
+ * 用于统一队列模式的第二阶段
  */
 export async function fetchDetailsInBatch(
   tasks: DetailTask[],
-  token: string,
-  concurrency: number,
   filters: TpsFilters,
-  onProgress?: (message: string) => void,
-  getCachedDetails?: (links: string[]) => Promise<Map<string, TpsDetailResult>>,
-  setCachedDetails?: (items: Array<{ link: string; data: TpsDetailResult }>) => Promise<void>
-): Promise<{
-  results: Array<{ task: DetailTask; details: TpsDetailResult[] }>;
-  stats: {
-    detailPageRequests: number;
-    cacheHits: number;
-    filteredOut: number;
-  };
-}> {
-  const stats = {
-    detailPageRequests: 0,
-    cacheHits: 0,
-    filteredOut: 0,
-  };
+  fetchPage: (url: string) => Promise<string>,
+  getCachedDetail: (detailLink: string) => Promise<TpsDetailResult[] | null>,
+  saveCachedDetail: (detailLink: string, results: TpsDetailResult[]) => Promise<void>,
+  onProgress?: (message: string) => void
+): Promise<{ results: TpsDetailResult[]; detailPagesFetched: number; cacheHits: number }> {
+  const allResults: TpsDetailResult[] = [];
+  let detailPagesFetched = 0;
+  let cacheHits = 0;
   
-  const results: Array<{ task: DetailTask; details: TpsDetailResult[] }> = [];
+  const baseUrl = 'https://www.truepeoplesearch.com';
   
-  // 去重详情链接
-  const uniqueLinks = [...new Set(tasks.map(t => t.searchResult.detailLink))];
-  
-  // 检查缓存
-  let cachedDetails = new Map<string, TpsDetailResult>();
-  if (getCachedDetails) {
-    const rawCached = await getCachedDetails(uniqueLinks);
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+    const detailUrl = task.detailLink.startsWith('http') 
+      ? task.detailLink 
+      : `${baseUrl}${task.detailLink}`;
     
-    // 验证缓存数据完整性：必须有 phone 字段才算有效缓存
-    for (const [link, data] of rawCached) {
-      if (data && data.phone && data.phone.trim() !== '') {
-        cachedDetails.set(link, data);
-      }
-    }
+    onProgress?.(`获取详情 ${i + 1}/${tasks.length}: ${task.searchResult.name}`);
     
-    stats.cacheHits = cachedDetails.size;
-    const invalidCacheCount = rawCached.size - cachedDetails.size;
-    
-    if (cachedDetails.size > 0) {
-      onProgress?.(`💾 有效缓存命中 ${cachedDetails.size} 条${invalidCacheCount > 0 ? `，无效缓存 ${invalidCacheCount} 条将重新获取` : ''}`);
-    } else if (invalidCacheCount > 0) {
-      onProgress?.(`⚠️ ${invalidCacheCount} 条缓存数据不完整，将重新获取`);
-    }
-  }
-  
-  // 需要获取的链接（包括无效缓存的链接）
-  const linksToFetch = uniqueLinks.filter(link => !cachedDetails.has(link));
-  
-  // 构建链接到任务的映射
-  const linkToTasks = new Map<string, DetailTask[]>();
-  for (const task of tasks) {
-    const link = task.searchResult.detailLink;
-    if (!linkToTasks.has(link)) {
-      linkToTasks.set(link, []);
-    }
-    linkToTasks.get(link)!.push(task);
-  }
-  
-  // 处理缓存命中的结果
-  for (const [link, cachedResult] of cachedDetails) {
-    const tasksForLink = linkToTasks.get(link) || [];
-    for (const task of tasksForLink) {
-      if (shouldIncludeResult(cachedResult, filters)) {
-        results.push({ task, details: [cachedResult] });
-      } else {
-        stats.filteredOut++;
-      }
-    }
-  }
-  
-  // 获取新详情
-  if (linksToFetch.length > 0) {
-    onProgress?.(`📋 获取 ${linksToFetch.length} 条详情（${concurrency} 并发）...`);
-    
-    const detailUrls = linksToFetch.map(link => 
-      link.startsWith('http') ? link : `${TPS_CONFIG.TPS_BASE}${link}`
-    );
-    
-    stats.detailPageRequests = detailUrls.length;
-    
-    const { results: detailHtmlResults, deferredUrls } = await fetchBatch(
-      detailUrls,
-      token,
-      concurrency,
-      onProgress
-    );
-    
-    // 解析详情并缓存
-    const newCacheItems: Array<{ link: string; data: TpsDetailResult }> = [];
-    
-    for (const [url, html] of detailHtmlResults) {
-      const link = linksToFetch.find(l => url.includes(l)) || url;
-      const tasksForLink = linkToTasks.get(link) || [];
+    try {
+      // 检查缓存
+      const cached = await getCachedDetail(task.detailLink);
       
-      for (const task of tasksForLink) {
-        const details = parseDetailPage(html, task.searchResult);
-        const filteredDetails: TpsDetailResult[] = [];
-        
-        for (const detail of details) {
-          if (shouldIncludeResult(detail, filters)) {
-            filteredDetails.push(detail);
-            newCacheItems.push({ link: detail.detailLink, data: detail });
-          } else {
-            stats.filteredOut++;
-          }
-        }
-        
-        if (filteredDetails.length > 0) {
-          results.push({ task, details: filteredDetails });
-        }
+      // 验证缓存数据完整性（必须有电话号码才算有效缓存）
+      if (cached && cached.length > 0 && cached.some(r => r.phone && r.phone.length >= 10)) {
+        cacheHits++;
+        // 应用过滤
+        const filtered = cached.filter(r => shouldIncludeResult(r, filters));
+        allResults.push(...filtered);
+        continue;
       }
-    }
-    
-    // 延后重试
-    if (deferredUrls.length > 0) {
-      onProgress?.(`🔄 延后重试 ${deferredUrls.length} 个详情页...`);
-      const retryResults = await executeDeferredRetry(deferredUrls, token, Math.floor(concurrency / 2), onProgress);
       
-      for (const [url, html] of retryResults) {
-        const link = linksToFetch.find(l => url.includes(l)) || url;
-        const tasksForLink = linkToTasks.get(link) || [];
-        
-        for (const task of tasksForLink) {
-          const details = parseDetailPage(html, task.searchResult);
-          const filteredDetails: TpsDetailResult[] = [];
-          
-          for (const detail of details) {
-            if (shouldIncludeResult(detail, filters)) {
-              filteredDetails.push(detail);
-              newCacheItems.push({ link: detail.detailLink, data: detail });
-            } else {
-              stats.filteredOut++;
-            }
-          }
-          
-          if (filteredDetails.length > 0) {
-            results.push({ task, details: filteredDetails });
-          }
-        }
+      // 获取详情页
+      const html = await fetchPage(detailUrl);
+      detailPagesFetched++;
+      
+      // 解析详情
+      const details = parseDetailPage(html, task.searchResult);
+      
+      // 保存到缓存
+      if (details.length > 0) {
+        await saveCachedDetail(task.detailLink, details);
       }
-    }
-    
-    // 保存缓存
-    if (setCachedDetails && newCacheItems.length > 0) {
-      await setCachedDetails(newCacheItems);
+      
+      // 应用过滤
+      const filtered = details.filter(r => shouldIncludeResult(r, filters));
+      allResults.push(...filtered);
+      
+    } catch (error) {
+      onProgress?.(`获取详情失败: ${task.detailLink} - ${error}`);
+      // 继续下一个
     }
   }
   
-  return { results, stats };
+  onProgress?.(`详情获取完成: ${allResults.length} 条结果，缓存命中 ${cacheHits}，新获取 ${detailPagesFetched}`);
+  
+  return { results: allResults, detailPagesFetched, cacheHits };
 }
 
-// ==================== 原有主搜索函数（保持向后兼容） ====================
+// ==================== 完整搜索函数（保留向后兼容） ====================
 
 /**
- * 完整搜索流程（原有函数，保持向后兼容）
- * 
- * 固定 10 并发，稳定可靠
- * 
- * @param name 搜索姓名
- * @param location 搜索地点（可选）
- * @param token Scrape.do API token
- * @param options 搜索选项
+ * 执行完整搜索（搜索 + 详情获取）
+ * 保留此函数以保持向后兼容
  */
 export async function fullSearch(
   name: string,
   location: string,
-  token: string,
-  options: TpsSearchOptions
-): Promise<{
-  success: boolean;
-  results: TpsDetailResult[];
-  stats: {
-    searchPageRequests: number;
-    detailPageRequests: number;
-    cacheHits: number;
-    filteredOut: number;
-    rateLimitedRequests: number;
-    immediateRetries: number;
-    deferredRetries: number;
-  };
-  error?: string;
-}> {
-  const { maxPages, filters, concurrency, onProgress, getCachedDetails, setCachedDetails } = options;
+  maxPages: number,
+  filters: TpsFilters,
+  fetchPage: (url: string) => Promise<string>,
+  getCachedDetail: (detailLink: string) => Promise<TpsDetailResult[] | null>,
+  saveCachedDetail: (detailLink: string, results: TpsDetailResult[]) => Promise<void>,
+  onProgress?: (message: string) => void
+): Promise<{ results: TpsDetailResult[]; pagesSearched: number; detailPagesFetched: number; cacheHits: number }> {
+  // 第一阶段：搜索
+  const { searchResults, pagesSearched, detailTasks } = await searchOnly(
+    name, location, maxPages, filters, fetchPage, onProgress
+  );
   
-  const stats = {
-    searchPageRequests: 0,
-    detailPageRequests: 0,
-    cacheHits: 0,
-    filteredOut: 0,
-    rateLimitedRequests: 0,
-    immediateRetries: 0,
-    deferredRetries: 0,
-  };
+  // 第二阶段：获取详情
+  const { results, detailPagesFetched, cacheHits } = await fetchDetailsInBatch(
+    detailTasks, filters, fetchPage, getCachedDetail, saveCachedDetail, onProgress
+  );
   
-  try {
-    // 构建搜索 URL
-    const searchParams = new URLSearchParams();
-    searchParams.set('name', name);
-    if (location) {
-      searchParams.set('citystatezip', location);
-    }
-    
-    const baseSearchUrl = `${TPS_CONFIG.TPS_BASE}/results?${searchParams.toString()}`;
-    
-    // 获取第一页（确定总记录数）
-    onProgress?.(`📄 获取搜索结果第 1 页...`);
-    const { html: firstPageHtml, status: firstPageStatus } = await fetchViaProxy(baseSearchUrl, token);
-    stats.searchPageRequests++;
-    
-    if (!firstPageHtml) {
-      return {
-        success: false,
-        results: [],
-        stats,
-        error: `获取第一页失败，状态码: ${firstPageStatus}`,
-      };
-    }
-    
-    const { results: firstPageResults, totalRecords } = parseSearchPage(firstPageHtml);
-    onProgress?.(`📊 找到 ${totalRecords} 条记录`);
-    
-    // 计算需要获取的页数
-    const totalPages = Math.min(
-      maxPages,
-      Math.ceil(totalRecords / TPS_CONFIG.RESULTS_PER_PAGE)
-    );
-    
-    // 收集所有搜索结果
-    let allSearchResults = [...firstPageResults];
-    
-    // 获取剩余搜索页（并发）
-    if (totalPages > 1) {
-      const remainingPageUrls: string[] = [];
-      for (let page = 2; page <= totalPages; page++) {
-        remainingPageUrls.push(`${baseSearchUrl}&page=${page}`);
-      }
-      
-      onProgress?.(`📄 获取剩余 ${remainingPageUrls.length} 页搜索结果...`);
-      
-      const { results: pageResults, deferredUrls } = await fetchBatch(
-        remainingPageUrls,
-        token,
-        concurrency,
-        onProgress
-      );
-      
-      stats.searchPageRequests += remainingPageUrls.length;
-      
-      // 解析搜索结果
-      for (const [url, html] of pageResults) {
-        const { results } = parseSearchPage(html);
-        allSearchResults.push(...results);
-      }
-      
-      // 延后重试
-      if (deferredUrls.length > 0) {
-        stats.rateLimitedRequests += deferredUrls.length;
-        const retryResults = await executeDeferredRetry(deferredUrls, token, concurrency, onProgress);
-        stats.deferredRetries += deferredUrls.length;
-        
-        for (const [url, html] of retryResults) {
-          const { results } = parseSearchPage(html);
-          allSearchResults.push(...results);
-        }
-      }
-    }
-    
-    // 搜索页初筛（年龄过滤）
-    const filteredSearchResults = allSearchResults.filter(result => {
-      // 跳过已故人员
-      if (result.name.toLowerCase().includes('deceased')) return false;
-      
-      // 年龄初筛
-      if (result.age !== undefined) {
-        if (filters.minAge !== undefined && result.age < filters.minAge) {
-          stats.filteredOut++;
-          return false;
-        }
-        if (filters.maxAge !== undefined && result.age > filters.maxAge) {
-          stats.filteredOut++;
-          return false;
-        }
-      }
-      
-      return true;
-    });
-    
-    onProgress?.(`🔍 初筛后 ${filteredSearchResults.length} 条记录需要获取详情`);
-    
-    // 去重详情链接
-    const uniqueDetailLinks = [...new Set(filteredSearchResults.map(r => r.detailLink))];
-    
-    // 检查缓存
-    let cachedDetails = new Map<string, TpsDetailResult>();
-    if (getCachedDetails) {
-      cachedDetails = await getCachedDetails(uniqueDetailLinks);
-      stats.cacheHits = cachedDetails.size;
-      onProgress?.(`💾 缓存命中 ${cachedDetails.size} 条`);
-    }
-    
-    // 需要获取的详情链接
-    const linksToFetch = uniqueDetailLinks.filter(link => !cachedDetails.has(link));
-    
-    // 获取详情页（并发）
-    const allDetailResults: TpsDetailResult[] = [];
-    
-    // 添加缓存结果
-    for (const [link, result] of cachedDetails) {
-      if (shouldIncludeResult(result, filters)) {
-        allDetailResults.push(result);
-      } else {
-        stats.filteredOut++;
-      }
-    }
-    
-    // 获取新详情
-    if (linksToFetch.length > 0) {
-      onProgress?.(`📋 获取 ${linksToFetch.length} 条详情...`);
-      
-      const detailUrls = linksToFetch.map(link => 
-        link.startsWith('http') ? link : `${TPS_CONFIG.TPS_BASE}${link}`
-      );
-      
-      const { results: detailHtmlResults, deferredUrls } = await fetchBatch(
-        detailUrls,
-        token,
-        concurrency,
-        onProgress
-      );
-      
-      stats.detailPageRequests += detailUrls.length;
-      
-      // 解析详情并缓存
-      const newCacheItems: Array<{ link: string; data: TpsDetailResult }> = [];
-      
-      for (const [url, html] of detailHtmlResults) {
-        const link = linksToFetch.find(l => url.includes(l)) || url;
-        const searchResult = filteredSearchResults.find(r => url.includes(r.detailLink));
-        
-        if (searchResult) {
-          const details = parseDetailPage(html, searchResult);
-          
-          for (const detail of details) {
-            if (shouldIncludeResult(detail, filters)) {
-              allDetailResults.push(detail);
-              newCacheItems.push({ link: detail.detailLink, data: detail });
-            } else {
-              stats.filteredOut++;
-            }
-          }
-        }
-      }
-      
-      // 延后重试
-      if (deferredUrls.length > 0) {
-        stats.rateLimitedRequests += deferredUrls.length;
-        const retryResults = await executeDeferredRetry(deferredUrls, token, concurrency, onProgress);
-        stats.deferredRetries += deferredUrls.length;
-        
-        for (const [url, html] of retryResults) {
-          const link = linksToFetch.find(l => url.includes(l)) || url;
-          const searchResult = filteredSearchResults.find(r => url.includes(r.detailLink));
-          
-          if (searchResult) {
-            const details = parseDetailPage(html, searchResult);
-            
-            for (const detail of details) {
-              if (shouldIncludeResult(detail, filters)) {
-                allDetailResults.push(detail);
-                newCacheItems.push({ link: detail.detailLink, data: detail });
-              } else {
-                stats.filteredOut++;
-              }
-            }
-          }
-        }
-      }
-      
-      // 保存缓存
-      if (setCachedDetails && newCacheItems.length > 0) {
-        await setCachedDetails(newCacheItems);
-      }
-    }
-    
-    // 电话号码去重
-    const seenPhones = new Set<string>();
-    const uniqueResults = allDetailResults.filter(result => {
-      if (result.phone) {
-        if (seenPhones.has(result.phone)) {
-          return false;
-        }
-        seenPhones.add(result.phone);
-      }
-      return true;
-    });
-    
-    onProgress?.(`✅ 完成，共 ${uniqueResults.length} 条唯一结果`);
-    
-    return {
-      success: true,
-      results: uniqueResults,
-      stats,
-    };
-    
-  } catch (error: any) {
-    return {
-      success: false,
-      results: [],
-      stats,
-      error: error.message,
-    };
-  }
+  return { results, pagesSearched, detailPagesFetched, cacheHits };
 }
