@@ -242,6 +242,9 @@ export async function getUserTpsSearchTasks(
 
 /**
  * 保存搜索结果
+ * 
+ * 类型已修复：与 scraper.ts 中的 TpsDetailResult 类型匹配
+ * 所有字段都是可选的，避免运行时错误
  */
 export async function saveTpsSearchResults(
   taskDbId: number,
@@ -250,17 +253,18 @@ export async function saveTpsSearchResults(
   searchLocation: string,
   results: Array<{
     name: string;
-    age: number;
-    city: string;
-    state: string;
-    location: string;
-    phone: string;
-    phoneType: string;
-    carrier: string;
-    reportYear: number | null;
-    isPrimary: boolean;
-    propertyValue: number;
-    yearBuilt: number | null;
+    age?: number;           // 可选，与 scraper.ts 类型匹配
+    city?: string;          // 可选
+    state?: string;         // 可选
+    location?: string;      // 可选
+    phone?: string;         // 可选
+    phoneType?: string;     // 可选
+    carrier?: string;       // 可选
+    reportYear?: number | null;
+    isPrimary?: boolean;    // 可选
+    propertyValue?: number; // 可选
+    yearBuilt?: number | null;
+    detailLink?: string;    // 可选，从 scraper.ts 传入
   }>
 ) {
   if (results.length === 0) return;
@@ -271,18 +275,19 @@ export async function saveTpsSearchResults(
     subTaskIndex,
     searchName,
     searchLocation,
-    name: r.name,
-    age: r.age,
-    city: r.city,
-    state: r.state,
-    location: r.location,
-    phone: r.phone,
-    phoneType: r.phoneType,
-    carrier: r.carrier,
-    reportYear: r.reportYear,
-    isPrimary: r.isPrimary,
-    propertyValue: r.propertyValue,
-    yearBuilt: r.yearBuilt,
+    name: r.name || '',
+    age: r.age ?? null,
+    city: r.city || '',
+    state: r.state || '',
+    location: r.location || '',
+    phone: r.phone || '',
+    phoneType: r.phoneType || '',
+    carrier: r.carrier || '',
+    reportYear: r.reportYear ?? null,
+    isPrimary: r.isPrimary ?? false,
+    propertyValue: r.propertyValue ?? 0,
+    yearBuilt: r.yearBuilt ?? null,
+    detailLink: r.detailLink || '',
   }));
   
   await database.insert(tpsSearchResults).values(values);

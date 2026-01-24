@@ -57,20 +57,27 @@ export default function TpsSearch() {
     enabled: !!user,
   });
   
+  // 获取 TPS 配置（从后端获取，确保与管理后台同步）
+  const { data: tpsConfig } = trpc.tps.getConfig.useQuery();
+  
   // 计算预估消耗
   const names = namesInput.trim().split("\n").filter(n => n.trim());
   const locations = locationsInput.trim().split("\n").filter(l => l.trim());
   
-  // TPS 配置（暂时使用固定值，后续从管理后台获取）
-  const searchCost = 0.3;
-  const detailCost = 0.3;
+  // TPS 费率（从后端配置获取，默认 0.3）
+  const searchCost = tpsConfig?.searchCost || 0.3;
+  const detailCost = tpsConfig?.detailCost || 0.3;
   
-  // 预估消耗计算
+  // 预估消耗计算（包含搜索页和详情页费用）
   const estimatedSearches = mode === "nameOnly" 
     ? names.length 
     : names.length * Math.max(locations.length, 1);
   const maxPages = 25;  // 固定使用最大 25 页
-  const estimatedCost = estimatedSearches * maxPages * searchCost;
+  const avgDetailsPerSearch = 50;  // 预估每个搜索平均 50 条详情
+  // 费用 = 搜索页费用 + 详情页费用
+  const estimatedSearchPageCost = estimatedSearches * maxPages * searchCost;
+  const estimatedDetailPageCost = estimatedSearches * avgDetailsPerSearch * detailCost;
+  const estimatedCost = estimatedSearchPageCost + estimatedDetailPageCost;
   
   // 提交搜索
   const searchMutation = trpc.tps.search.useMutation({
