@@ -3,10 +3,10 @@
  * 
  * 提供 TPS 搜索功能的 API 端点
  * 
- * v3.0 更新:
- * - 实现 8 任务并发（与 EXE 客户端一致）
- * - 使用全局并发管理器动态分配 Scrape.do 并发资源
- * - 任务完成后自动加速剩余任务
+ * v3.1 更新:
+ * - 回滚到固定 4 线程 × 10 并发配置
+ * - 移除动态并发管理器（避免并发波动导致限流）
+ * - 保持稳定可靠的并发策略
  */
 
 import { z } from "zod";
@@ -17,7 +17,6 @@ import {
   TpsFilters, 
   TpsDetailResult,
   TPS_CONFIG,
-  TaskConcurrencyManager
 } from "./scraper";
 import {
   getTpsConfig,
@@ -37,8 +36,10 @@ import {
   logApi,
 } from "./db";
 
-// 任务级并发配置
-const MAX_TASK_CONCURRENCY = 8;  // 最多 8 任务并发（与 EXE 客户端一致）
+// 固定并发配置
+const TASK_CONCURRENCY = TPS_CONFIG.TASK_CONCURRENCY;      // 4 线程
+const SCRAPEDO_CONCURRENCY = TPS_CONFIG.SCRAPEDO_CONCURRENCY;  // 每线程 10 并发
+// 总并发 = 4 × 10 = 40（与 Scrape.do 账户限制匹配）
 
 // 输入验证 schema
 const tpsFiltersSchema = z.object({
@@ -332,7 +333,7 @@ export const tpsRouter = router({
     }),
 });
 
-// ==================== 搜索执行逻辑（动态并发版本） ====================
+// ==================== 搜索执行逻辑（固定 4 线程 × 10 并发） ====================
 
 async function executeTpsSearch(
   taskDbId: number,
@@ -345,9 +346,6 @@ async function executeTpsSearch(
   const detailCost = parseFloat(config.detailCost);
   const token = config.scrapeDoToken;
   const maxPages = TPS_CONFIG.MAX_SAFE_PAGES;  // 固定使用最大 25 页
-  
-  // 创建任务级并发管理器
-  const concurrencyManager = new TaskConcurrencyManager(TPS_CONFIG.BASE_CONCURRENCY);
   
   const logs: Array<{ timestamp: string; message: string }> = [];
   const addLog = (message: string) => {
@@ -373,7 +371,7 @@ async function executeTpsSearch(
   }
   
   addLog(`🚀 开始搜索任务，共 ${subTasks.length} 个子任务`);
-  addLog(`⚡ 动态并发模式: 最多 ${MAX_TASK_CONCURRENCY} 任务并发，总并发限制 ${TPS_CONFIG.BASE_CONCURRENCY}`);
+  addLog(`⚡ 固定并发模式: ${TASK_CONCURRENCY} 线程 × ${SCRAPEDO_CONCURRENCY} 并发 = ${TASK_CONCURRENCY * SCRAPEDO_CONCURRENCY} 总并发`);
   
   // 更新任务状态
   await updateTpsSearchTaskProgress(taskDbId, {
@@ -411,21 +409,17 @@ async function executeTpsSearch(
   let completedCount = 0;
   
   try {
-    // 使用动态并发执行任务
-    // 策略：启动最多 MAX_TASK_CONCURRENCY 个任务，每个任务完成后立即启动下一个
-    // 每个任务的 Scrape.do 并发数由 concurrencyManager 动态分配
+    // 固定 4 线程并发执行任务
+    // 每个线程使用固定的 10 并发
     
     const taskQueue = [...subTasks.map((task, index) => ({ ...task, index }))];
-    const runningTasks: Promise<void>[] = [];
     let taskIndex = 0;
     
     // 处理单个子任务
     const processSubTask = async (subTask: { name: string; location: string; index: number }) => {
       const globalIndex = subTask.index;
       
-      // 获取并发槽位
-      const concurrency = concurrencyManager.acquire();
-      addLog(`📋 [${globalIndex + 1}/${subTasks.length}] 搜索: ${subTask.name}${subTask.location ? ` @ ${subTask.location}` : ""} (并发: ${concurrency})`);
+      addLog(`📋 [${globalIndex + 1}/${subTasks.length}] 搜索: ${subTask.name}${subTask.location ? ` @ ${subTask.location}` : ""}`);
       
       try {
         const result = await fullSearch(
@@ -435,7 +429,7 @@ async function executeTpsSearch(
           {
             maxPages,
             filters: input.filters || {},
-            getConcurrency: () => concurrencyManager.getCurrentConcurrency(),
+            concurrency: SCRAPEDO_CONCURRENCY,  // 固定 10 并发
             onProgress: (msg) => addLog(msg),
             getCachedDetails,
             setCachedDetails,
@@ -472,8 +466,6 @@ async function executeTpsSearch(
           addLog(`❌ [${globalIndex + 1}/${subTasks.length}] 失败: ${result.error}`);
         }
       } finally {
-        // 释放并发槽位（这会自动加速剩余任务）
-        concurrencyManager.release();
         completedCount++;
         
         // 更新进度
@@ -490,7 +482,9 @@ async function executeTpsSearch(
       }
     };
     
-    // 启动初始批次的任务
+    // 固定 4 线程并发执行
+    const runningTasks: Promise<void>[] = [];
+    
     const startNextTask = () => {
       if (taskIndex < taskQueue.length) {
         const task = taskQueue[taskIndex++];
@@ -502,9 +496,9 @@ async function executeTpsSearch(
       }
     };
     
-    // 启动最多 MAX_TASK_CONCURRENCY 个初始任务
-    const initialBatchSize = Math.min(MAX_TASK_CONCURRENCY, taskQueue.length);
-    addLog(`🧵 启动 ${initialBatchSize} 个初始任务...`);
+    // 启动 4 个初始任务
+    const initialBatchSize = Math.min(TASK_CONCURRENCY, taskQueue.length);
+    addLog(`🧵 启动 ${initialBatchSize} 个线程...`);
     
     for (let i = 0; i < initialBatchSize; i++) {
       startNextTask();
