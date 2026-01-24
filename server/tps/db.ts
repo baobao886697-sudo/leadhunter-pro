@@ -2,7 +2,7 @@
  * TruePeopleSearch 数据库操作
  */
 
-import { getDb } from "../db";
+import { getDb, getConfig } from "../db";
 import { 
   tpsConfig, 
   tpsDetailCache, 
@@ -34,22 +34,29 @@ export async function getTpsConfig() {
   const configs = await database.select().from(tpsConfig).limit(1);
   const config = configs[0];
   
+  // 从 systemConfigs 表获取 Token（管理后台配置的位置）
+  const tokenFromSystemConfig = await getConfig('TPS_SCRAPE_TOKEN');
+  
   if (!config) {
-    // 返回默认配置
+    // 返回默认配置，优先使用 systemConfigs 中的 Token
     return {
       id: 0,
       searchCost: "0.3",
       detailCost: "0.3",
       maxConcurrent: 40,
       cacheDays: 30,
-      scrapeDoToken: process.env.TPS_SCRAPE_DO_TOKEN || null,
+      scrapeDoToken: tokenFromSystemConfig || process.env.TPS_SCRAPE_DO_TOKEN || null,
       maxPages: 25,
       batchDelay: 200,
       enabled: true,
     };
   }
   
-  return config;
+  // 如果 tpsConfig 表中没有 Token，使用 systemConfigs 中的
+  return {
+    ...config,
+    scrapeDoToken: config.scrapeDoToken || tokenFromSystemConfig || process.env.TPS_SCRAPE_DO_TOKEN || null,
+  };
 }
 
 /**
