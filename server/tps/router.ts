@@ -81,6 +81,7 @@ export const tpsRouter = router({
       const config = await getTpsConfig();
       const searchCost = parseFloat(config.searchCost);
       const detailCost = parseFloat(config.detailCost);
+      const maxPages = config.maxPages || 25;
       
       // 计算子任务数
       let subTaskCount = 0;
@@ -91,22 +92,29 @@ export const tpsRouter = router({
         subTaskCount = input.names.length * locations.length;
       }
       
-      // 预估：每个子任务平均 5 页搜索 + 50 条详情
-      const avgPagesPerTask = 5;
-      const avgDetailsPerTask = 50;
+      // 预估参数（与前端保持一致）
+      const avgDetailsPerTask = 50;  // 每个任务平均 50 条详情
       
-      const estimatedSearchPages = subTaskCount * avgPagesPerTask;
+      // 搜索页费用：任务数 × 最大页数 × 单价（最大预估）
+      const maxSearchPages = subTaskCount * maxPages;
+      const maxSearchCost = maxSearchPages * searchCost;
+      
+      // 详情页费用：任务数 × 平均详情数 × 单价
       const estimatedDetails = subTaskCount * avgDetailsPerTask;
+      const estimatedDetailCost = estimatedDetails * detailCost;
       
-      const estimatedCost = 
-        estimatedSearchPages * searchCost + 
-        estimatedDetails * detailCost;
+      // 总费用
+      const estimatedCost = maxSearchCost + estimatedDetailCost;
       
       return {
         subTaskCount,
-        estimatedSearchPages,
+        maxPages,
+        maxSearchPages,
+        maxSearchCost: Math.ceil(maxSearchCost * 10) / 10,
+        avgDetailsPerTask,
         estimatedDetails,
-        estimatedCost: Math.ceil(estimatedCost * 10) / 10, // 向上取整到0.1
+        estimatedDetailCost: Math.ceil(estimatedDetailCost * 10) / 10,
+        estimatedCost: Math.ceil(estimatedCost * 10) / 10,
         searchCost,
         detailCost,
       };
@@ -300,10 +308,11 @@ export const tpsRouter = router({
         return digits;
       };
       
-      // 生成 CSV
+      // 生成 CSV（包含完整字段）
       const headers = [
         "姓名", "年龄", "城市", "州", "位置", "电话", "电话类型", 
-        "运营商", "报告年份", "是否主号", "房产价值", "建造年份"
+        "运营商", "报告年份", "是否主号", "房产价值", "建造年份",
+        "搜索姓名", "搜索地点", "详情链接"
       ];
       
       const rows = results.data.map((r: any) => [
@@ -319,6 +328,9 @@ export const tpsRouter = router({
         r.isPrimary ? "是" : "否",
         r.propertyValue?.toString() || "",
         r.yearBuilt?.toString() || "",
+        r.searchName || "",
+        r.searchLocation || "",
+        r.detailLink ? `https://www.truepeoplesearch.com${r.detailLink}` : "",
       ]);
       
       // 添加 UTF-8 BOM 头以确保 Excel 正确识别中文

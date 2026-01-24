@@ -613,27 +613,36 @@ export async function searchOnly(
       }
     }
     
-    // 搜索页初筛（年龄过滤）
+    // 搜索页初筛（年龄过滤 + 已故人员过滤）
+    // 注意：如果搜索页没有解析到年龄，会保留该记录，在详情页再次过滤
+    // 这样可以避免遗漏潜在符合条件的记录，同时详情页的 shouldIncludeResult 会进行二次过滤
+    let filteredOutInSearch = 0;
     const filteredSearchResults = allSearchResults.filter(result => {
-      // 跳过已故人员
-      if (result.name.toLowerCase().includes('deceased')) return false;
+      // 跳过已故人员（姓名包含 deceased）
+      if (result.name.toLowerCase().includes('deceased')) {
+        filteredOutInSearch++;
+        return false;
+      }
       
-      // 年龄初筛
+      // 年龄初筛：只有当搜索页有年龄信息时才过滤
+      // 如果没有年龄信息，保留该记录，在详情页再次验证
       if (result.age !== undefined) {
         if (filters.minAge !== undefined && result.age < filters.minAge) {
-          stats.filteredOut++;
+          filteredOutInSearch++;
           return false;
         }
         if (filters.maxAge !== undefined && result.age > filters.maxAge) {
-          stats.filteredOut++;
+          filteredOutInSearch++;
           return false;
         }
       }
+      // 没有年龄信息的记录保留，等详情页进一步过滤
       
       return true;
     });
     
-    onProgress?.(`🔍 初筛后 ${filteredSearchResults.length} 条记录`);
+    stats.filteredOut += filteredOutInSearch;
+    onProgress?.(`🔍 初筛后 ${filteredSearchResults.length} 条记录（过滤 ${filteredOutInSearch} 条）`);
     
     return {
       success: true,

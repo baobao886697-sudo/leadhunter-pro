@@ -373,16 +373,32 @@ export default function TpsSearch() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">搜索任务数</span>
-                  <span>{estimatedSearches}</span>
+                  <span>{estimatedSearches} 个</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">每任务页数</span>
-                  <span>{maxPages} 页</span>
+                  <span className="text-muted-foreground">最大搜索页数</span>
+                  <span>每任务 {maxPages} 页</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">搜索费用</span>
-                  <span>{searchCost} 积分/页</span>
+                  <span className="text-muted-foreground">预估详情数</span>
+                  <span>每任务 ~{avgDetailsPerSearch} 条</span>
                 </div>
+                
+                <div className="border-t border-slate-700 pt-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">搜索页费用</span>
+                    <span className="text-cyan-400">
+                      {estimatedSearches} × {maxPages} × {searchCost} = {estimatedSearchPageCost.toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">详情页费用</span>
+                    <span className="text-cyan-400">
+                      {estimatedSearches} × {avgDetailsPerSearch} × {detailCost} = {estimatedDetailPageCost.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+                
                 <div className="border-t border-slate-700 pt-3">
                   <div className="flex justify-between">
                     <span className="font-medium">预估总消耗</span>
@@ -390,6 +406,9 @@ export default function TpsSearch() {
                       ~{estimatedCost.toFixed(1)} 积分
                     </span>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    实际费用取决于搜索结果数量，可能低于预估
+                  </p>
                 </div>
                 
                 {profile && estimatedCost > (profile.credits || 0) && (
