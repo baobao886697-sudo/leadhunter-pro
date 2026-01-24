@@ -429,6 +429,88 @@ async function ensureTables() {
     `);
     console.log("[Database] User feedbacks table ready");
     
+    // 18. TPS 配置表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS tps_config (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        searchCost DECIMAL(10,2) NOT NULL DEFAULT 0.3,
+        detailCost DECIMAL(10,2) NOT NULL DEFAULT 0.3,
+        maxConcurrent INT NOT NULL DEFAULT 40,
+        cacheDays INT NOT NULL DEFAULT 30,
+        scrapeDoToken VARCHAR(255),
+        maxPages INT NOT NULL DEFAULT 25,
+        batchDelay INT NOT NULL DEFAULT 200,
+        enabled BOOLEAN DEFAULT TRUE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
+      )
+    `);
+    console.log("[Database] TPS config table ready");
+    
+    // 19. TPS 详情页缓存表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS tps_detail_cache (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        detailLink VARCHAR(500) NOT NULL UNIQUE,
+        data JSON,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        expiresAt TIMESTAMP NULL,
+        INDEX idx_expiresAt (expiresAt)
+      )
+    `);
+    console.log("[Database] TPS detail cache table ready");
+    
+    // 20. TPS 搜索任务表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS tps_search_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        taskId VARCHAR(32) NOT NULL UNIQUE,
+        userId INT NOT NULL,
+        mode ENUM('nameOnly', 'nameLocation') NOT NULL DEFAULT 'nameOnly',
+        names JSON NOT NULL,
+        locations JSON,
+        filters JSON,
+        maxPages INT NOT NULL DEFAULT 25,
+        status ENUM('pending', 'running', 'completed', 'failed', 'stopped', 'insufficient_credits') NOT NULL DEFAULT 'pending',
+        progress INT NOT NULL DEFAULT 0,
+        totalSubTasks INT NOT NULL DEFAULT 0,
+        completedSubTasks INT NOT NULL DEFAULT 0,
+        totalResults INT NOT NULL DEFAULT 0,
+        creditsUsed DECIMAL(10,2) NOT NULL DEFAULT 0,
+        errorMessage TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+        completedAt TIMESTAMP NULL,
+        INDEX idx_userId (userId),
+        INDEX idx_status (status)
+      )
+    `);
+    console.log("[Database] TPS search tasks table ready");
+    
+    // 21. TPS 搜索结果表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS tps_search_results (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        taskId INT NOT NULL,
+        subTaskIndex INT NOT NULL DEFAULT 0,
+        name VARCHAR(200),
+        searchName VARCHAR(200),
+        searchLocation VARCHAR(200),
+        firstName VARCHAR(100),
+        lastName VARCHAR(100),
+        age INT,
+        city VARCHAR(100),
+        state VARCHAR(50),
+        phones JSON,
+        addresses JSON,
+        propertyValue INT,
+        detailLink VARCHAR(500),
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        INDEX idx_taskId (taskId)
+      )
+    `);
+    console.log("[Database] TPS search results table ready");
+    
     // ========== 初始化默认数据 ==========
     
     // 插入默认系统配置（如果不存在）
@@ -442,6 +524,13 @@ async function ensureTables() {
       ('NEW_USER_BONUS', '0', '新用户赠送积分')
     `);
     console.log("[Database] Default system configs inserted");
+    
+    // 插入默认 TPS 配置（如果不存在）
+    await db.execute(sql`
+      INSERT IGNORE INTO tps_config (id, searchCost, detailCost, maxConcurrent, cacheDays, maxPages, batchDelay, enabled)
+      VALUES (1, 0.3, 0.3, 40, 30, 25, 200, TRUE)
+    `);
+    console.log("[Database] Default TPS config inserted");
     
     // ========== 数据迁移 ==========
     await migrateOldData(db);

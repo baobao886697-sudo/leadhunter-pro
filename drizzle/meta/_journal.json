@@ -15,6 +15,20 @@
       "when": 1768668148679,
       "tag": "0001_natural_dragon_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768668200000,
+      "tag": "0002_add_user_feedbacks",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1768700000000,
+      "tag": "0003_add_tps_tables",
+      "breakpoints": true
     }
   ]
 }
