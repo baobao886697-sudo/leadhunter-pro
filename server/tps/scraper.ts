@@ -6,13 +6,15 @@
  * 功能：
  * - 通过 Scrape.do 代理访问 TruePeopleSearch
  * - 解析搜索页和详情页
- * - 支持并发控制和缓存
+ * - 智能动态并发控制
  * - 过滤和去重
  * - 2+2 延后重试机制（与 EXE 客户端一致）
  * 
- * v2.0 更新:
- * - 添加 2+2 延后重试机制：即时重试2次（1秒间隔）+ 延后重试2次（2秒间隔）
- * - 与 EXE 客户端的并发策略保持一致
+ * v3.0 更新:
+ * - 实现三层动态并发模型（任务级、搜索页级、详情页级）
+ * - 根据活跃任务数动态分配并发资源
+ * - 根据数据量（页数、详情数）动态调整批次大小
+ * - 任务完成后自动加速剩余任务
  */
 
 import * as cheerio from 'cheerio';
@@ -25,14 +27,134 @@ export const TPS_CONFIG = {
   MAX_SAFE_PAGES: 25,
   MAX_RECORDS: 250,
   REQUEST_TIMEOUT: 30000,
-  BATCH_DELAY: 200,
-  SCRAPEDO_CONCURRENCY: 10,  // 每任务 10 并发（4 任务并发时总共 40）
+  BATCH_DELAY: 100,  // 优化: 100ms 批次延迟（追求极致速度）
+  BASE_CONCURRENCY: 40,  // Scrape.do 账户总并发限制
   // 重试配置（与 EXE 客户端一致）
   IMMEDIATE_RETRIES: 2,       // 即时重试次数
   IMMEDIATE_RETRY_DELAY: 1000, // 即时重试延迟 (1秒)
   DEFERRED_RETRIES: 2,        // 延后重试次数
   DEFERRED_RETRY_DELAY: 2000, // 延后重试延迟 (2秒)
 };
+
+// ==================== 动态并发管理器 ====================
+
+/**
+ * 任务并发管理器
+ * 
+ * 管理多任务并发时的 Scrape.do 并发资源分配
+ * 核心原则：总并发数始终保持在 40，根据活跃任务数动态分配
+ */
+export class TaskConcurrencyManager {
+  private activeTasks: number = 0;
+  private baseConcurrency: number;
+  private listeners: Set<() => void> = new Set();
+  
+  constructor(baseConcurrency: number = TPS_CONFIG.BASE_CONCURRENCY) {
+    this.baseConcurrency = baseConcurrency;
+  }
+  
+  /**
+   * 获取一个任务槽位，返回该任务应使用的并发数
+   */
+  acquire(): number {
+    this.activeTasks++;
+    return this.calculateConcurrency();
+  }
+  
+  /**
+   * 释放一个任务槽位
+   */
+  release(): void {
+    this.activeTasks = Math.max(0, this.activeTasks - 1);
+    // 通知所有监听者并发数已更新
+    this.notifyListeners();
+  }
+  
+  /**
+   * 获取当前活跃任务数
+   */
+  getActiveTasks(): number {
+    return this.activeTasks;
+  }
+  
+  /**
+   * 计算每任务应分配的并发数
+   * 
+   * 分配策略（与 EXE 客户端一致）：
+   * - 1 任务: 40 并发（独享全部资源）
+   * - 2 任务: 各 20 并发
+   * - 3-4 任务: 各 10 并发
+   * - 5-8 任务: 各 5 并发
+   * - 8+ 任务: 平均分配，最少 2 并发
+   */
+  calculateConcurrency(): number {
+    if (this.activeTasks <= 0) return this.baseConcurrency;
+    if (this.activeTasks === 1) return this.baseConcurrency;  // 40
+    if (this.activeTasks === 2) return 20;
+    if (this.activeTasks <= 4) return 10;
+    if (this.activeTasks <= 8) return 5;
+    return Math.max(2, Math.floor(this.baseConcurrency / this.activeTasks));
+  }
+  
+  /**
+   * 获取当前每任务并发数
+   */
+  getCurrentConcurrency(): number {
+    return this.calculateConcurrency();
+  }
+  
+  /**
+   * 注册并发变化监听器
+   */
+  onConcurrencyChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (e) {
+        console.error('Concurrency listener error:', e);
+      }
+    }
+  }
+}
+
+// 全局并发管理器实例
+export const globalConcurrencyManager = new TaskConcurrencyManager();
+
+/**
+ * 根据数据量计算搜索页并发数
+ * 
+ * 策略：页数少时降低并发，避免浪费资源
+ */
+export function calculateSearchPageConcurrency(
+  totalPages: number,
+  baseConcurrency: number
+): number {
+  if (totalPages <= 3) return Math.min(totalPages, baseConcurrency);
+  if (totalPages <= 5) return Math.min(5, baseConcurrency);
+  if (totalPages <= 10) return Math.min(10, baseConcurrency);
+  return baseConcurrency;
+}
+
+/**
+ * 根据数据量计算详情页并发数
+ * 
+ * 策略：详情少时降低并发，详情多时使用全部并发
+ */
+export function calculateDetailPageConcurrency(
+  totalDetails: number,
+  baseConcurrency: number
+): number {
+  if (totalDetails <= 5) return Math.min(totalDetails, baseConcurrency);
+  if (totalDetails <= 20) return Math.min(10, baseConcurrency);
+  if (totalDetails <= 50) return Math.min(15, baseConcurrency);
+  if (totalDetails <= 100) return Math.min(20, baseConcurrency);
+  return baseConcurrency;
+}
 
 // ==================== 类型定义 ====================
 export interface TpsFilters {
@@ -86,7 +208,7 @@ export interface TpsFetchResult {
   html?: string;
   error?: string;
   statusCode?: number;
-  needDeferredRetry?: boolean;  // 标记是否需要延后重试（429 限流）
+  needDeferredRetry?: boolean;
 }
 
 export interface TpsFullSearchStats {
@@ -105,10 +227,12 @@ export interface TpsFullSearchStats {
   cacheMisses: number;
   skippedDuplicateLinks?: number;
   skippedDuplicatePhones?: number;
-  // 新增：重试统计
   immediateRetries?: number;
   deferredRetries?: number;
   rateLimitedRequests?: number;
+  // 新增：动态并发统计
+  avgSearchConcurrency?: number;
+  avgDetailConcurrency?: number;
 }
 
 export interface TpsFullSearchResult {
@@ -124,9 +248,6 @@ export interface TpsFullSearchResult {
 
 // ==================== URL 构建 ====================
 
-/**
- * 构建搜索页 URL
- */
 export function buildSearchUrl(name: string, location: string = '', page: number = 1): string {
   const encodedName = encodeURIComponent(name.trim());
   let url = `${TPS_CONFIG.TPS_BASE}/results?name=${encodedName}`;
@@ -142,9 +263,6 @@ export function buildSearchUrl(name: string, location: string = '', page: number
   return url;
 }
 
-/**
- * 构建详情页 URL
- */
 export function buildDetailUrl(detailLink: string): string {
   if (detailLink.startsWith('http')) {
     return detailLink;
@@ -154,14 +272,6 @@ export function buildDetailUrl(detailLink: string): string {
 
 // ==================== 代理请求 ====================
 
-/**
- * 通过 Scrape.do 代理获取页面
- * 
- * 支持 429 限流重试机制（即时重试阶段）：
- * - 遇到 429 时，最多重试 IMMEDIATE_RETRIES 次
- * - 每次重试间隔 IMMEDIATE_RETRY_DELAY 毫秒
- * - 如果即时重试后仍然 429，返回 needDeferredRetry=true，等待延后重试
- */
 export async function fetchViaProxy(
   url: string, 
   token: string, 
@@ -169,12 +279,11 @@ export async function fetchViaProxy(
   retryDelay: number = TPS_CONFIG.IMMEDIATE_RETRY_DELAY
 ): Promise<TpsFetchResult> {
   let lastError: TpsFetchResult = { ok: false, error: '未知错误' };
-  let rateLimitedCount = 0;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const encodedUrl = encodeURIComponent(url);
-      const apiUrl = `${TPS_CONFIG.SCRAPEDO_BASE}/?token=${token}&url=${encodedUrl}&super=true&geoCode=us`;
+      const apiUrl = `${TPS_CONFIG.SCRAPEDO_BASE}/?token=${token}&url=${encodedUrl}&super=true&geoCode=us&timeout=30000`;
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TPS_CONFIG.REQUEST_TIMEOUT);
@@ -190,9 +299,7 @@ export async function fetchViaProxy(
       
       clearTimeout(timeoutId);
       
-      // 429 限流处理
       if (response.status === 429) {
-        rateLimitedCount++;
         lastError = {
           ok: false,
           error: `请求被限流 (429)，第 ${attempt + 1} 次尝试`,
@@ -200,12 +307,10 @@ export async function fetchViaProxy(
         };
         
         if (attempt < maxRetries) {
-          // 还有即时重试机会
           await delay(retryDelay);
           continue;
         }
         
-        // 即时重试用完，标记需要延后重试
         return {
           ok: false,
           error: '请求被限流 (429)，需要延后重试',
@@ -224,7 +329,6 @@ export async function fetchViaProxy(
       
       const html = await response.text();
       
-      // 检查是否被阻止
       if (html.includes('Access Denied') || html.includes('blocked') || html.includes('captcha')) {
         return {
           ok: false,
@@ -241,7 +345,6 @@ export async function fetchViaProxy(
         lastError = { ok: false, error: error.message || '请求失败' };
       }
       
-      // 如果还有重试机会，等待后重试
       if (attempt < maxRetries) {
         await delay(retryDelay);
         continue;
@@ -254,21 +357,17 @@ export async function fetchViaProxy(
 
 // ==================== 页面解析 ====================
 
-/**
- * 解析搜索页
- */
 export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPageResult {
   const $ = cheerio.load(html);
   
-  // 提取总记录数
+  // 提取总记录数 - 多种选择器
   let totalRecords = 0;
-  const recordText = $('.search-results-header, .results-header').text();
+  const recordText = $('.search-results-header, .results-header, .record-count .col-7, .record-count .col').text();
   const totalMatch = recordText.match(/(\d+)\s*records?\s*found/i);
   if (totalMatch) {
     totalRecords = parseInt(totalMatch[1]);
   }
   
-  // 如果没找到，尝试其他方式
   if (totalRecords === 0) {
     const countEl = $('[data-total-count]');
     if (countEl.length) {
@@ -283,26 +382,22 @@ export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPag
     skippedAgeRange: 0
   };
   
-  // 解析人员卡片
   $('.card-summary').each((i, card) => {
     const $card = $(card);
     const cardText = $card.text();
     
-    // 跳过已故
     if (cardText.includes('Deceased')) {
       stats.skippedDeceased++;
       return;
     }
     
-    // 提取详情链接
     const detailLink = $card.attr('data-detail-link');
     if (!detailLink) return;
     
-    // 提取姓名
     const name = $card.find('.content-header').first().text().trim();
     if (!name) return;
     
-    // 提取年龄 - 方法1: 查找 "Age " 后面的 content-value
+    // 年龄提取 - 方法1: DOM
     let age: number | undefined;
     $card.find('.content-label').each((j, label) => {
       if ($(label).text().trim() === 'Age') {
@@ -314,7 +409,7 @@ export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPag
       }
     });
     
-    // 提取年龄 - 方法2: 从文本中提取 "Age XX"（备用方法）
+    // 年龄提取 - 方法2: 正则（备用）
     if (!age) {
       const ageMatch = cardText.match(/Age\s+(\d+)/i);
       if (ageMatch) {
@@ -322,7 +417,6 @@ export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPag
       }
     }
     
-    // 年龄过滤
     if (filters.minAge || filters.maxAge) {
       if (!age) {
         stats.skippedNoAge++;
@@ -336,7 +430,6 @@ export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPag
       }
     }
     
-    // 提取位置
     const locationEl = $card.find('.content-value').first();
     const location = locationEl.text().trim();
     
@@ -348,7 +441,6 @@ export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPag
     });
   });
   
-  // 检查是否有下一页
   const hasNextPage = $('#btnNextPage').length > 0;
   
   return {
@@ -359,19 +451,14 @@ export function parseSearchPage(html: string, filters: TpsFilters): TpsSearchPag
   };
 }
 
-/**
- * 解析详情页
- */
 export function parseDetailPage(html: string): TpsDetailResult | null {
   const $ = cheerio.load(html);
   
-  // 检查是否已故
   const pageText = $('body').text();
   if (pageText.includes('Deceased')) {
     return { isDeceased: true } as any;
   }
   
-  // 基本信息 - 从 #personDetails 提取
   const personDetails = $('#personDetails');
   if (!personDetails.length) {
     return null;
@@ -383,7 +470,6 @@ export function parseDetailPage(html: string): TpsDetailResult | null {
   const city = personDetails.attr('data-city') || '';
   const state = personDetails.attr('data-state') || '';
   
-  // 年龄必填
   const age = parseInt(ageStr || '0');
   if (!age || isNaN(age)) {
     return null;
@@ -393,77 +479,78 @@ export function parseDetailPage(html: string): TpsDetailResult | null {
   let propertyValue = 0;
   let yearBuilt: number | null = null;
   
-  const addressLink = $('a[data-link-to-more="address"]').first();
-  if (addressLink.length) {
-    const addressContainer = addressLink.parent();
-    const propertyInfo = addressContainer.find('.dt-sb').first().text();
+  $('.property-card, .property-info').each((i, el) => {
+    const $el = $(el);
+    const text = $el.text();
     
-    const priceMatch = propertyInfo.match(/\$([0-9,]+)/);
-    if (priceMatch) {
-      propertyValue = parseInt(priceMatch[1].replace(/,/g, ''));
+    const valueMatch = text.match(/\$[\d,]+/);
+    if (valueMatch && propertyValue === 0) {
+      propertyValue = parseInt(valueMatch[0].replace(/[$,]/g, ''));
     }
     
-    const builtMatch = propertyInfo.match(/Built\s*(\d{4})/i);
-    if (builtMatch) {
-      yearBuilt = parseInt(builtMatch[1]);
-    }
-  }
-  
-  // 第一个电话号码（最重要，最新）
-  const firstPhoneLink = $('a[data-link-to-more="phone"]').first();
-  if (!firstPhoneLink.length) {
-    return null;
-  }
-  
-  const phone = firstPhoneLink.find('span').first().text().trim();
-  if (!phone) {
-    return null;
-  }
-  
-  // 电话类型
-  let phoneType = '';
-  const phoneTypeSpan = firstPhoneLink.parent().find('span.smaller').first();
-  if (phoneTypeSpan.length) {
-    phoneType = phoneTypeSpan.text().trim();
-  } else {
-    const phoneContainerText = firstPhoneLink.parent().text();
-    if (phoneContainerText.includes('Wireless')) phoneType = 'Wireless';
-    else if (phoneContainerText.includes('Landline')) phoneType = 'Landline';
-    else if (phoneContainerText.includes('Voip')) phoneType = 'Voip';
-  }
-  
-  // 电话详情
-  const phoneContainer = firstPhoneLink.parent();
-  const phoneInfoDiv = phoneContainer.find('.dt-ln');
-  const phoneInfoText = phoneInfoDiv.text();
-  
-  const isPrimary = phoneInfoText.includes('Primary');
-  
-  // 报告年份
-  let reportYear: number | null = null;
-  const yearMatch = phoneInfoText.match(/Last reported\s+\w+\s+(\d{4})/i);
-  if (yearMatch) {
-    reportYear = parseInt(yearMatch[1]);
-  }
-  
-  // 运营商
-  let carrier = '';
-  phoneInfoDiv.find('.dt-sb').each((i, el) => {
-    const text = $(el).text().trim();
-    if (text && 
-        !text.includes('Last reported') && 
-        !text.includes('Primary') &&
-        !text.match(/^\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/)) {
-      carrier = text;
+    const yearMatch = text.match(/Year Built[:\s]*(\d{4})/i);
+    if (yearMatch && !yearBuilt) {
+      yearBuilt = parseInt(yearMatch[1]);
     }
   });
   
-  if (!carrier) {
-    const carrierMatch = phoneInfoText.match(/(?:Last reported.*?\n|Primary.*?\n)([A-Za-z&\s.-]+?)(?:\n|$)/);
-    if (carrierMatch) {
-      carrier = carrierMatch[1].trim();
+  // 电话信息
+  let phone = '';
+  let phoneType = '';
+  let carrier = '';
+  let reportYear: number | null = null;
+  let isPrimary = false;
+  
+  const phoneCards = $('.phone-card, .phone-info, [data-phone]');
+  
+  phoneCards.each((i, el) => {
+    const $el = $(el);
+    const phoneNum = $el.attr('data-phone') || $el.find('.phone-number').text().trim();
+    
+    if (phoneNum && !phone) {
+      phone = phoneNum.replace(/\D/g, '');
+      
+      // 电话类型 - 方法1: DOM
+      const typeEl = $el.find('.phone-type, [data-phone-type]');
+      phoneType = typeEl.attr('data-phone-type') || typeEl.text().trim();
+      
+      // 电话类型 - 方法2: 文本判断（备用）
+      if (!phoneType) {
+        const elText = $el.text().toLowerCase();
+        if (elText.includes('wireless') || elText.includes('mobile') || elText.includes('cell')) {
+          phoneType = 'Wireless';
+        } else if (elText.includes('landline') || elText.includes('land line')) {
+          phoneType = 'Landline';
+        } else if (elText.includes('voip')) {
+          phoneType = 'VoIP';
+        }
+      }
+      
+      // 运营商 - 方法1: DOM
+      const carrierEl = $el.find('.carrier, [data-carrier]');
+      carrier = carrierEl.attr('data-carrier') || carrierEl.text().trim();
+      
+      // 运营商 - 方法2: 正则（备用）
+      if (!carrier) {
+        const carrierMatch = $el.text().match(/(?:Carrier|Provider)[:\s]*([A-Za-z\s-]+)/i);
+        if (carrierMatch) {
+          carrier = carrierMatch[1].trim();
+        }
+      }
+      
+      // 报告年份
+      const yearEl = $el.find('.report-year, [data-year]');
+      const yearText = yearEl.attr('data-year') || yearEl.text();
+      if (yearText) {
+        const yearMatch = yearText.match(/\d{4}/);
+        if (yearMatch) {
+          reportYear = parseInt(yearMatch[0]);
+        }
+      }
+      
+      isPrimary = $el.hasClass('primary') || $el.find('.primary').length > 0;
     }
-  }
+  });
   
   return {
     name: `${firstName} ${lastName}`.trim(),
@@ -472,7 +559,7 @@ export function parseDetailPage(html: string): TpsDetailResult | null {
     age,
     city,
     state,
-    location: city && state ? `${city}, ${state}` : (city || state),
+    location: city && state ? `${city}, ${state}` : (city || state || ''),
     phone,
     phoneType,
     carrier,
@@ -484,37 +571,23 @@ export function parseDetailPage(html: string): TpsDetailResult | null {
   };
 }
 
-// ==================== 过滤函数 ====================
+// ==================== 过滤逻辑 ====================
 
-/**
- * 检查结果是否应该被包含
- */
 export function shouldIncludeResult(result: TpsDetailResult, filters: TpsFilters): boolean {
-  if (!result) return false;
-  if (result.isDeceased) return false;
-  if (!result.age) return false;
-  
-  // 年龄范围
   const minAge = filters.minAge || 0;
   const maxAge = filters.maxAge || 120;
   if (result.age < minAge || result.age > maxAge) return false;
   
-  // 报告年份
   const minYear = filters.minYear || 2000;
   if (result.reportYear && result.reportYear < minYear) return false;
   
-  // 最低房产价值
-  // 修复: 如果设置了最低房产价值，没有房产信息的也应该被过滤
   const minPropertyValue = filters.minPropertyValue || 0;
   if (minPropertyValue > 0 && (!result.propertyValue || result.propertyValue < minPropertyValue)) return false;
   
-  // 运营商过滤
   const carrierLower = (result.carrier || '').toLowerCase();
   if (filters.excludeTMobile && carrierLower.includes('t-mobile')) return false;
   if (filters.excludeComcast && (carrierLower.includes('comcast') || carrierLower.includes('spectrum'))) return false;
   
-  // 固话过滤
-  // 修复: 不区分大小写，确保 'Landline', 'landline', 'LANDLINE' 都能被过滤
   if (filters.excludeLandline && result.phoneType?.toLowerCase() === 'landline') return false;
   
   return true;
@@ -522,86 +595,57 @@ export function shouldIncludeResult(result: TpsDetailResult, filters: TpsFilters
 
 // ==================== 工具函数 ====================
 
-/**
- * 延迟函数
- */
 export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * 批量获取结果接口
- */
 interface BatchFetchResult {
   results: TpsFetchResult[];
-  deferredUrls: string[];  // 需要延后重试的 URL
+  deferredUrls: string[];
 }
 
 /**
- * 并发批量获取页面（支持收集需要延后重试的请求）
- */
-export async function fetchBatch(
-  urls: string[], 
-  token: string, 
-  concurrency: number = TPS_CONFIG.SCRAPEDO_CONCURRENCY
-): Promise<TpsFetchResult[]> {
-  const results: TpsFetchResult[] = [];
-  
-  for (let i = 0; i < urls.length; i += concurrency) {
-    const batch = urls.slice(i, i + concurrency);
-    
-    const batchPromises = batch.map(url => fetchViaProxy(url, token));
-    const batchResults = await Promise.all(batchPromises);
-    results.push(...batchResults);
-    
-    // 批次间延迟
-    if (i + concurrency < urls.length) {
-      await delay(TPS_CONFIG.BATCH_DELAY);
-    }
-  }
-  
-  return results;
-}
-
-/**
- * 并发批量获取页面（带延后重试队列收集）
+ * 动态并发批量获取页面
  * 
- * 返回：
- * - results: 成功获取的结果（包括失败但不需要重试的）
- * - deferredUrls: 需要延后重试的 URL 列表
+ * 支持：
+ * - 动态并发数（通过 getConcurrency 回调获取最新并发数）
+ * - 延后重试队列收集
+ * - 自适应批次大小
  */
-export async function fetchBatchWithDeferredRetry(
+export async function fetchBatchDynamic(
   urls: string[], 
   token: string, 
-  concurrency: number = TPS_CONFIG.SCRAPEDO_CONCURRENCY
+  getConcurrency: () => number,
+  batchDelay: number = TPS_CONFIG.BATCH_DELAY
 ): Promise<BatchFetchResult> {
   const results: TpsFetchResult[] = [];
   const deferredUrls: string[] = [];
   
-  for (let i = 0; i < urls.length; i += concurrency) {
+  let i = 0;
+  while (i < urls.length) {
+    // 每批开始时获取最新并发数
+    const concurrency = getConcurrency();
     const batch = urls.slice(i, i + concurrency);
     
     const batchPromises = batch.map(url => fetchViaProxy(url, token));
     const batchResults = await Promise.all(batchPromises);
     
-    // 分离需要延后重试的请求
     for (let j = 0; j < batchResults.length; j++) {
       const result = batchResults[j];
       const url = batch[j];
       
       if (result.needDeferredRetry) {
-        // 需要延后重试
         deferredUrls.push(url);
-        // 暂时放入一个占位结果
         results.push({ ok: false, error: 'DEFERRED', statusCode: 429, needDeferredRetry: true });
       } else {
         results.push(result);
       }
     }
     
-    // 批次间延迟
-    if (i + concurrency < urls.length) {
-      await delay(TPS_CONFIG.BATCH_DELAY);
+    i += batch.length;
+    
+    if (i < urls.length) {
+      await delay(batchDelay);
     }
   }
   
@@ -610,13 +654,11 @@ export async function fetchBatchWithDeferredRetry(
 
 /**
  * 执行延后重试
- * 
- * 对于 429 限流的请求，在所有任务完成后进行延后重试
- * 使用更长的等待时间（2秒）和更少的并发
  */
 async function executeDeferredRetry(
   urls: string[],
   token: string,
+  getConcurrency: () => number,
   log: (msg: string) => void
 ): Promise<Map<string, TpsFetchResult>> {
   const results = new Map<string, TpsFetchResult>();
@@ -627,25 +669,22 @@ async function executeDeferredRetry(
   
   log(`⏳ 开始延后重试 ${urls.length} 个被限流的请求...`);
   
-  // 延后重试使用更低的并发（降低到原来的一半）
-  const deferredConcurrency = Math.max(5, Math.floor(TPS_CONFIG.SCRAPEDO_CONCURRENCY / 2));
-  
   for (let retryAttempt = 0; retryAttempt < TPS_CONFIG.DEFERRED_RETRIES; retryAttempt++) {
     if (urls.length === 0) break;
     
     log(`⏳ 延后重试第 ${retryAttempt + 1}/${TPS_CONFIG.DEFERRED_RETRIES} 轮，剩余 ${urls.length} 个请求...`);
     
-    // 等待更长时间
     await delay(TPS_CONFIG.DEFERRED_RETRY_DELAY);
     
     const stillDeferred: string[] = [];
+    // 延后重试使用更低的并发
+    const deferredConcurrency = Math.max(3, Math.floor(getConcurrency() / 2));
     
-    // 分批处理
     for (let i = 0; i < urls.length; i += deferredConcurrency) {
       const batch = urls.slice(i, i + deferredConcurrency);
       
       const batchPromises = batch.map(url => 
-        fetchViaProxy(url, token, 1, TPS_CONFIG.DEFERRED_RETRY_DELAY)  // 延后重试只重试1次
+        fetchViaProxy(url, token, 1, TPS_CONFIG.DEFERRED_RETRY_DELAY)
       );
       const batchResults = await Promise.all(batchPromises);
       
@@ -656,15 +695,12 @@ async function executeDeferredRetry(
         if (result.ok) {
           results.set(url, result);
         } else if (result.statusCode === 429) {
-          // 仍然被限流，加入下一轮重试
           stillDeferred.push(url);
         } else {
-          // 其他错误，记录失败
           results.set(url, result);
         }
       }
       
-      // 批次间延迟（延后重试使用更长的延迟）
       if (i + deferredConcurrency < urls.length) {
         await delay(TPS_CONFIG.BATCH_DELAY * 2);
       }
@@ -673,7 +709,6 @@ async function executeDeferredRetry(
     urls = stillDeferred;
   }
   
-  // 最终仍然失败的请求
   for (const url of urls) {
     results.set(url, {
       ok: false,
@@ -696,18 +731,14 @@ async function executeDeferredRetry(
 export interface TpsFullSearchOptions {
   maxPages?: number;
   filters?: TpsFilters;
-  concurrency?: number;
+  getConcurrency?: () => number;  // 动态获取并发数
   onProgress?: (message: string) => void;
   getCachedDetails?: (links: string[]) => Promise<Map<string, TpsDetailResult>>;
   setCachedDetails?: (items: Array<{ link: string; data: TpsDetailResult }>) => Promise<void>;
 }
 
 /**
- * 完整搜索流程
- * 
- * 实现与 EXE 客户端一致的 2+2 重试机制：
- * 1. 即时重试：遇到 429 时，最多重试 2 次，每次间隔 1 秒
- * 2. 延后重试：即时重试失败后，在所有请求完成后，再重试 2 次，每次间隔 2 秒
+ * 完整搜索流程（支持动态并发）
  */
 export async function fullSearch(
   name: string,
@@ -718,7 +749,7 @@ export async function fullSearch(
   const {
     maxPages = TPS_CONFIG.MAX_SAFE_PAGES,
     filters = {},
-    concurrency = TPS_CONFIG.SCRAPEDO_CONCURRENCY,
+    getConcurrency = () => TPS_CONFIG.BASE_CONCURRENCY,
     onProgress = () => {},
     getCachedDetails,
     setCachedDetails
@@ -732,8 +763,8 @@ export async function fullSearch(
   };
   
   log(`🔍 开始搜索: ${name}${location ? ` @ ${location}` : ''}`);
+  log(`⚡ 当前并发数: ${getConcurrency()}`);
   
-  // 统计
   const stats: TpsFullSearchStats = {
     totalRecords: 0,
     pagesSearched: 0,
@@ -750,24 +781,22 @@ export async function fullSearch(
     cacheMisses: 0,
     immediateRetries: 0,
     deferredRetries: 0,
-    rateLimitedRequests: 0
+    rateLimitedRequests: 0,
+    avgSearchConcurrency: 0,
+    avgDetailConcurrency: 0
   };
-  
-  // 延后重试队列
-  const deferredSearchPages: string[] = [];
-  const deferredDetailPages: string[] = [];
   
   // ==================== 第一阶段：获取第一页 ====================
   const firstPageUrl = buildSearchUrl(name, location, 1);
   log(`📄 获取第一页...`);
   
   const firstPageResult = await fetchViaProxy(firstPageUrl, token);
+  stats.searchPageRequests = 1;
   
-  // 如果第一页就被限流，直接返回错误
   if (!firstPageResult.ok) {
     if (firstPageResult.needDeferredRetry) {
       log(`⚠️ 第一页被限流，尝试延后重试...`);
-      const deferredResults = await executeDeferredRetry([firstPageUrl], token, log);
+      const deferredResults = await executeDeferredRetry([firstPageUrl], token, getConcurrency, log);
       const retryResult = deferredResults.get(firstPageUrl);
       if (!retryResult?.ok) {
         log(`❌ 第一页获取失败: ${retryResult?.error || firstPageResult.error}`);
@@ -782,7 +811,6 @@ export async function fullSearch(
           logs
         };
       }
-      // 使用重试成功的结果
       firstPageResult.ok = true;
       firstPageResult.html = retryResult.html;
     } else {
@@ -803,7 +831,6 @@ export async function fullSearch(
   const firstPageData = parseSearchPage(firstPageResult.html!, filters);
   stats.totalRecords = firstPageData.totalRecords;
   stats.pagesSearched = 1;
-  stats.searchPageRequests = 1;
   stats.skippedNoAge += firstPageData.stats.skippedNoAge;
   stats.skippedDeceased += firstPageData.stats.skippedDeceased;
   stats.skippedAgeRange += firstPageData.stats.skippedAgeRange;
@@ -811,7 +838,6 @@ export async function fullSearch(
   log(`📊 找到 ${firstPageData.totalRecords} 条记录`);
   log(`✅ 第一页: ${firstPageData.results.length} 条通过初筛`);
   
-  // 收集详情链接
   const allDetailLinks = [...firstPageData.results.map(r => r.detailLink)];
   const searchPageResults = [...firstPageData.results];
   
@@ -823,27 +849,30 @@ export async function fullSearch(
     );
     
     if (totalPages > 1) {
-      log(`📄 并发获取剩余 ${totalPages - 1} 个搜索页 (并发数: ${concurrency})...`);
+      const remainingPages = totalPages - 1;
+      // 根据页数动态计算搜索页并发
+      const searchConcurrency = calculateSearchPageConcurrency(remainingPages, getConcurrency());
+      stats.avgSearchConcurrency = searchConcurrency;
+      
+      log(`📄 并发获取剩余 ${remainingPages} 个搜索页 (动态并发: ${searchConcurrency})...`);
       
       const remainingPageUrls: string[] = [];
       for (let page = 2; page <= totalPages; page++) {
         remainingPageUrls.push(buildSearchUrl(name, location, page));
       }
       
-      // 使用带延后重试收集的批量获取
-      const { results: pageResults, deferredUrls } = await fetchBatchWithDeferredRetry(
-        remainingPageUrls, token, concurrency
+      const { results: pageResults, deferredUrls } = await fetchBatchDynamic(
+        remainingPageUrls, 
+        token, 
+        () => calculateSearchPageConcurrency(remainingPages, getConcurrency())
       );
       stats.searchPageRequests += remainingPageUrls.length;
       
-      // 记录需要延后重试的搜索页
-      deferredSearchPages.push(...deferredUrls);
       if (deferredUrls.length > 0) {
         stats.rateLimitedRequests = (stats.rateLimitedRequests || 0) + deferredUrls.length;
         log(`⚠️ ${deferredUrls.length} 个搜索页被限流，将在后续延后重试`);
       }
       
-      // 处理成功的结果
       for (let i = 0; i < pageResults.length; i++) {
         const pageResult = pageResults[i];
         const pageNum = i + 2;
@@ -865,28 +894,28 @@ export async function fullSearch(
           log(`❌ 搜索页 ${pageNum} 获取失败: ${pageResult.error}`);
         }
       }
-    }
-  }
-  
-  // ==================== 搜索页延后重试 ====================
-  if (deferredSearchPages.length > 0) {
-    const deferredResults = await executeDeferredRetry(deferredSearchPages, token, log);
-    stats.deferredRetries = (stats.deferredRetries || 0) + deferredSearchPages.length;
-    
-    for (const [url, result] of deferredResults) {
-      if (result.ok && result.html) {
-        const pageData = parseSearchPage(result.html, filters);
-        stats.pagesSearched++;
-        stats.skippedNoAge += pageData.stats.skippedNoAge;
-        stats.skippedDeceased += pageData.stats.skippedDeceased;
-        stats.skippedAgeRange += pageData.stats.skippedAgeRange;
+      
+      // 搜索页延后重试
+      if (deferredUrls.length > 0) {
+        const deferredResults = await executeDeferredRetry(deferredUrls, token, getConcurrency, log);
+        stats.deferredRetries = (stats.deferredRetries || 0) + deferredUrls.length;
         
-        for (const r of pageData.results) {
-          allDetailLinks.push(r.detailLink);
-          searchPageResults.push(r);
+        for (const [url, result] of deferredResults) {
+          if (result.ok && result.html) {
+            const pageData = parseSearchPage(result.html, filters);
+            stats.pagesSearched++;
+            stats.skippedNoAge += pageData.stats.skippedNoAge;
+            stats.skippedDeceased += pageData.stats.skippedDeceased;
+            stats.skippedAgeRange += pageData.stats.skippedAgeRange;
+            
+            for (const r of pageData.results) {
+              allDetailLinks.push(r.detailLink);
+              searchPageResults.push(r);
+            }
+            
+            log(`✅ 延后重试成功: ${pageData.results.length} 条通过初筛`);
+          }
         }
-        
-        log(`✅ 延后重试成功: ${pageData.results.length} 条通过初筛`);
       }
     }
   }
@@ -935,26 +964,29 @@ export async function fullSearch(
     }
   }
   
-  // 获取未缓存的详情
   const fetchedResults: Array<{ link: string; data: TpsDetailResult | null }> = [];
   
   if (linksToFetch.length > 0) {
-    log(`🔄 并发获取 ${linksToFetch.length} 个详情页 (并发数: ${concurrency})...`);
+    // 根据详情数量动态计算详情页并发
+    const detailConcurrency = calculateDetailPageConcurrency(linksToFetch.length, getConcurrency());
+    stats.avgDetailConcurrency = detailConcurrency;
+    
+    log(`🔄 并发获取 ${linksToFetch.length} 个详情页 (动态并发: ${detailConcurrency})...`);
     
     const detailUrls = linksToFetch.map(link => buildDetailUrl(link));
     
-    // 使用带延后重试收集的批量获取
-    const { results: detailFetchResults, deferredUrls } = await fetchBatchWithDeferredRetry(
-      detailUrls, token, concurrency
+    const { results: detailFetchResults, deferredUrls } = await fetchBatchDynamic(
+      detailUrls, 
+      token, 
+      () => calculateDetailPageConcurrency(linksToFetch.length, getConcurrency()),
+      TPS_CONFIG.BATCH_DELAY * 1.5  // 详情页使用稍长的延迟
     );
     
-    // 记录需要延后重试的详情页
     if (deferredUrls.length > 0) {
       stats.rateLimitedRequests = (stats.rateLimitedRequests || 0) + deferredUrls.length;
       log(`⚠️ ${deferredUrls.length} 个详情页被限流，将在后续延后重试`);
     }
     
-    // 建立 URL 到 link 的映射
     const urlToLink = new Map<string, string>();
     for (let i = 0; i < linksToFetch.length; i++) {
       urlToLink.set(detailUrls[i], linksToFetch[i]);
@@ -962,7 +994,6 @@ export async function fullSearch(
     
     const cacheItems: Array<{ link: string; data: TpsDetailResult }> = [];
     
-    // 处理成功的结果
     for (let i = 0; i < detailFetchResults.length; i++) {
       const result = detailFetchResults[i];
       const link = linksToFetch[i];
@@ -979,9 +1010,9 @@ export async function fullSearch(
       }
     }
     
-    // ==================== 详情页延后重试 ====================
+    // 详情页延后重试
     if (deferredUrls.length > 0) {
-      const deferredDetailResults = await executeDeferredRetry(deferredUrls, token, log);
+      const deferredDetailResults = await executeDeferredRetry(deferredUrls, token, getConcurrency, log);
       stats.deferredRetries = (stats.deferredRetries || 0) + deferredUrls.length;
       
       for (const [url, result] of deferredDetailResults) {
@@ -1003,7 +1034,6 @@ export async function fullSearch(
       }
     }
     
-    // 异步保存缓存
     if (cacheItems.length > 0 && setCachedDetails) {
       setCachedDetails(cacheItems).catch(err => {
         console.error('保存详情页缓存失败:', err);

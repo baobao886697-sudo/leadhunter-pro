@@ -2,6 +2,11 @@
  * TruePeopleSearch tRPC 路由
  * 
  * 提供 TPS 搜索功能的 API 端点
+ * 
+ * v3.0 更新:
+ * - 实现 8 任务并发（与 EXE 客户端一致）
+ * - 使用全局并发管理器动态分配 Scrape.do 并发资源
+ * - 任务完成后自动加速剩余任务
  */
 
 import { z } from "zod";
@@ -11,7 +16,8 @@ import {
   fullSearch, 
   TpsFilters, 
   TpsDetailResult,
-  TPS_CONFIG 
+  TPS_CONFIG,
+  TaskConcurrencyManager
 } from "./scraper";
 import {
   getTpsConfig,
@@ -30,6 +36,9 @@ import {
   logCreditChange,
   logApi,
 } from "./db";
+
+// 任务级并发配置
+const MAX_TASK_CONCURRENCY = 8;  // 最多 8 任务并发（与 EXE 客户端一致）
 
 // 输入验证 schema
 const tpsFiltersSchema = z.object({
@@ -143,7 +152,7 @@ export const tpsRouter = router({
         names: input.names,
         locations: input.locations || [],
         filters: input.filters || {},
-        maxPages: input.maxPages || config.maxPages,
+        maxPages: config.maxPages,
       });
       
       // 异步执行搜索（不阻塞响应）
@@ -323,7 +332,7 @@ export const tpsRouter = router({
     }),
 });
 
-// ==================== 搜索执行逻辑 ====================
+// ==================== 搜索执行逻辑（动态并发版本） ====================
 
 async function executeTpsSearch(
   taskDbId: number,
@@ -336,8 +345,9 @@ async function executeTpsSearch(
   const detailCost = parseFloat(config.detailCost);
   const token = config.scrapeDoToken;
   const maxPages = TPS_CONFIG.MAX_SAFE_PAGES;  // 固定使用最大 25 页
-  const TASK_CONCURRENCY = 4;  // 4 任务并发
-  const PER_TASK_CONCURRENCY = TPS_CONFIG.SCRAPEDO_CONCURRENCY;  // 每任务 10 并发
+  
+  // 创建任务级并发管理器
+  const concurrencyManager = new TaskConcurrencyManager(TPS_CONFIG.BASE_CONCURRENCY);
   
   const logs: Array<{ timestamp: string; message: string }> = [];
   const addLog = (message: string) => {
@@ -363,6 +373,7 @@ async function executeTpsSearch(
   }
   
   addLog(`🚀 开始搜索任务，共 ${subTasks.length} 个子任务`);
+  addLog(`⚡ 动态并发模式: 最多 ${MAX_TASK_CONCURRENCY} 任务并发，总并发限制 ${TPS_CONFIG.BASE_CONCURRENCY}`);
   
   // 更新任务状态
   await updateTpsSearchTaskProgress(taskDbId, {
@@ -400,21 +411,23 @@ async function executeTpsSearch(
   let completedCount = 0;
   
   try {
-    // 4 任务并发执行
-    addLog(`🧵 并发模式: ${TASK_CONCURRENCY} 任务并发，每任务 ${PER_TASK_CONCURRENCY} 请求并发`);
+    // 使用动态并发执行任务
+    // 策略：启动最多 MAX_TASK_CONCURRENCY 个任务，每个任务完成后立即启动下一个
+    // 每个任务的 Scrape.do 并发数由 concurrencyManager 动态分配
     
-    // 分批处理任务
-    for (let batchStart = 0; batchStart < subTasks.length; batchStart += TASK_CONCURRENCY) {
-      const batchEnd = Math.min(batchStart + TASK_CONCURRENCY, subTasks.length);
-      const batch = subTasks.slice(batchStart, batchEnd);
+    const taskQueue = [...subTasks.map((task, index) => ({ ...task, index }))];
+    const runningTasks: Promise<void>[] = [];
+    let taskIndex = 0;
+    
+    // 处理单个子任务
+    const processSubTask = async (subTask: { name: string; location: string; index: number }) => {
+      const globalIndex = subTask.index;
       
-      addLog(`📦 批次 ${Math.floor(batchStart / TASK_CONCURRENCY) + 1}: 处理任务 ${batchStart + 1}-${batchEnd}`);
+      // 获取并发槽位
+      const concurrency = concurrencyManager.acquire();
+      addLog(`📋 [${globalIndex + 1}/${subTasks.length}] 搜索: ${subTask.name}${subTask.location ? ` @ ${subTask.location}` : ""} (并发: ${concurrency})`);
       
-      // 并发执行这一批任务
-      const batchPromises = batch.map(async (subTask, batchIndex) => {
-        const globalIndex = batchStart + batchIndex;
-        addLog(`📋 [${globalIndex + 1}/${subTasks.length}] 搜索: ${subTask.name}${subTask.location ? ` @ ${subTask.location}` : ""}`);
-        
+      try {
         const result = await fullSearch(
           subTask.name,
           subTask.location,
@@ -422,21 +435,13 @@ async function executeTpsSearch(
           {
             maxPages,
             filters: input.filters || {},
-            concurrency: PER_TASK_CONCURRENCY,
+            getConcurrency: () => concurrencyManager.getCurrentConcurrency(),
             onProgress: (msg) => addLog(msg),
             getCachedDetails,
             setCachedDetails,
           }
         );
         
-        return { result, subTask, globalIndex };
-      });
-      
-      // 等待这一批完成
-      const batchResults = await Promise.all(batchPromises);
-      
-      // 处理结果
-      for (const { result, subTask, globalIndex } of batchResults) {
         if (result.success) {
           totalSearchPages += result.stats.searchPageRequests;
           totalDetailPages += result.stats.detailPageRequests;
@@ -466,22 +471,47 @@ async function executeTpsSearch(
         } else {
           addLog(`❌ [${globalIndex + 1}/${subTasks.length}] 失败: ${result.error}`);
         }
-        
+      } finally {
+        // 释放并发槽位（这会自动加速剩余任务）
+        concurrencyManager.release();
         completedCount++;
+        
+        // 更新进度
+        const progress = Math.round((completedCount / subTasks.length) * 100);
+        await updateTpsSearchTaskProgress(taskDbId, {
+          completedSubTasks: completedCount,
+          progress,
+          totalResults,
+          searchPageRequests: totalSearchPages,
+          detailPageRequests: totalDetailPages,
+          cacheHits: totalCacheHits,
+          logs,
+        });
       }
-      
-      // 更新进度
-      const progress = Math.round((completedCount / subTasks.length) * 100);
-      await updateTpsSearchTaskProgress(taskDbId, {
-        completedSubTasks: completedCount,
-        progress,
-        totalResults,
-        searchPageRequests: totalSearchPages,
-        detailPageRequests: totalDetailPages,
-        cacheHits: totalCacheHits,
-        logs,
-      });
+    };
+    
+    // 启动初始批次的任务
+    const startNextTask = () => {
+      if (taskIndex < taskQueue.length) {
+        const task = taskQueue[taskIndex++];
+        const promise = processSubTask(task).then(() => {
+          // 任务完成后，启动下一个任务
+          startNextTask();
+        });
+        runningTasks.push(promise);
+      }
+    };
+    
+    // 启动最多 MAX_TASK_CONCURRENCY 个初始任务
+    const initialBatchSize = Math.min(MAX_TASK_CONCURRENCY, taskQueue.length);
+    addLog(`🧵 启动 ${initialBatchSize} 个初始任务...`);
+    
+    for (let i = 0; i < initialBatchSize; i++) {
+      startNextTask();
     }
+    
+    // 等待所有任务完成
+    await Promise.all(runningTasks);
     
     // 计算实际消耗
     const actualCost = totalSearchPages * searchCost + totalDetailPages * detailCost;
