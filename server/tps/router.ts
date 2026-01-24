@@ -277,8 +277,14 @@ export const tpsRouter = router({
       const userId = ctx.user!.id;
       const history = await getUserTpsSearchTasks(userId, input.page, input.pageSize);
       
+      // 转换 creditsUsed 为数字类型
+      const tasksWithParsedCredits = history.data.map(task => ({
+        ...task,
+        creditsUsed: parseFloat(task.creditsUsed) || 0,
+      }));
+      
       return {
-        tasks: history.data,
+        tasks: tasksWithParsedCredits,
         total: history.total,
         page: input.page,
         pageSize: input.pageSize,
