@@ -160,7 +160,7 @@ export default function AnywhoHistory() {
                           <TableCell>{task.names?.length || 0}</TableCell>
                           <TableCell>{task.totalResults || 0}</TableCell>
                           <TableCell className="text-amber-400">
-                            {task.creditsUsed?.toFixed(1) || 0}
+                            {Number(task.creditsUsed || 0).toFixed(1)}
                           </TableCell>
                           <TableCell>{getStatusBadge(task.status)}</TableCell>
                           <TableCell className="text-gray-400 text-sm">
