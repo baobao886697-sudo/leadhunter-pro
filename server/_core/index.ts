@@ -581,7 +581,7 @@ async function ensureTables() {
     // 插入默认 TPS 配置（如果不存在）
     await db.execute(sql`
       INSERT IGNORE INTO tps_config (id, searchCost, detailCost, maxConcurrent, cacheDays, maxPages, batchDelay, enabled)
-      VALUES (1, 0.3, 0.3, 40, 30, 25, 200, TRUE)
+      VALUES (1, 0.3, 0.3, 40, 180, 25, 200, TRUE)
     `);
     console.log("[Database] Default TPS config inserted");
     

@@ -296,7 +296,7 @@ export const tpsConfig = mysqlTable("tps_config", {
   searchCost: decimal("searchCost", { precision: 10, scale: 2 }).default("0.3").notNull(), // 每搜索页消耗积分
   detailCost: decimal("detailCost", { precision: 10, scale: 2 }).default("0.3").notNull(), // 每详情页消耗积分
   maxConcurrent: int("maxConcurrent").default(40).notNull(), // 最大并发数
-  cacheDays: int("cacheDays").default(30).notNull(), // 缓存天数
+  cacheDays: int("cacheDays").default(180).notNull(), // 缓存天数
   scrapeDoToken: varchar("scrapeDoToken", { length: 100 }), // Scrape.do API Token
   maxPages: int("maxPages").default(25).notNull(), // 最大搜索页数
   batchDelay: int("batchDelay").default(200).notNull(), // 批次间延迟(ms)

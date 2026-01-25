@@ -492,7 +492,7 @@ async function executeTpsSearchUnifiedQueue(
   };
   
   const setCachedDetails = async (items: Array<{ link: string; data: TpsDetailResult }>) => {
-    const cacheDays = config.cacheDays || 30;
+    const cacheDays = config.cacheDays || 180;
     await saveTpsDetailCache(items, cacheDays);
   };
   

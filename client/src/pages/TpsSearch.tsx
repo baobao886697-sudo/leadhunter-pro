@@ -534,7 +534,7 @@ export default function TpsSearch() {
                   <li>• 每页搜索消耗 {searchCost} 积分</li>
                   <li>• 每条详情消耗 {detailCost} 积分</li>
                   <li>• 缓存命中的数据免费使用</li>
-                  <li>• 搜索结果缓存 30 天</li>
+                  <li>• 搜索结果缓存 180 天</li>
                 </ul>
               </CardContent>
             </Card>
