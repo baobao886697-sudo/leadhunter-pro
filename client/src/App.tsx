@@ -27,6 +27,8 @@ import TpsTask from "./pages/TpsTask";
 import TpsHistory from "./pages/TpsHistory";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import PeopleSearchNow from "./pages/PeopleSearchNow";
+import SearchPeopleFree from "./pages/SearchPeopleFree";
 
 function Router() {
   return (
@@ -49,6 +51,8 @@ function Router() {
       <Route path="/tps" component={TpsSearch} />
       <Route path="/tps/task/:taskId" component={TpsTask} />
       <Route path="/tps/history" component={TpsHistory} />
+      <Route path="/people-search-now" component={PeopleSearchNow} />
+      <Route path="/search-people-free" component={SearchPeopleFree} />
       <Route path="/about" component={About} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
