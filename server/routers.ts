@@ -18,6 +18,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { tpsRouter } from "./tps/router";
+import { anywhoRouter } from "./anywho/router";
 import { sendPasswordResetEmail } from "./services/email";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { sdk } from "./_core/sdk";
@@ -137,6 +138,7 @@ const adminProcedure = publicProcedure.use(({ ctx, next }) => {
 export const appRouter = router({
   system: systemRouter,
   tps: tpsRouter,  // TruePeopleSearch 路由
+  anywho: anywhoRouter,  // Anywho 路由
 
   // ============ 认证路由 ============
   auth: router({

@@ -399,3 +399,119 @@ export const tpsSearchResults = mysqlTable("tps_search_results", {
 
 export type TpsSearchResult = typeof tpsSearchResults.$inferSelect;
 export type InsertTpsSearchResult = typeof tpsSearchResults.$inferInsert;
+
+
+// ==================== Anywho 模块 ====================
+
+// Anywho 配置表
+export const anywhoConfig = mysqlTable("anywho_config", {
+  id: int("id").autoincrement().primaryKey(),
+  searchCost: decimal("searchCost", { precision: 10, scale: 2 }).default("0.5").notNull(), // 每搜索页消耗积分
+  detailCost: decimal("detailCost", { precision: 10, scale: 2 }).default("0.5").notNull(), // 每详情页消耗积分
+  maxConcurrent: int("maxConcurrent").default(20).notNull(), // 最大并发数
+  cacheDays: int("cacheDays").default(180).notNull(), // 缓存天数
+  scrapeDoToken: varchar("scrapeDoToken", { length: 100 }), // Scrape.do API Token
+  maxPages: int("maxPages").default(10).notNull(), // 最大搜索页数
+  batchDelay: int("batchDelay").default(300).notNull(), // 批次间延迟(ms)
+  enabled: boolean("enabled").default(true).notNull(), // 是否启用
+  defaultMinAge: int("defaultMinAge").default(18).notNull(), // 默认最小年龄
+  defaultMaxAge: int("defaultMaxAge").default(99).notNull(), // 默认最大年龄
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AnywhoConfig = typeof anywhoConfig.$inferSelect;
+export type InsertAnywhoConfig = typeof anywhoConfig.$inferInsert;
+
+// Anywho 详情页缓存表
+export const anywhoDetailCache = mysqlTable("anywho_detail_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  detailLink: varchar("detailLink", { length: 500 }).notNull().unique(),
+  data: json("data").$type<{
+    name: string;
+    firstName: string;
+    lastName: string;
+    age: number;
+    city: string;
+    state: string;
+    location: string;
+    phone: string;
+    phoneType: string;
+    carrier: string;
+    reportYear: number | null;
+    isPrimary: boolean;
+    propertyValue: number;
+    yearBuilt: number | null;
+    marriageStatus: string | null;  // Anywho 特色：婚姻状况
+    familyMembers: string[];        // 家庭成员
+    employment: string[];           // 就业历史
+    isDeceased: boolean;
+  }>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+});
+
+export type AnywhoDetailCache = typeof anywhoDetailCache.$inferSelect;
+export type InsertAnywhoDetailCache = typeof anywhoDetailCache.$inferInsert;
+
+// Anywho 搜索任务表
+export const anywhoSearchTasks = mysqlTable("anywho_search_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: varchar("taskId", { length: 32 }).notNull().unique(),
+  userId: int("userId").notNull(),
+  mode: mysqlEnum("mode", ["nameOnly", "nameLocation"]).default("nameOnly").notNull(),
+  names: json("names").$type<string[]>().notNull(),
+  locations: json("locations").$type<string[]>(),
+  filters: json("filters").$type<{
+    minAge?: number;
+    maxAge?: number;
+    includeMarriageStatus?: boolean;
+    includePropertyInfo?: boolean;
+    includeFamilyMembers?: boolean;
+    includeEmployment?: boolean;
+  }>(),
+  totalSubTasks: int("totalSubTasks").default(0).notNull(),
+  completedSubTasks: int("completedSubTasks").default(0).notNull(),
+  totalResults: int("totalResults").default(0).notNull(),
+  searchPageRequests: int("searchPageRequests").default(0).notNull(),
+  detailPageRequests: int("detailPageRequests").default(0).notNull(),
+  cacheHits: int("cacheHits").default(0).notNull(),
+  creditsUsed: decimal("creditsUsed", { precision: 10, scale: 2 }).default("0").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "cancelled", "insufficient_credits"]).default("pending").notNull(),
+  progress: int("progress").default(0).notNull(),
+  logs: json("logs").$type<Array<{ timestamp: string; message: string }>>(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+});
+
+export type AnywhoSearchTask = typeof anywhoSearchTasks.$inferSelect;
+export type InsertAnywhoSearchTask = typeof anywhoSearchTasks.$inferInsert;
+
+// Anywho 搜索结果表
+export const anywhoSearchResults = mysqlTable("anywho_search_results", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: int("taskId").notNull(),
+  subTaskIndex: int("subTaskIndex").default(0).notNull(),
+  name: varchar("name", { length: 200 }),
+  searchName: varchar("searchName", { length: 200 }),
+  searchLocation: varchar("searchLocation", { length: 200 }),
+  age: int("age"),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 50 }),
+  location: varchar("location", { length: 200 }),
+  phone: varchar("phone", { length: 50 }),
+  phoneType: varchar("phoneType", { length: 50 }),
+  carrier: varchar("carrier", { length: 100 }),
+  reportYear: int("reportYear"),
+  isPrimary: boolean("isPrimary").default(false),
+  propertyValue: int("propertyValue").default(0),
+  yearBuilt: int("yearBuilt"),
+  marriageStatus: varchar("marriageStatus", { length: 50 }),  // Anywho 特色：婚姻状况
+  detailLink: varchar("detailLink", { length: 500 }),
+  fromCache: boolean("fromCache").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AnywhoSearchResult = typeof anywhoSearchResults.$inferSelect;
+export type InsertAnywhoSearchResult = typeof anywhoSearchResults.$inferInsert;

@@ -30,6 +30,9 @@ import ResetPassword from "./pages/ResetPassword";
 import PeopleSearchNow from "./pages/PeopleSearchNow";
 import SearchPeopleFree from "./pages/SearchPeopleFree";
 import Anywho from "./pages/Anywho";
+import AnywhoSearch from "./pages/AnywhoSearch";
+import AnywhoTask from "./pages/AnywhoTask";
+import AnywhoHistory from "./pages/AnywhoHistory";
 
 function Router() {
   return (
@@ -54,7 +57,10 @@ function Router() {
       <Route path="/tps/history" component={TpsHistory} />
       <Route path="/people-search-now" component={PeopleSearchNow} />
       <Route path="/search-people-free" component={SearchPeopleFree} />
-      <Route path="/anywho" component={Anywho} />
+      <Route path="/anywho" component={AnywhoSearch} />
+      <Route path="/anywho/task/:taskId" component={AnywhoTask} />
+      <Route path="/anywho/history" component={AnywhoHistory} />
+      <Route path="/anywho/intro" component={Anywho} />
       <Route path="/about" component={About} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
