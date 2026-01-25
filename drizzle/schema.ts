@@ -393,6 +393,7 @@ export const tpsSearchResults = mysqlTable("tps_search_results", {
   propertyValue: int("propertyValue").default(0),
   yearBuilt: int("yearBuilt"),
   detailLink: varchar("detailLink", { length: 500 }),
+  fromCache: boolean("fromCache").default(false).notNull(), // 是否来自缓存
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

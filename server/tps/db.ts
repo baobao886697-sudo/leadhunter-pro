@@ -301,6 +301,7 @@ export async function saveTpsSearchResults(
     propertyValue?: number; // 可选
     yearBuilt?: number | null;
     detailLink?: string;    // 可选，从 scraper.ts 传入
+    fromCache?: boolean;    // 可选，标记是否来自缓存
   }>
 ) {
   if (results.length === 0) return;
@@ -324,6 +325,7 @@ export async function saveTpsSearchResults(
     propertyValue: r.propertyValue ?? 0,
     yearBuilt: r.yearBuilt ?? null,
     detailLink: r.detailLink || '',
+    fromCache: r.fromCache ?? false,
   }));
   
   await database.insert(tpsSearchResults).values(values);

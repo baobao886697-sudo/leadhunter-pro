@@ -337,7 +337,7 @@ export const tpsRouter = router({
       const headers = [
         "姓名", "年龄", "城市", "州", "位置", "电话", "电话类型", 
         "运营商", "报告年份", "是否主号", "房产价值", "建造年份",
-        "搜索姓名", "搜索地点", "详情链接"
+        "搜索姓名", "搜索地点", "缓存命中", "详情链接"
       ];
       
       const rows = results.data.map((r: any) => [
@@ -355,6 +355,7 @@ export const tpsRouter = router({
         r.yearBuilt?.toString() || "",
         r.searchName || "",
         r.searchLocation || "",
+        r.fromCache ? "是" : "否",
         r.detailLink ? `https://www.truepeoplesearch.com${r.detailLink}` : "",
       ]);
       

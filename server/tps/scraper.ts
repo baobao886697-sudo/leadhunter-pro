@@ -100,6 +100,7 @@ export interface TpsDetailResult {
   propertyValue?: number;
   yearBuilt?: number;
   detailLink?: string;
+  fromCache?: boolean;  // 标记是否来自缓存
 }
 
 export interface TpsFilters {
@@ -603,7 +604,9 @@ export async function fetchDetailsInBatch(
     const cachedArray = cachedMap.get(link);
     if (cachedArray && cachedArray.length > 0 && cachedArray.some(c => c.phone && c.phone.length >= 10)) {
       cacheHits++;
-      const filteredCached = cachedArray.filter(r => shouldIncludeResult(r, filters));
+      // 标记缓存数据来源
+      const cachedWithFlag = cachedArray.map(r => ({ ...r, fromCache: true }));
+      const filteredCached = cachedWithFlag.filter(r => shouldIncludeResult(r, filters));
       filteredOut += cachedArray.length - filteredCached.length;
       if (filteredCached.length > 0) {
         for (const task of linkTasks) {
@@ -659,7 +662,9 @@ export async function fetchDetailsInBatch(
                         cacheToSave.push({ link, data: detail });
                     }
                 }
-                const filtered = details.filter(r => shouldIncludeResult(r, filters));
+                // 标记新获取的数据不是来自缓存
+                const detailsWithFlag = details.map(d => ({ ...d, fromCache: false }));
+                const filtered = detailsWithFlag.filter(r => shouldIncludeResult(r, filters));
                 filteredOut += details.length - filtered.length;
                 const linkTasks = tasksByLink.get(link) || [task];
                 for (const t of linkTasks) {
