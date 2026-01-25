@@ -427,6 +427,7 @@ export const anywhoRouter = router({
       
       // 标记任务为取消状态
       const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await db.update(anywhoSearchTasks)
         .set({ status: "cancelled" })
         .where(eq(anywhoSearchTasks.taskId, input.taskId));
@@ -700,7 +701,7 @@ async function executeAnywhoSearch(
           phone: r.detail!.phone,
           phoneType: r.detail!.phoneType,
           carrier: r.detail!.carrier,
-          allPhones: r.detail!.phones || [],
+          allPhones: r.detail!.allPhones || [],
           reportYear: r.detail!.reportYear,
           isPrimary: true,  // 第一个号码为主号码
           marriageStatus: r.detail!.marriageStatus,
@@ -734,26 +735,26 @@ async function executeAnywhoSearch(
     }
     
     // 2. 年龄过滤（默认 50-79 岁）
-    const minAge = filters.minAge ?? 50;
-    const maxAge = filters.maxAge ?? 79;
-    if (minAge > 0 || maxAge < 100) {
+    const filterMinAge = filters.minAge ?? 50;
+    const filterMaxAge = filters.maxAge ?? 79;
+    if (filterMinAge > 0 || filterMaxAge < 100) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
         if (r.age === null || r.age === undefined) return true;  // 保留年龄未知的
-        if (r.age < minAge) return false;
-        if (r.age > maxAge) return false;
+        if (r.age < filterMinAge) return false;
+        if (r.age > filterMaxAge) return false;
         return true;
       });
       filteredAge = beforeCount - filteredResults.length;
     }
     
     // 3. 号码年份过滤（默认 2025 年）
-    const minYear = filters.minYear ?? 2025;
-    if (minYear > 2020) {
+    const filterMinYear = filters.minYear ?? 2025;
+    if (filterMinYear > 2020) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
         if (!r.reportYear) return true;  // 保留年份未知的
-        return r.reportYear >= minYear;
+        return r.reportYear >= filterMinYear;
       });
       filteredYear = beforeCount - filteredResults.length;
     }
@@ -806,8 +807,8 @@ async function executeAnywhoSearch(
     await addLog(`════════ 过滤阶段完成 ════════`);
     await addLog(`📊 原始结果: ${initialCount} 条`);
     if (filteredDeceased > 0) await addLog(`   • 排除已故: ${filteredDeceased} 条`);
-    if (filteredAge > 0) await addLog(`   • 年龄过滤 (${minAge}-${maxAge}岁): ${filteredAge} 条`);
-    if (filteredYear > 0) await addLog(`   • 号码年份过滤 (≥${minYear}年): ${filteredYear} 条`);
+    if (filteredAge > 0) await addLog(`   • 年龄过滤 (${filterMinAge}-${filterMaxAge}岁): ${filteredAge} 条`);
+    if (filteredYear > 0) await addLog(`   • 号码年份过滤 (≥${filterMinYear}年): ${filteredYear} 条`);
     if (filteredMarried > 0) await addLog(`   • 排除已婚: ${filteredMarried} 条`);
     if (filteredTMobile > 0) await addLog(`   • 排除 T-Mobile: ${filteredTMobile} 条`);
     if (filteredComcast > 0) await addLog(`   • 排除 Comcast: ${filteredComcast} 条`);
@@ -826,7 +827,7 @@ async function executeAnywhoSearch(
     const creditsUsed = (totalSearchPages * searchCost) + (totalDetailPages * detailCost);
     
     // 扣除积分
-    await deductCredits(userId, creditsUsed, "search", `Anywho 搜索任务 ${taskId.slice(0, 8)}`, taskId);
+    await deductCredits(userId, creditsUsed);
     
     // 完成任务
     await completeAnywhoSearchTask(taskId, {

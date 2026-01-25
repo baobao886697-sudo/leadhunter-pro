@@ -61,6 +61,7 @@ export interface AnywhoDetailResult {
   phone: string;
   phoneType: string;
   carrier: string;
+  allPhones?: string[];
   reportYear: number | null;
   isPrimary: boolean;
   propertyValue: number;
