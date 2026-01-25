@@ -634,9 +634,11 @@ async function ensureTables() {
     `);
     console.log("[Database] Anywho search tasks table ready");
     
-    // 25. Anywho 搜索结果表
+    // 25. Anywho 搜索结果表 - 强制重建以确保结构正确
+    await db.execute(sql`DROP TABLE IF EXISTS anywho_search_results`);
+    console.log("[Database] Dropped old anywho_search_results table");
     await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS anywho_search_results (
+      CREATE TABLE anywho_search_results (
         id INT AUTO_INCREMENT PRIMARY KEY,
         taskId INT NOT NULL,
         subTaskIndex INT NOT NULL DEFAULT 0,
@@ -669,51 +671,7 @@ async function ensureTables() {
     `);
     console.log("[Database] Anywho search results table ready");
     
-    // 修复 anywho_search_results 表结构（删除旧表并重新创建）
-    try {
-      // 检查表是否有旧字段 isPrimaryPhone
-      const [columns] = await db.execute(sql`SHOW COLUMNS FROM anywho_search_results LIKE 'isPrimaryPhone'`);
-      if (Array.isArray(columns) && columns.length > 0) {
-        // 表结构不正确，删除并重新创建
-        console.log("[Database] Anywho search results table has old structure, recreating...");
-        await db.execute(sql`DROP TABLE IF EXISTS anywho_search_results`);
-        await db.execute(sql`
-          CREATE TABLE anywho_search_results (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            taskId INT NOT NULL,
-            subTaskIndex INT NOT NULL DEFAULT 0,
-            name VARCHAR(200),
-            firstName VARCHAR(100),
-            lastName VARCHAR(100),
-            searchName VARCHAR(200),
-            searchLocation VARCHAR(200),
-            age INT,
-            city VARCHAR(100),
-            state VARCHAR(50),
-            location VARCHAR(200),
-            currentAddress VARCHAR(500),
-            phone VARCHAR(50),
-            phoneType VARCHAR(50),
-            carrier VARCHAR(100),
-            allPhones JSON,
-            reportYear INT,
-            isPrimary BOOLEAN DEFAULT TRUE,
-            marriageStatus VARCHAR(50),
-            marriageRecords JSON,
-            familyMembers JSON,
-            emails JSON,
-            isDeceased BOOLEAN DEFAULT FALSE,
-            detailLink VARCHAR(500),
-            fromCache BOOLEAN DEFAULT FALSE NOT NULL,
-            createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-            INDEX idx_taskId (taskId)
-          )
-        `);
-        console.log("[Database] Anywho search results table recreated with correct structure");
-      }
-    } catch (e) {
-      console.log("[Database] Anywho search results table structure check skipped:", e);
-    }
+    // 注意：表已在上面强制重建，无需额外修复逻辑
     
     // 插入默认 Anywho 配置（如果不存在）
     await db.execute(sql`
