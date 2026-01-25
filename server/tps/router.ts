@@ -474,6 +474,7 @@ async function executeTpsSearchUnifiedQueue(
   let totalCacheHits = 0;
   let totalResults = 0;
   let totalFilteredOut = 0;
+  let totalSkippedDeceased = 0;  // 跳过的已故人员数量
   
   // 缓存函数（修复：返回数组以支持多电话号码）
   const getCachedDetails = async (links: string[]) => {
@@ -529,6 +530,7 @@ async function executeTpsSearchUnifiedQueue(
       if (result.success) {
         totalSearchPages += result.stats.searchPageRequests;
         totalFilteredOut += result.stats.filteredOut;
+        totalSkippedDeceased += result.stats.skippedDeceased || 0;
         
         // 保存搜索结果
         subTaskResults.set(subTask.index, {
@@ -590,6 +592,9 @@ async function executeTpsSearchUnifiedQueue(
     addLog(`📊 搜索页请求: ${totalSearchPages} 页`);
     addLog(`📊 待获取详情: ${allDetailTasks.length} 条`);
     addLog(`📊 年龄预过滤: ${totalFilteredOut} 条被排除`);
+    if (totalSkippedDeceased > 0) {
+      addLog(`📊 排除已故: ${totalSkippedDeceased} 条 (Deceased)`);
+    }
     
     // ==================== 搜索阶段完成后的积分检查 ====================
     // 计算已消耗的搜索页费用
@@ -757,6 +762,9 @@ async function executeTpsSearchUnifiedQueue(
     addLog(`   • 有效结果: ${totalResults} 条联系人信息`);
     addLog(`   • 缓存命中: ${totalCacheHits} 条 (免费获取)`);
     addLog(`   • 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
+    if (totalSkippedDeceased > 0) {
+      addLog(`   • 排除已故: ${totalSkippedDeceased} 条 (Deceased)`);
+    }
     
     // 费用明细
     const searchPageCost = totalSearchPages * searchCost;

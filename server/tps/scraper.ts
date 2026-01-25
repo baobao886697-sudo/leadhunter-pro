@@ -84,6 +84,7 @@ export interface TpsSearchResult {
   age?: number;
   location: string;
   detailLink: string;
+  isDeceased?: boolean;  // 是否已故
 }
 
 export interface TpsDetailResult {
@@ -180,6 +181,10 @@ function parseSearchPageWithTotal(html: string): {
 
 /**
  * 解析搜索结果页面，仅提取人员列表
+ * 
+ * 优化说明：
+ * - 检测已故人员标记 (Deceased)
+ * - 使用 DOM + 正则 组合方法提取年龄
  */
 export function parseSearchPage(html: string): TpsSearchResult[] {
   const $ = cheerio.load(html);
@@ -187,6 +192,14 @@ export function parseSearchPage(html: string): TpsSearchResult[] {
   
   $('.card-summary').each((index, card) => {
     const $card = $(card);
+    
+    // 获取卡片文本用于检测已故
+    const cardText = $card.text();
+    
+    // 检查是否已故 - 标记但不跳过，由后续过滤函数处理
+    const isDeceased = cardText.includes('Deceased');
+    
+    // 提取姓名
     let name = '';
     const h4Elem = $card.find('.h4').first();
     if (h4Elem.length && h4Elem.text().trim()) {
@@ -198,15 +211,49 @@ export function parseSearchPage(html: string): TpsSearchResult[] {
       }
     }
     
-    const ageText = $card.find('.content-value').first().text().trim();
-    const ageMatch = ageText.match(/(\d+)/);
-    const age = ageMatch ? parseInt(ageMatch[1], 10) : undefined;
+    // 提取年龄 - 使用 DOM + 正则 组合方法
+    let age: number | undefined = undefined;
     
+    // 方法1: DOM 方法 - 查找 "Age " 后面的 content-value
+    const contentValues = $card.find('.content-value');
+    contentValues.each((j, el) => {
+      const $el = $(el);
+      const prevText = $el.prev().text().trim();
+      if (prevText.includes('Age')) {
+        const ageText = $el.text().trim();
+        const parsed = parseInt(ageText, 10);
+        if (!isNaN(parsed) && parsed > 0 && parsed < 150) {
+          age = parsed;
+          return false; // break
+        }
+      }
+    });
+    
+    // 方法2: 正则方法 - 从文本中提取 "Age XX"
+    if (age === undefined) {
+      const ageMatch = cardText.match(/Age\s+(\d+)/i);
+      if (ageMatch) {
+        age = parseInt(ageMatch[1], 10);
+      }
+    }
+    
+    // 方法3: 回退到原有方法 - 第一个 content-value
+    if (age === undefined) {
+      const ageText = $card.find('.content-value').first().text().trim();
+      const ageMatch = ageText.match(/(\d+)/);
+      if (ageMatch) {
+        age = parseInt(ageMatch[1], 10);
+      }
+    }
+    
+    // 提取位置
     const location = $card.find('.content-value').eq(1).text().trim() || '';
+    
+    // 提取详情链接
     const detailLink = $card.find('a[href*="/find/person/"]').first().attr('href') || '';
     
     if (detailLink) {
-      results.push({ name, age, location, detailLink });
+      results.push({ name, age, location, detailLink, isDeceased });
     }
   });
   
@@ -218,26 +265,64 @@ const DEFAULT_MIN_AGE = 50;
 const DEFAULT_MAX_AGE = 79;
 
 /**
- * 搜索页年龄精确过滤
+ * 搜索页精确过滤
  * 
  * 优化说明：
+ * - 默认排除已故人员 (Deceased) - 固定启用
  * - 使用精确匹配，不留 ±5 岁缓冲，节省 API 积分
- * - 用户未设置年龄范围时，使用默认值 30-70 岁
+ * - 用户未设置年龄范围时，使用默认值 50-79 岁
  * - 没有年龄信息的结果会被保留（无法判断）
+ * 
+ * @returns 返回过滤后的结果和统计信息
  */
-export function preFilterByAge(results: TpsSearchResult[], filters: TpsFilters): TpsSearchResult[] {
+export interface PreFilterResult {
+  filtered: TpsSearchResult[];
+  stats: {
+    skippedDeceased: number;  // 跳过的已故人员数量
+    skippedAgeRange: number;  // 跳过的年龄不符合数量
+  };
+}
+
+export function preFilterByAge(results: TpsSearchResult[], filters: TpsFilters): PreFilterResult {
   // 使用用户设置的年龄范围，如果未设置则使用默认值
   const minAge = filters.minAge ?? DEFAULT_MIN_AGE;
   const maxAge = filters.maxAge ?? DEFAULT_MAX_AGE;
   
-  return results.filter(r => {
+  let skippedDeceased = 0;
+  let skippedAgeRange = 0;
+  
+  const filtered = results.filter(r => {
+    // 排除已故人员 - 固定启用
+    if (r.isDeceased) {
+      skippedDeceased++;
+      return false;
+    }
+    
     // 没有年龄信息的保留（无法判断）
     if (r.age === undefined) return true;
+    
     // 精确匹配年龄范围
-    if (r.age < minAge) return false;
-    if (r.age > maxAge) return false;
+    if (r.age < minAge || r.age > maxAge) {
+      skippedAgeRange++;
+      return false;
+    }
+    
     return true;
   });
+  
+  return {
+    filtered,
+    stats: {
+      skippedDeceased,
+      skippedAgeRange
+    }
+  };
+}
+
+// 保留旧版本的简单过滤函数，以保持向后兼容
+export function preFilterByAgeSimple(results: TpsSearchResult[], filters: TpsFilters): TpsSearchResult[] {
+  const { filtered } = preFilterByAge(results, filters);
+  return filtered;
 }
 
 // ==================== 详情页解析 (保持不变) ====================
@@ -457,6 +542,7 @@ export interface SearchOnlyResult {
   stats: {
     searchPageRequests: number;
     filteredOut: number;
+    skippedDeceased?: number;  // 跳过的已故人员数量
   };
   error?: string;
 }
@@ -498,8 +584,10 @@ export async function searchOnly(
     onProgress?.(`找到 ${totalRecords} 条记录, 共 ${totalPages} 页`);
 
     // 阶段二: 并发获取剩余搜索页
-    const allResults = [...preFilterByAge(firstResults, filters)];
-    filteredOut += firstResults.length - allResults.length;
+    const firstFilterResult = preFilterByAge(firstResults, filters);
+    const allResults = [...firstFilterResult.filtered];
+    filteredOut += firstResults.length - firstFilterResult.filtered.length;
+    let totalSkippedDeceased = firstFilterResult.stats.skippedDeceased;
 
     if (totalPages > 1 && hasNextPage) {
       const remainingUrls: string[] = [];
@@ -523,9 +611,10 @@ export async function searchOnly(
       for (const html of pageHtmls) {
         if (html) {
           const pageResults = parseSearchPage(html);
-          const filtered = preFilterByAge(pageResults, filters);
-          filteredOut += pageResults.length - filtered.length;
-          allResults.push(...filtered);
+          const filterResult = preFilterByAge(pageResults, filters);
+          filteredOut += pageResults.length - filterResult.filtered.length;
+          totalSkippedDeceased += filterResult.stats.skippedDeceased;
+          allResults.push(...filterResult.filtered);
         }
       }
     }
@@ -537,7 +626,7 @@ export async function searchOnly(
     return {
       success: true,
       searchResults: uniqueResults,
-      stats: { searchPageRequests, filteredOut },
+      stats: { searchPageRequests, filteredOut, skippedDeceased: totalSkippedDeceased },
     };
 
   } catch (error: any) {
