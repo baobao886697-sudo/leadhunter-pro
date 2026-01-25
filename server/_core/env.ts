@@ -17,4 +17,7 @@ export const ENV = {
   apifyApiToken: process.env.APIFY_API_TOKEN ?? "",
   scrapeDoApiKey: process.env.SCRAPEDO_API_KEY ?? "",
   trongridApiKey: process.env.TRONGRID_API_KEY ?? "",
+  
+  // 邮件服务
+  resendApiKey: process.env.RESEND_API_KEY ?? "",
 };

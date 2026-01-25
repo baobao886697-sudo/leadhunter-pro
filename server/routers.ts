@@ -18,6 +18,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { tpsRouter } from "./tps/router";
+import { sendPasswordResetEmail } from "./services/email";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { sdk } from "./_core/sdk";
 import { validateAdminCredentials, generateAdminToken, verifyAdminToken, getAdminTokenFromHeader } from "./_core/adminAuth";
@@ -273,8 +274,8 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const token = await createPasswordResetToken(input.email);
         if (token) {
-          // TODO: 发送重置邮件
-          // await sendPasswordResetEmail(input.email, token);
+          // 发送密码重置邮件
+          await sendPasswordResetEmail(input.email, token);
         }
         // 无论是否存在都返回成功，防止邮箱枚举
         return { success: true, message: "如果该邮箱已注册，您将收到重置链接" };
