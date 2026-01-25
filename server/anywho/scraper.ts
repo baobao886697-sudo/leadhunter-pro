@@ -19,14 +19,16 @@ export const ANYWHO_CONFIG = {
   REQUEST_TIMEOUT: 120000, // 请求超时(ms)
 };
 
-// 过滤条件类型
+// 过滤条件类型 - 新的过滤条件
 export interface AnywhoFilters {
-  minAge?: number;
-  maxAge?: number;
-  includeMarriageStatus?: boolean;
-  includePropertyInfo?: boolean;
-  includeFamilyMembers?: boolean;
-  includeEmployment?: boolean;
+  minAge?: number;           // 年龄范围 0-100，默认 50
+  maxAge?: number;           // 年龄范围 0-100，默认 79
+  minYear?: number;          // 号码年份 2020-2030，默认 2025
+  excludeDeceased?: boolean; // 排除已故人员，默认 true
+  excludeMarried?: boolean;  // 排除已婚
+  excludeTMobile?: boolean;  // 排除 T-Mobile 号码
+  excludeComcast?: boolean;  // 排除 Comcast 号码
+  excludeLandline?: boolean; // 排除 Landline 号码
 }
 
 // 搜索结果类型

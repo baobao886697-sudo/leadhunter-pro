@@ -579,8 +579,8 @@ async function ensureTables() {
         maxPages INT NOT NULL DEFAULT 10,
         batchDelay INT NOT NULL DEFAULT 300,
         enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        defaultMinAge INT NOT NULL DEFAULT 18,
-        defaultMaxAge INT NOT NULL DEFAULT 99,
+        defaultMinAge INT NOT NULL DEFAULT 50,
+        defaultMaxAge INT NOT NULL DEFAULT 79,
         updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
       )
     `);
@@ -676,7 +676,7 @@ async function ensureTables() {
     // 插入默认 Anywho 配置
     await db.execute(sql`
       INSERT INTO anywho_config (id, searchCost, detailCost, maxConcurrent, cacheDays, maxPages, batchDelay, enabled, defaultMinAge, defaultMaxAge)
-      VALUES (1, 0.5, 0.5, 20, 180, 10, 300, TRUE, 18, 99)
+      VALUES (1, 0.5, 0.5, 20, 180, 10, 300, TRUE, 50, 79)
     `);
     console.log("[Database] Default Anywho config inserted");
     

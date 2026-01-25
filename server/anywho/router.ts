@@ -43,14 +43,16 @@ import { eq } from "drizzle-orm";
 const TOTAL_CONCURRENCY = ANYWHO_CONFIG.TOTAL_CONCURRENCY;
 const SEARCH_CONCURRENCY = ANYWHO_CONFIG.TASK_CONCURRENCY;
 
-// 输入验证 schema
+// 输入验证 schema - 新的过滤条件
 const anywhoFiltersSchema = z.object({
-  minAge: z.number().min(0).max(120).optional(),
-  maxAge: z.number().min(0).max(120).optional(),
-  excludeDeceased: z.boolean().optional(),        // 排除已故人员
-  includeMarriageStatus: z.boolean().optional(),
-  includeFamilyMembers: z.boolean().optional(),
-  includeEmails: z.boolean().optional(),
+  minAge: z.number().min(0).max(100).optional(),      // 年龄范围 0-100
+  maxAge: z.number().min(0).max(100).optional(),      // 年龄范围 0-100
+  minYear: z.number().min(2020).max(2030).optional(), // 号码年份 2020-2030
+  excludeDeceased: z.boolean().optional(),            // 排除已故人员
+  excludeMarried: z.boolean().optional(),             // 排除已婚
+  excludeTMobile: z.boolean().optional(),             // 排除 T-Mobile 号码
+  excludeComcast: z.boolean().optional(),             // 排除 Comcast 号码
+  excludeLandline: z.boolean().optional(),            // 排除 Landline 号码
 }).optional();
 
 const anywhoSearchInputSchema = z.object({
@@ -69,8 +71,8 @@ export const anywhoRouter = router({
       detailCost: parseFloat(config.detailCost),
       maxPages: config.maxPages,
       enabled: config.enabled,
-      defaultMinAge: config.defaultMinAge || 18,
-      defaultMaxAge: config.defaultMaxAge || 99,
+      defaultMinAge: config.defaultMinAge || 50,
+      defaultMaxAge: config.defaultMaxAge || 79,
     };
   }),
 
@@ -648,22 +650,98 @@ async function executeAnywhoSearch(
     
     // 应用过滤条件
     let filteredResults = allResults;
+    const initialCount = filteredResults.length;
     
-    // 排除已故人员
-    if (filters.excludeDeceased) {
+    // 1. 排除已故人员（默认启用）
+    if (filters.excludeDeceased !== false) {  // 默认排除已故
+      const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => !r.isDeceased);
-      await addLog(`排除已故人员后剩余 ${filteredResults.length} 条`);
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`排除已故人员后剩余 ${filteredResults.length} 条`);
+      }
     }
     
-    // 年龄过滤
-    if (filters.minAge !== undefined || filters.maxAge !== undefined) {
+    // 2. 年龄过滤（默认 50-79 岁）
+    const minAge = filters.minAge ?? 50;
+    const maxAge = filters.maxAge ?? 79;
+    if (minAge > 0 || maxAge < 100) {
+      const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
         if (r.age === null || r.age === undefined) return true;  // 保留年龄未知的
-        if (filters.minAge !== undefined && r.age < filters.minAge) return false;
-        if (filters.maxAge !== undefined && r.age > filters.maxAge) return false;
+        if (r.age < minAge) return false;
+        if (r.age > maxAge) return false;
         return true;
       });
-      await addLog(`年龄过滤后剩余 ${filteredResults.length} 条`);
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`年龄过滤(${minAge}-${maxAge}岁)后剩余 ${filteredResults.length} 条`);
+      }
+    }
+    
+    // 3. 号码年份过滤（默认 2025 年）
+    const minYear = filters.minYear ?? 2025;
+    if (minYear > 2020) {
+      const beforeCount = filteredResults.length;
+      filteredResults = filteredResults.filter(r => {
+        if (!r.reportYear) return true;  // 保留年份未知的
+        return r.reportYear >= minYear;
+      });
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`号码年份过滤(≥${minYear}年)后剩余 ${filteredResults.length} 条`);
+      }
+    }
+    
+    // 4. 排除已婚
+    if (filters.excludeMarried) {
+      const beforeCount = filteredResults.length;
+      filteredResults = filteredResults.filter(r => {
+        if (!r.marriageStatus) return true;  // 保留婚姻状态未知的
+        return r.marriageStatus.toLowerCase() !== 'married';
+      });
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`排除已婚后剩余 ${filteredResults.length} 条`);
+      }
+    }
+    
+    // 5. 排除 T-Mobile 号码
+    if (filters.excludeTMobile) {
+      const beforeCount = filteredResults.length;
+      filteredResults = filteredResults.filter(r => {
+        if (!r.carrier) return true;  // 保留运营商未知的
+        return !r.carrier.toLowerCase().includes('t-mobile') && !r.carrier.toLowerCase().includes('tmobile');
+      });
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`排除 T-Mobile 后剩余 ${filteredResults.length} 条`);
+      }
+    }
+    
+    // 6. 排除 Comcast 号码
+    if (filters.excludeComcast) {
+      const beforeCount = filteredResults.length;
+      filteredResults = filteredResults.filter(r => {
+        if (!r.carrier) return true;  // 保留运营商未知的
+        const carrierLower = r.carrier.toLowerCase();
+        return !carrierLower.includes('comcast') && !carrierLower.includes('spectrum') && !carrierLower.includes('xfinity');
+      });
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`排除 Comcast 后剩余 ${filteredResults.length} 条`);
+      }
+    }
+    
+    // 7. 排除 Landline 号码
+    if (filters.excludeLandline) {
+      const beforeCount = filteredResults.length;
+      filteredResults = filteredResults.filter(r => {
+        if (!r.phoneType) return true;  // 保留类型未知的
+        return r.phoneType.toLowerCase() !== 'landline';
+      });
+      if (beforeCount !== filteredResults.length) {
+        await addLog(`排除 Landline 后剩余 ${filteredResults.length} 条`);
+      }
+    }
+    
+    // 记录总过滤结果
+    if (initialCount !== filteredResults.length) {
+      await addLog(`过滤完成：${initialCount} → ${filteredResults.length} 条`);
     }
     
     totalResults = filteredResults.length;

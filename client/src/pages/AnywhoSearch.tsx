@@ -1,6 +1,15 @@
 /**
  * Anywho 搜索页面
  * 布局参照 TPS，独立模块方便后期管理
+ * 
+ * 过滤条件：
+ * - 默认年龄：50-79岁（可调节 0-100）
+ * - 默认排除已故：是
+ * - 默认号码年份：2025-2026（可调节 2020-2030）
+ * - 排除已婚
+ * - 排除 T-Mobile 号码
+ * - 排除 Comcast 号码
+ * - 排除 Landline 号码
  */
 
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -36,6 +45,9 @@ import {
   Mail,
   Home,
   Shield,
+  Calendar,
+  UserX,
+  Ban,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -50,15 +62,20 @@ export default function AnywhoSearch() {
   const [namesInput, setNamesInput] = useState("");
   const [locationsInput, setLocationsInput] = useState("");
   
-  // 过滤条件
+  // 过滤条件 - 新的默认值
   const [filters, setFilters] = useState({
-    minAge: 18,
-    maxAge: 99,
-    includeMarriageStatus: true,  // Anywho 特色：婚姻状况
-    includePropertyInfo: true,    // 房产信息
-    includeFamilyMembers: true,   // 家庭成员
-    includeEmployment: true,      // 就业历史
+    minAge: 50,           // 默认最小年龄 50
+    maxAge: 79,           // 默认最大年龄 79
+    minYear: 2025,        // 默认号码最早年份 2025
+    excludeDeceased: true,     // 默认排除已故
+    excludeMarried: false,     // 排除已婚（替换原来的婚姻查询）
+    excludeTMobile: false,     // 排除 T-Mobile（替换原来的房产信息）
+    excludeComcast: false,     // 排除 Comcast（替换原来的家庭成员）
+    excludeLandline: false,    // 排除 Landline（替换原来的就业历史）
   });
+  
+  // 从后端配置获取默认年龄范围
+  const [configInitialized, setConfigInitialized] = useState(false);
   
   // 高级选项
   const [showFilters, setShowFilters] = useState(false);
@@ -75,6 +92,18 @@ export default function AnywhoSearch() {
       // 配置不存在时静默处理
     }
   });
+  
+  // 从后端配置初始化默认年龄范围
+  useEffect(() => {
+    if (anywhoConfig && !configInitialized) {
+      setFilters(prev => ({
+        ...prev,
+        minAge: anywhoConfig.defaultMinAge || 50,
+        maxAge: anywhoConfig.defaultMaxAge || 79,
+      }));
+      setConfigInitialized(true);
+    }
+  }, [anywhoConfig, configInitialized]);
   
   // 计算预估消耗
   const names = namesInput.trim().split("\n").filter(n => n.trim());
@@ -296,74 +325,112 @@ export default function AnywhoSearch() {
                       <Slider
                         value={[filters.minAge, filters.maxAge]}
                         onValueChange={([min, max]) => setFilters(f => ({ ...f, minAge: min, maxAge: max }))}
-                        min={18}
-                        max={99}
+                        min={0}
+                        max={100}
                         step={1}
                       />
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      过滤掉不在此年龄范围内的记录（默认 50-79 岁）
+                    </p>
                   </div>
                   
-                  {/* Anywho 特色选项 */}
+                  {/* 电话年份 */}
+                  <div>
+                    <Label>电话最早年份: {filters.minYear}</Label>
+                    <Slider
+                      value={[filters.minYear]}
+                      onValueChange={([v]) => setFilters(f => ({ ...f, minYear: v }))}
+                      min={2020}
+                      max={2030}
+                      step={1}
+                      className="mt-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      过滤掉早于此年份的电话号码（默认 2025 年）
+                    </p>
+                  </div>
+                  
+                  {/* 排除已故 */}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20">
+                    <div className="flex items-center gap-3">
+                      <UserX className="h-5 w-5 text-red-400" />
+                      <div>
+                        <Label className="text-red-300">排除已故人员</Label>
+                        <p className="text-xs text-muted-foreground">过滤掉已故或死亡记录的人员</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={filters.excludeDeceased}
+                      onCheckedChange={(v) => setFilters(f => ({ ...f, excludeDeceased: v }))}
+                    />
+                  </div>
+                  
+                  {/* 排除选项 */}
                   <div className="border-t border-slate-700 pt-4">
                     <p className="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
-                      <Star className="h-4 w-4" />
-                      Anywho 特色数据
+                      <Ban className="h-4 w-4" />
+                      排除过滤条件
                     </p>
                     
                     <div className="space-y-4">
+                      {/* 排除已婚（替换原来的婚姻查询） */}
                       <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20">
                         <div className="flex items-center gap-3">
                           <Heart className="h-5 w-5 text-pink-400" />
                           <div>
-                            <Label className="text-pink-300">婚姻状况查询</Label>
-                            <p className="text-xs text-muted-foreground">获取目标人员的婚姻状态信息</p>
+                            <Label className="text-pink-300">排除已婚</Label>
+                            <p className="text-xs text-muted-foreground">过滤掉婚姻状态为已婚的人员</p>
                           </div>
                         </div>
                         <Switch
-                          checked={filters.includeMarriageStatus}
-                          onCheckedChange={(v) => setFilters(f => ({ ...f, includeMarriageStatus: v }))}
+                          checked={filters.excludeMarried}
+                          onCheckedChange={(v) => setFilters(f => ({ ...f, excludeMarried: v }))}
                         />
                       </div>
                       
+                      {/* 排除 T-Mobile（替换原来的房产信息） */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <Home className="h-5 w-5 text-amber-400" />
+                          <Phone className="h-5 w-5 text-amber-400" />
                           <div>
-                            <Label>房产信息</Label>
-                            <p className="text-xs text-muted-foreground">获取房产所有权和价值信息</p>
+                            <Label>排除 T-Mobile 号码</Label>
+                            <p className="text-xs text-muted-foreground">过滤掉 T-Mobile 运营商的号码</p>
                           </div>
                         </div>
                         <Switch
-                          checked={filters.includePropertyInfo}
-                          onCheckedChange={(v) => setFilters(f => ({ ...f, includePropertyInfo: v }))}
+                          checked={filters.excludeTMobile}
+                          onCheckedChange={(v) => setFilters(f => ({ ...f, excludeTMobile: v }))}
                         />
                       </div>
                       
+                      {/* 排除 Comcast（替换原来的家庭成员） */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <Users className="h-5 w-5 text-blue-400" />
+                          <Phone className="h-5 w-5 text-blue-400" />
                           <div>
-                            <Label>家庭成员</Label>
-                            <p className="text-xs text-muted-foreground">获取家庭成员和亲属关系</p>
+                            <Label>排除 Comcast 号码</Label>
+                            <p className="text-xs text-muted-foreground">过滤掉 Comcast/Spectrum 运营商的号码</p>
                           </div>
                         </div>
                         <Switch
-                          checked={filters.includeFamilyMembers}
-                          onCheckedChange={(v) => setFilters(f => ({ ...f, includeFamilyMembers: v }))}
+                          checked={filters.excludeComcast}
+                          onCheckedChange={(v) => setFilters(f => ({ ...f, excludeComcast: v }))}
                         />
                       </div>
                       
+                      {/* 排除 Landline（替换原来的就业历史） */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <Building className="h-5 w-5 text-green-400" />
+                          <Phone className="h-5 w-5 text-green-400" />
                           <div>
-                            <Label>就业历史</Label>
-                            <p className="text-xs text-muted-foreground">获取工作经历和职业背景</p>
+                            <Label>排除 Landline 号码</Label>
+                            <p className="text-xs text-muted-foreground">过滤掉固定电话（Landline）类型的号码</p>
                           </div>
                         </div>
                         <Switch
-                          checked={filters.includeEmployment}
-                          onCheckedChange={(v) => setFilters(f => ({ ...f, includeEmployment: v }))}
+                          checked={filters.excludeLandline}
+                          onCheckedChange={(v) => setFilters(f => ({ ...f, excludeLandline: v }))}
                         />
                       </div>
                     </div>
@@ -416,50 +483,72 @@ export default function AnywhoSearch() {
                   <span className="text-muted-foreground">预估详情数</span>
                   <span>每任务 ~{avgDetailsPerSearch} 条</span>
                 </div>
-                
-                <div className="border-t border-slate-700 pt-3 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">搜索页费用</span>
-                    <span className="text-amber-400">
-                      {estimatedSearches} × {maxPages} × {searchCost} = {estimatedSearchPageCost.toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">详情页费用</span>
-                    <span className="text-amber-400">
-                      {estimatedSearches} × {avgDetailsPerSearch} × {detailCost} = {estimatedDetailPageCost.toFixed(1)}
-                    </span>
-                  </div>
-                </div>
-                
                 <div className="border-t border-slate-700 pt-3">
                   <div className="flex justify-between">
-                    <span className="font-medium">预估总消耗</span>
+                    <span className="text-muted-foreground">预估消耗</span>
                     <span className="text-xl font-bold text-purple-400">
                       ~{estimatedCost.toFixed(1)} 积分
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    实际费用取决于搜索结果数量，可能低于预估
-                  </p>
                 </div>
-                
-                {profile && estimatedCost > (profile.credits || 0) && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-sm text-red-400 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      积分不足，请先充值
-                    </p>
-                  </div>
-                )}
+              </CardContent>
+            </Card>
+
+            {/* 当前过滤条件摘要 */}
+            <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-slate-400" />
+                  当前过滤条件
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">年龄范围</span>
+                  <span>{filters.minAge} - {filters.maxAge} 岁</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">号码年份</span>
+                  <span>≥ {filters.minYear} 年</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">排除已故</span>
+                  <span className={filters.excludeDeceased ? "text-green-400" : "text-gray-500"}>
+                    {filters.excludeDeceased ? "是" : "否"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">排除已婚</span>
+                  <span className={filters.excludeMarried ? "text-green-400" : "text-gray-500"}>
+                    {filters.excludeMarried ? "是" : "否"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">排除 T-Mobile</span>
+                  <span className={filters.excludeTMobile ? "text-green-400" : "text-gray-500"}>
+                    {filters.excludeTMobile ? "是" : "否"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">排除 Comcast</span>
+                  <span className={filters.excludeComcast ? "text-green-400" : "text-gray-500"}>
+                    {filters.excludeComcast ? "是" : "否"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">排除 Landline</span>
+                  <span className={filters.excludeLandline ? "text-green-400" : "text-gray-500"}>
+                    {filters.excludeLandline ? "是" : "否"}
+                  </span>
+                </div>
               </CardContent>
             </Card>
 
             {/* 提交按钮 */}
             <Button
+              className="w-full h-12 text-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
               onClick={handleSearch}
               disabled={searchMutation.isPending || names.length === 0}
-              className="w-full h-12 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
             >
               {searchMutation.isPending ? (
                 <>
@@ -474,86 +563,18 @@ export default function AnywhoSearch() {
               )}
             </Button>
 
-            {/* Anywho 数据优势 */}
-            <Card className="bg-gradient-to-br from-pink-900/30 to-purple-900/30 border-pink-700/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-pink-500" />
-                  Anywho 独家优势
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center flex-shrink-0">
-                    <Heart className="h-4 w-4 text-pink-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-pink-300">婚姻状况查询</p>
-                    <p className="text-xs text-muted-foreground">独家提供婚姻状态信息</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <Shield className="h-4 w-4 text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-amber-300">AT&T 官方数据</p>
-                    <p className="text-xs text-muted-foreground">120亿条记录，30年行业经验</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-purple-300">95%+ 准确率</p>
-                    <p className="text-xs text-muted-foreground">多源数据交叉验证</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 快速入门 */}
-            <Card className="bg-slate-900/50 border-slate-700">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Info className="h-5 w-5 text-blue-500" />
-                  快速入门
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold">1</div>
-                  <p className="text-sm">选择搜索模式（仅姓名 / 姓名+地点）</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold">2</div>
-                  <p className="text-sm">输入姓名列表，每行一个姓名</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold">3</div>
-                  <p className="text-sm">点击"开始搜索"，等待结果</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold">4</div>
-                  <p className="text-sm">导出 CSV 文档，包含婚姻状况等信息</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 费用说明 */}
-            <Card className="bg-slate-900/50 border-slate-700">
+            {/* Anywho 特色提示 */}
+            <Card className="bg-gradient-to-br from-pink-900/20 to-purple-900/20 border-pink-700/30">
               <CardContent className="pt-4">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-yellow-500" />
-                  费用说明
-                </h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• 每页搜索消耗 {searchCost} 积分</li>
-                  <li>• 每条详情消耗 {detailCost} 积分</li>
-                  <li>• 缓存命中的数据免费使用</li>
-                  <li>• 搜索结果缓存 180 天</li>
-                </ul>
+                <div className="flex items-start gap-3">
+                  <Heart className="h-5 w-5 text-pink-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-pink-300">Anywho 特色功能</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      支持查询婚姻状况、运营商信息，数据来源于 AT&T 官方数据库
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

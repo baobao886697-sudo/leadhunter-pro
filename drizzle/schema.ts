@@ -414,8 +414,8 @@ export const anywhoConfig = mysqlTable("anywho_config", {
   maxPages: int("maxPages").default(10).notNull(), // 最大搜索页数
   batchDelay: int("batchDelay").default(300).notNull(), // 批次间延迟(ms)
   enabled: boolean("enabled").default(true).notNull(), // 是否启用
-  defaultMinAge: int("defaultMinAge").default(18).notNull(), // 默认最小年龄
-  defaultMaxAge: int("defaultMaxAge").default(99).notNull(), // 默认最大年龄
+  defaultMinAge: int("defaultMinAge").default(50).notNull(), // 默认最小年龄
+  defaultMaxAge: int("defaultMaxAge").default(79).notNull(), // 默认最大年龄
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
