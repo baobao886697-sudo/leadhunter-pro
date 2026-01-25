@@ -566,21 +566,21 @@ async function ensureTables() {
     
     // ========== Anywho 相关表 ==========
     
-    // 22. Anywho 配置表
+    // 22. Anywho 配置表 - 先删除旧表再创建新表以确保字段一致
+    await db.execute(sql`DROP TABLE IF EXISTS anywho_config`);
     await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS anywho_config (
+      CREATE TABLE anywho_config (
         id INT AUTO_INCREMENT PRIMARY KEY,
         searchCost DECIMAL(10,2) NOT NULL DEFAULT 0.5,
         detailCost DECIMAL(10,2) NOT NULL DEFAULT 0.5,
         maxConcurrent INT NOT NULL DEFAULT 20,
-        cacheDays INT NOT NULL DEFAULT 30,
-        scrapeDoToken VARCHAR(255),
-        minAge INT DEFAULT 18,
-        maxAge INT DEFAULT 99,
-        excludeDeceased BOOLEAN DEFAULT TRUE,
-        includeMarriageStatus BOOLEAN DEFAULT TRUE,
-        enabled BOOLEAN DEFAULT TRUE,
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        cacheDays INT NOT NULL DEFAULT 180,
+        scrapeDoToken VARCHAR(100),
+        maxPages INT NOT NULL DEFAULT 10,
+        batchDelay INT NOT NULL DEFAULT 300,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        defaultMinAge INT NOT NULL DEFAULT 18,
+        defaultMaxAge INT NOT NULL DEFAULT 99,
         updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
       )
     `);
@@ -673,10 +673,10 @@ async function ensureTables() {
     
     // 注意：表已在上面强制重建，无需额外修复逻辑
     
-    // 插入默认 Anywho 配置（如果不存在）
+    // 插入默认 Anywho 配置
     await db.execute(sql`
-      INSERT IGNORE INTO anywho_config (id, searchCost, detailCost, maxConcurrent, cacheDays, minAge, maxAge, excludeDeceased, includeMarriageStatus, enabled)
-      VALUES (1, 0.5, 0.5, 20, 30, 18, 99, TRUE, TRUE, TRUE)
+      INSERT INTO anywho_config (id, searchCost, detailCost, maxConcurrent, cacheDays, maxPages, batchDelay, enabled, defaultMinAge, defaultMaxAge)
+      VALUES (1, 0.5, 0.5, 20, 180, 10, 300, TRUE, 18, 99)
     `);
     console.log("[Database] Default Anywho config inserted");
     
