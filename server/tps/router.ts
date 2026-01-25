@@ -652,6 +652,13 @@ async function executeTpsSearchUnifiedQueue(
         }
       }
       
+      // 调试：检查哪些子任务没有收到结果
+      for (const subTask of subTasks) {
+        if (!rawResultsBySubTask.has(subTask.index)) {
+          addLog(`⚠️ [调试] 子任务 ${subTask.index + 1} (${subTask.name} @ ${subTask.location || '无地点'}) 未收到任何结果`);
+        }
+      }
+      
       for (const { task, details } of detailResult.results) {
         if (!resultsBySubTask.has(task.subTaskIndex)) {
           resultsBySubTask.set(task.subTaskIndex, []);
