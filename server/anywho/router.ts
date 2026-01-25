@@ -3,7 +3,11 @@
  * 独立模块，方便后期管理和修改
  * 
  * 提供 Anywho 搜索功能的 API 端点
- * 特色功能：婚姻状况查询、运营商信息、已故排除
+ * 
+ * 重要更新 (2026-01-26):
+ * - 直接从搜索结果页提取完整数据，避免访问详情页被 CAPTCHA 阻止
+ * - 大幅减少 API 请求数量和费用（只需搜索页请求）
+ * - 保留过滤功能：年龄、已故、已婚、运营商等
  */
 
 import { z } from "zod";
@@ -11,7 +15,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { 
   searchOnly,
-  fetchDetailsInBatch,
+  convertSearchResultToDetail,
   AnywhoFilters, 
   AnywhoDetailResult,
   AnywhoSearchResult,
@@ -79,13 +83,12 @@ export const anywhoRouter = router({
     };
   }),
 
-  // 预估搜索消耗
+  // 预估搜索消耗 - 更新：不再需要详情页费用
   estimateCost: protectedProcedure
     .input(anywhoSearchInputSchema)
     .query(async ({ input }) => {
       const config = await getAnywhoConfig();
       const searchCost = parseFloat(config.searchCost);
-      const detailCost = parseFloat(config.detailCost);
       const maxPages = config.maxPages || 10;
       
       // 计算子任务数
@@ -97,31 +100,25 @@ export const anywhoRouter = router({
         subTaskCount = input.names.length * locations.length;
       }
       
-      // 预估参数
-      const avgDetailsPerTask = 30;
-      
-      // 搜索页费用
+      // 搜索页费用（不再需要详情页费用）
       const maxSearchPages = subTaskCount * maxPages;
       const maxSearchCost = maxSearchPages * searchCost;
       
-      // 详情页费用
-      const estimatedDetails = subTaskCount * avgDetailsPerTask;
-      const estimatedDetailCost = estimatedDetails * detailCost;
-      
-      // 总费用
-      const estimatedCost = maxSearchCost + estimatedDetailCost;
+      // 总费用 = 只有搜索页费用
+      const estimatedCost = maxSearchCost;
       
       return {
         subTaskCount,
         maxPages,
         maxSearchPages,
         maxSearchCost: Math.ceil(maxSearchCost * 10) / 10,
-        avgDetailsPerTask,
-        estimatedDetails,
-        estimatedDetailCost: Math.ceil(estimatedDetailCost * 10) / 10,
+        avgDetailsPerTask: 0,  // 不再需要详情页
+        estimatedDetails: 0,
+        estimatedDetailCost: 0,
         estimatedCost: Math.ceil(estimatedCost * 10) / 10,
         searchCost,
-        detailCost,
+        detailCost: 0,  // 不再需要详情页费用
+        note: "直接从搜索结果页提取数据，无需访问详情页",
       };
     }),
 
@@ -150,7 +147,6 @@ export const anywhoRouter = router({
       // 检查用户积分
       const userCredits = await getUserCredits(userId);
       const searchCost = parseFloat(config.searchCost);
-      const detailCost = parseFloat(config.detailCost);
       const maxPages = config.maxPages || 10;
       
       // 计算子任务
@@ -166,7 +162,7 @@ export const anywhoRouter = router({
         }
       }
       
-      // 预估最小消耗
+      // 预估最小消耗（只需搜索页费用）
       const minEstimatedCost = subTasks.length * searchCost;
       if (userCredits < minEstimatedCost) {
         throw new TRPCError({
@@ -310,7 +306,7 @@ export const anywhoRouter = router({
         page++;
       }
       
-      // 完善详细的 CSV 表头（已删除：婚姻记录、所有电话、家庭成员、搜索地点）
+      // CSV 表头
       const headers = [
         "序号",
         "姓名",
@@ -439,8 +435,8 @@ export const anywhoRouter = router({
 });
 
 /**
- * 异步执行搜索任务
- * 参考 TPS 日志逻辑，提供详细的执行过程日志
+ * 异步执行搜索任务 - 新版本
+ * 直接从搜索结果页提取数据，不访问详情页
  */
 async function executeAnywhoSearch(
   taskId: string,
@@ -452,12 +448,9 @@ async function executeAnywhoSearch(
 ) {
   const token = config.scrapeDoToken;
   const searchCost = parseFloat(config.searchCost);
-  const detailCost = parseFloat(config.detailCost);
   const maxPages = config.maxPages || 10;
   
   let totalSearchPages = 0;
-  let totalDetailPages = 0;
-  let totalCacheHits = 0;
   let totalResults = 0;
   let completedSubTasks = 0;
   let totalFilteredOut = 0;  // 过滤掉的记录数
@@ -478,7 +471,7 @@ async function executeAnywhoSearch(
   try {
     // ==================== 启动日志 ====================
     await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🌸 开始 Anywho 搜索`);
+    await addLog(`🌸 开始 Anywho 搜索 (优化版 - 直接提取搜索结果)`);
     await addLog(`═══════════════════════════════════════════════════`);
     
     // 显示搜索配置
@@ -506,26 +499,28 @@ async function executeAnywhoSearch(
     if (filters.excludeComcast) await addLog(`   • 排除 Comcast: 是`);
     if (filters.excludeLandline) await addLog(`   • 排除 Landline: 是`);
     
-    // 显示预估费用
+    // 显示预估费用（只需搜索页费用）
     const estimatedSearchPages = subTasks.length * maxPages;
-    const estimatedDetailPages = subTasks.length * 30;  // 预估每任务 30 条详情
     const estimatedSearchCost = estimatedSearchPages * searchCost;
-    const estimatedDetailCost = estimatedDetailPages * detailCost;
-    const estimatedTotalCost = estimatedSearchCost + estimatedDetailCost;
     
     await addLog(`💰 费用预估 (最大值):`);
     await addLog(`   • 搜索页费用: 最多 ${estimatedSearchPages} 页 × ${searchCost} = ${estimatedSearchCost.toFixed(1)} 积分`);
-    await addLog(`   • 详情页费用: 预估 ~${estimatedDetailPages} 页 × ${detailCost} = ${estimatedDetailCost.toFixed(1)} 积分`);
-    await addLog(`   • 预估总费用: ~${estimatedTotalCost.toFixed(1)} 积分 (实际费用取决于搜索结果)`);
-    await addLog(`   💡 提示: 缓存命中的详情不收费，可节省大量积分`);
+    await addLog(`   • 详情页费用: 0 积分 (直接从搜索结果提取数据)`);
+    await addLog(`   • 预估总费用: ~${estimatedSearchCost.toFixed(1)} 积分`);
+    await addLog(`   💡 优化: 无需访问详情页，大幅节省费用！`);
     
     await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务并发 / 详情 ${TOTAL_CONCURRENCY} 并发`);
+    await addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务并发`);
     
-    // ==================== 阶段一：并发搜索 ====================
-    await addLog(`📋 阶段一：并发搜索 (${SEARCH_CONCURRENCY} 任务并发)...`);
+    // ==================== 搜索并提取数据 ====================
+    await addLog(`📋 开始搜索并提取数据 (${SEARCH_CONCURRENCY} 任务并发)...`);
     
-    const allDetailTasks: DetailTask[] = [];
+    const allSearchResults: Array<{
+      searchResult: AnywhoSearchResult;
+      searchName: string;
+      searchLocation?: string;
+      subTaskIndex: number;
+    }> = [];
     
     // 分批执行搜索
     for (let i = 0; i < subTasks.length; i += SEARCH_CONCURRENCY) {
@@ -551,10 +546,10 @@ async function executeAnywhoSearch(
           
           totalSearchPages += pagesSearched;
           
-          // 收集详情任务
+          // 收集搜索结果
           for (const result of results) {
-            allDetailTasks.push({
-              detailLink: result.detailLink,
+            allSearchResults.push({
+              searchResult: result,
               searchName: subTask.name,
               searchLocation: subTask.location,
               subTaskIndex,
@@ -574,7 +569,7 @@ async function executeAnywhoSearch(
       await Promise.all(searchPromises);
       
       completedSubTasks = Math.min(i + batch.length, subTasks.length);
-      const progress = Math.floor((completedSubTasks / subTasks.length) * 50);
+      const progress = Math.floor((completedSubTasks / subTasks.length) * 80);  // 搜索占 80% 进度
       
       await updateAnywhoSearchTaskProgress(taskId, {
         progress,
@@ -586,139 +581,71 @@ async function executeAnywhoSearch(
     // 搜索阶段完成日志
     await addLog(`════════ 搜索阶段完成 ════════`);
     await addLog(`📊 搜索页请求: ${totalSearchPages} 页`);
-    await addLog(`📊 待获取详情: ${allDetailTasks.length} 条`);
+    await addLog(`📊 原始结果: ${allSearchResults.length} 条`);
     
-    // 阶段2：检查缓存
-    await addLog(`📋 阶段二：检查缓存...`);
-    const detailLinks = allDetailTasks.map(t => t.detailLink);
-    const cachedDetails = await getCachedAnywhoDetails(detailLinks);
-    const cachedMap = new Map(cachedDetails.map(c => [c.detailLink, c.data]));
+    // ==================== 转换并应用过滤 ====================
+    await addLog(`📋 转换数据并应用过滤条件...`);
     
-    totalCacheHits = cachedDetails.length;
-    await addLog(`💾 缓存命中: ${totalCacheHits} 条 (免费获取)`);
+    const allResults: Array<{
+      subTaskIndex: number;
+      name: string;
+      firstName: string;
+      lastName: string;
+      searchName: string;
+      searchLocation?: string;
+      age: number | null;
+      city: string;
+      state: string;
+      location: string;
+      currentAddress?: string;
+      phone: string;
+      phoneType: string;
+      carrier: string;
+      allPhones: string[];
+      reportYear: number | null;
+      isPrimary: boolean;
+      marriageStatus: string | null;
+      marriageRecords: string[];
+      familyMembers: string[];
+      emails: string[];
+      isDeceased: boolean;
+      detailLink: string;
+      fromCache: boolean;
+    }> = [];
     
-    // 分离缓存命中和需要获取的任务
-    const tasksToFetch: DetailTask[] = [];
-    const cachedResults: Array<{ task: DetailTask; detail: any }> = [];
-    
-    for (const task of allDetailTasks) {
-      const cached = cachedMap.get(task.detailLink);
-      if (cached) {
-        cachedResults.push({ task, detail: cached });
-      } else {
-        tasksToFetch.push(task);
-      }
+    // 转换搜索结果为详情格式
+    for (const item of allSearchResults) {
+      const detail = convertSearchResultToDetail(item.searchResult);
+      
+      allResults.push({
+        subTaskIndex: item.subTaskIndex,
+        name: detail.name,
+        firstName: detail.firstName,
+        lastName: detail.lastName,
+        searchName: item.searchName,
+        searchLocation: item.searchLocation,
+        age: detail.age,
+        city: detail.city,
+        state: detail.state,
+        location: detail.location,
+        currentAddress: detail.currentAddress,
+        phone: detail.phone,
+        phoneType: detail.phoneType,
+        carrier: detail.carrier,
+        allPhones: detail.allPhones || [],
+        reportYear: detail.reportYear,
+        isPrimary: true,
+        marriageStatus: detail.marriageStatus,
+        marriageRecords: detail.marriageRecords || [],
+        familyMembers: detail.familyMembers || [],
+        emails: detail.emails || [],
+        isDeceased: detail.isDeceased || false,
+        detailLink: item.searchResult.detailLink,
+        fromCache: false,
+      });
     }
     
-    // 阶段3：获取详情
-    let fetchedResults: Array<{ task: DetailTask; detail: AnywhoDetailResult | null }> = [];
-    
-    if (tasksToFetch.length > 0) {
-      await addLog(`📋 阶段三：获取详情 (${TOTAL_CONCURRENCY} 并发)...`);
-      await addLog(`🔗 需要获取: ${tasksToFetch.length} 条详情`);
-      
-      const { results, requestCount } = await fetchDetailsInBatch(
-        tasksToFetch,
-        token,
-        filters,
-        undefined,
-        async (completed, total) => {
-          // 检查是否取消
-          if (await checkCancelled()) {
-            throw new Error("任务已被用户取消");
-          }
-          const progress = 50 + Math.floor((completed / total) * 45);
-          await updateAnywhoSearchTaskProgress(taskId, { progress });
-        }
-      );
-      
-      fetchedResults = results;
-      totalDetailPages = requestCount;
-      
-      // 保存新获取的缓存
-      const newCacheItems = fetchedResults
-        .filter(r => r.detail !== null)
-        .map(r => ({
-          detailLink: r.task.detailLink,
-          data: r.detail,
-        }));
-      
-      if (newCacheItems.length > 0) {
-        await saveAnywhoDetailCache(newCacheItems);
-        await addLog(`💾 已保存 ${newCacheItems.length} 条新缓存`);
-      }
-      
-      // 详情阶段完成日志
-      await addLog(`════════ 详情阶段完成 ════════`);
-      await addLog(`📊 详情页请求: ${totalDetailPages} 页`);
-      await addLog(`📊 缓存命中: ${totalCacheHits} 条`);
-      await addLog(`📊 新获取: ${fetchedResults.filter(r => r.detail !== null).length} 条`);
-    } else {
-      await addLog(`════════ 详情阶段完成 ════════`);
-      await addLog(`📊 全部缓存命中: ${totalCacheHits} 条 (无需请求)`);
-    }
-    
-    // 合并结果并应用过滤
-    const allResults = [
-      ...cachedResults.map(r => ({
-        subTaskIndex: r.task.subTaskIndex,
-        name: r.detail.name,
-        firstName: r.detail.firstName,
-        lastName: r.detail.lastName,
-        searchName: r.task.searchName,
-        searchLocation: r.task.searchLocation,
-        age: r.detail.age,
-        city: r.detail.city,
-        state: r.detail.state,
-        location: r.detail.location,
-        currentAddress: r.detail.currentAddress,
-        phone: r.detail.phone,
-        phoneType: r.detail.phoneType,
-        carrier: r.detail.carrier,
-        allPhones: r.detail.allPhones || [],
-        reportYear: r.detail.reportYear,
-        isPrimary: true,  // 第一个号码为主号码
-        marriageStatus: r.detail.marriageStatus,
-        marriageRecords: r.detail.marriageRecords || [],
-        familyMembers: r.detail.familyMembers || [],
-        emails: r.detail.emails || [],
-        isDeceased: r.detail.isDeceased || false,
-        detailLink: r.task.detailLink,
-        fromCache: true,
-      })),
-      ...fetchedResults
-        .filter(r => r.detail !== null)
-        .map(r => ({
-          subTaskIndex: r.task.subTaskIndex,
-          name: r.detail!.name,
-          firstName: r.detail!.firstName,
-          lastName: r.detail!.lastName,
-          searchName: r.task.searchName,
-          searchLocation: r.task.searchLocation,
-          age: r.detail!.age,
-          city: r.detail!.city,
-          state: r.detail!.state,
-          location: r.detail!.location,
-          currentAddress: r.detail!.currentAddress,
-          phone: r.detail!.phone,
-          phoneType: r.detail!.phoneType,
-          carrier: r.detail!.carrier,
-          allPhones: r.detail!.allPhones || [],
-          reportYear: r.detail!.reportYear,
-          isPrimary: true,  // 第一个号码为主号码
-          marriageStatus: r.detail!.marriageStatus,
-          marriageRecords: r.detail!.marriageRecords || [],
-          familyMembers: r.detail!.familyMembers || [],
-          emails: r.detail!.emails || [],
-          isDeceased: r.detail!.isDeceased || false,
-          detailLink: r.task.detailLink,
-          fromCache: false,
-        })),
-    ];
-    
-    // ==================== 阶段四：应用过滤条件 ====================
-    await addLog(`📋 阶段四：应用过滤条件...`);
-    
+    // 应用过滤条件
     let filteredResults = allResults;
     const initialCount = filteredResults.length;
     let filteredDeceased = 0;
@@ -730,7 +657,7 @@ async function executeAnywhoSearch(
     let filteredLandline = 0;
     
     // 1. 排除已故人员（默认启用）
-    if (filters.excludeDeceased !== false) {  // 默认排除已故
+    if (filters.excludeDeceased !== false) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => !r.isDeceased);
       filteredDeceased = beforeCount - filteredResults.length;
@@ -742,7 +669,7 @@ async function executeAnywhoSearch(
     if (filterMinAge > 0 || filterMaxAge < 100) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
-        if (r.age === null || r.age === undefined) return true;  // 保留年龄未知的
+        if (r.age === null || r.age === undefined) return true;
         if (r.age < filterMinAge) return false;
         if (r.age > filterMaxAge) return false;
         return true;
@@ -755,7 +682,7 @@ async function executeAnywhoSearch(
     if (filterMinYear > 2020) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
-        if (!r.reportYear) return true;  // 保留年份未知的
+        if (!r.reportYear) return true;
         return r.reportYear >= filterMinYear;
       });
       filteredYear = beforeCount - filteredResults.length;
@@ -765,7 +692,7 @@ async function executeAnywhoSearch(
     if (filters.excludeMarried) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
-        if (!r.marriageStatus) return true;  // 保留婚姻状态未知的
+        if (!r.marriageStatus) return true;
         return r.marriageStatus.toLowerCase() !== 'married';
       });
       filteredMarried = beforeCount - filteredResults.length;
@@ -775,7 +702,7 @@ async function executeAnywhoSearch(
     if (filters.excludeTMobile) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
-        if (!r.carrier) return true;  // 保留运营商未知的
+        if (!r.carrier) return true;
         return !r.carrier.toLowerCase().includes('t-mobile') && !r.carrier.toLowerCase().includes('tmobile');
       });
       filteredTMobile = beforeCount - filteredResults.length;
@@ -785,7 +712,7 @@ async function executeAnywhoSearch(
     if (filters.excludeComcast) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
-        if (!r.carrier) return true;  // 保留运营商未知的
+        if (!r.carrier) return true;
         const carrierLower = r.carrier.toLowerCase();
         return !carrierLower.includes('comcast') && !carrierLower.includes('spectrum') && !carrierLower.includes('xfinity');
       });
@@ -796,7 +723,7 @@ async function executeAnywhoSearch(
     if (filters.excludeLandline) {
       const beforeCount = filteredResults.length;
       filteredResults = filteredResults.filter(r => {
-        if (!r.phoneType) return true;  // 保留类型未知的
+        if (!r.phoneType) return true;
         return r.phoneType.toLowerCase() !== 'landline';
       });
       filteredLandline = beforeCount - filteredResults.length;
@@ -825,8 +752,8 @@ async function executeAnywhoSearch(
       await saveAnywhoSearchResults(taskDbId, filteredResults);
     }
     
-    // 计算消耗积分
-    const creditsUsed = (totalSearchPages * searchCost) + (totalDetailPages * detailCost);
+    // 计算消耗积分（只有搜索页费用）
+    const creditsUsed = totalSearchPages * searchCost;
     
     // 扣除积分
     await deductCredits(userId, creditsUsed);
@@ -836,8 +763,8 @@ async function executeAnywhoSearch(
       totalResults,
       creditsUsed: creditsUsed.toFixed(2),
       searchPageRequests: totalSearchPages,
-      detailPageRequests: totalDetailPages,
-      cacheHits: totalCacheHits,
+      detailPageRequests: 0,  // 不再访问详情页
+      cacheHits: 0,
     });
     
     // ==================== 完成日志 ====================
@@ -848,18 +775,12 @@ async function executeAnywhoSearch(
     // 搜索结果摘要
     await addLog(`📊 搜索结果摘要:`);
     await addLog(`   • 有效结果: ${totalResults} 条联系人信息`);
-    await addLog(`   • 缓存命中: ${totalCacheHits} 条 (免费获取)`);
     await addLog(`   • 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
     
     // 费用明细
-    const searchPageCost = totalSearchPages * searchCost;
-    const detailPageCost = totalDetailPages * detailCost;
-    const savedByCache = totalCacheHits * detailCost;
-    
     await addLog(`💰 费用明细:`);
-    await addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${searchPageCost.toFixed(1)} 积分`);
-    await addLog(`   • 详情页费用: ${totalDetailPages} 页 × ${detailCost} = ${detailPageCost.toFixed(1)} 积分`);
-    await addLog(`   • 缓存节省: ${totalCacheHits} 条 × ${detailCost} = ${savedByCache.toFixed(1)} 积分`);
+    await addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${creditsUsed.toFixed(1)} 积分`);
+    await addLog(`   • 详情页费用: 0 积分 (直接从搜索结果提取)`);
     await addLog(`   ──────────────────────────────`);
     await addLog(`   • 实际消耗: ${creditsUsed.toFixed(1)} 积分`);
     
@@ -869,15 +790,10 @@ async function executeAnywhoSearch(
       const costPerResult = creditsUsed / totalResults;
       await addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`);
     }
-    const cacheHitRate = totalCacheHits > 0 ? ((totalCacheHits / (totalCacheHits + totalDetailPages)) * 100).toFixed(1) : '0';
-    await addLog(`   • 缓存命中率: ${cacheHitRate}%`);
-    if (savedByCache > 0) {
-      const savingsPercent = creditsUsed > 0 ? Math.round(savedByCache / (creditsUsed + savedByCache) * 100) : 0;
-      await addLog(`   • 缓存节省: ${savedByCache.toFixed(1)} 积分 (相当于 ${savingsPercent}% 的原始费用)`);
-    }
+    await addLog(`   • 优化效果: 无需详情页请求，节省大量费用！`);
     
     await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`💡 提示: 相同姓名/地点的后续搜索将命中缓存，节省更多积分`);
+    await addLog(`💡 提示: 直接从搜索结果页提取数据，避免详情页 CAPTCHA 问题`);
     await addLog(`═══════════════════════════════════════════════════`);
     
   } catch (error: any) {

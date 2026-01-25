@@ -433,15 +433,22 @@ export async function getUserCredits(userId: number): Promise<number> {
 export async function logCreditChange(data: {
   userId: number;
   amount: number;
-  type: "search" | "recharge" | "refund" | "admin" | "tps_search" | "anywho_search";
+  balanceAfter: number;
+  type: "search" | "recharge" | "refund" | "admin_add" | "admin_deduct" | "admin_adjust" | "bonus";
   description: string;
-  relatedId?: string;
+  relatedOrderId?: string;
+  relatedTaskId?: string;
 }) {
   const database = await db();
   
   await database.insert(creditLogs).values({
-    ...data,
-    createdAt: new Date(),
+    userId: data.userId,
+    amount: data.amount,
+    balanceAfter: data.balanceAfter,
+    type: data.type,
+    description: data.description,
+    relatedOrderId: data.relatedOrderId,
+    relatedTaskId: data.relatedTaskId,
   });
 }
 
@@ -450,16 +457,26 @@ export async function logCreditChange(data: {
  */
 export async function logApi(data: {
   userId: number;
+  apiType: "apollo_search" | "apollo_enrich" | "apify_search" | "scrape_tps" | "scrape_fps";
   endpoint: string;
-  method: string;
-  statusCode: number;
+  requestParams?: unknown;
+  responseStatus: number;
   responseTime: number;
+  success?: boolean;
   errorMessage?: string;
+  creditsUsed?: number;
 }) {
   const database = await db();
   
   await database.insert(apiLogs).values({
-    ...data,
-    createdAt: new Date(),
+    userId: data.userId,
+    apiType: data.apiType,
+    endpoint: data.endpoint,
+    requestParams: data.requestParams,
+    responseStatus: data.responseStatus,
+    responseTime: data.responseTime,
+    success: data.success ?? true,
+    errorMessage: data.errorMessage,
+    creditsUsed: data.creditsUsed ?? 0,
   });
 }
