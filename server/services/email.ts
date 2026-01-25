@@ -22,7 +22,7 @@ function getResendClient(): Resend | null {
 }
 
 // 发件人地址（使用 Resend 默认域名，或配置自定义域名）
-const FROM_EMAIL = process.env.FROM_EMAIL || 'DataReach <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'DataReach <noreply@datareach.co>';
 
 /**
  * 检查邮件服务是否可用
