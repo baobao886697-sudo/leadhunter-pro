@@ -564,6 +564,118 @@ async function ensureTables() {
     }
     console.log("[Database] TPS search results columns sync completed");
     
+    // ========== Anywho 相关表 ==========
+    
+    // 22. Anywho 配置表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS anywho_config (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        searchCost DECIMAL(10,2) NOT NULL DEFAULT 0.5,
+        detailCost DECIMAL(10,2) NOT NULL DEFAULT 0.5,
+        maxConcurrent INT NOT NULL DEFAULT 20,
+        cacheDays INT NOT NULL DEFAULT 30,
+        scrapeDoToken VARCHAR(255),
+        minAge INT DEFAULT 18,
+        maxAge INT DEFAULT 99,
+        excludeDeceased BOOLEAN DEFAULT TRUE,
+        includeMarriageStatus BOOLEAN DEFAULT TRUE,
+        enabled BOOLEAN DEFAULT TRUE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL
+      )
+    `);
+    console.log("[Database] Anywho config table ready");
+    
+    // 23. Anywho 详情页缓存表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS anywho_detail_cache (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        detailLink VARCHAR(500) NOT NULL UNIQUE,
+        name VARCHAR(200),
+        age INT,
+        marriageStatus VARCHAR(50),
+        marriageRecords JSON,
+        isDeceased BOOLEAN DEFAULT FALSE,
+        data JSON,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        expiresAt TIMESTAMP NULL,
+        INDEX idx_expiresAt (expiresAt)
+      )
+    `);
+    console.log("[Database] Anywho detail cache table ready");
+    
+    // 24. Anywho 搜索任务表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS anywho_search_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        taskId VARCHAR(32) NOT NULL UNIQUE,
+        userId INT NOT NULL,
+        mode ENUM('nameOnly', 'nameLocation') NOT NULL DEFAULT 'nameOnly',
+        names JSON NOT NULL,
+        locations JSON,
+        filters JSON,
+        totalSubTasks INT NOT NULL DEFAULT 0,
+        completedSubTasks INT NOT NULL DEFAULT 0,
+        totalResults INT NOT NULL DEFAULT 0,
+        searchPageRequests INT NOT NULL DEFAULT 0,
+        detailPageRequests INT NOT NULL DEFAULT 0,
+        cacheHits INT NOT NULL DEFAULT 0,
+        creditsUsed DECIMAL(10,2) NOT NULL DEFAULT 0,
+        status ENUM('pending', 'running', 'completed', 'failed', 'cancelled', 'insufficient_credits') NOT NULL DEFAULT 'pending',
+        progress INT NOT NULL DEFAULT 0,
+        logs JSON,
+        errorMessage TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        startedAt TIMESTAMP NULL,
+        completedAt TIMESTAMP NULL,
+        INDEX idx_userId (userId),
+        INDEX idx_status (status)
+      )
+    `);
+    console.log("[Database] Anywho search tasks table ready");
+    
+    // 25. Anywho 搜索结果表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS anywho_search_results (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        taskId INT NOT NULL,
+        subTaskIndex INT NOT NULL DEFAULT 0,
+        name VARCHAR(200),
+        firstName VARCHAR(100),
+        lastName VARCHAR(100),
+        searchName VARCHAR(200),
+        searchLocation VARCHAR(200),
+        age INT,
+        city VARCHAR(100),
+        state VARCHAR(50),
+        location VARCHAR(200),
+        currentAddress VARCHAR(500),
+        phone VARCHAR(50),
+        phoneType VARCHAR(50),
+        carrier VARCHAR(100),
+        isPrimaryPhone BOOLEAN DEFAULT FALSE,
+        allPhones JSON,
+        email VARCHAR(200),
+        allEmails JSON,
+        marriageStatus VARCHAR(50),
+        marriageRecords JSON,
+        relatives JSON,
+        isDeceased BOOLEAN DEFAULT FALSE,
+        detailLink VARCHAR(500),
+        fromCache BOOLEAN DEFAULT FALSE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        INDEX idx_taskId (taskId)
+      )
+    `);
+    console.log("[Database] Anywho search results table ready");
+    
+    // 插入默认 Anywho 配置（如果不存在）
+    await db.execute(sql`
+      INSERT IGNORE INTO anywho_config (id, searchCost, detailCost, maxConcurrent, cacheDays, minAge, maxAge, excludeDeceased, includeMarriageStatus, enabled)
+      VALUES (1, 0.5, 0.5, 20, 30, 18, 99, TRUE, TRUE, TRUE)
+    `);
+    console.log("[Database] Default Anywho config inserted");
+    
     // ========== 初始化默认数据 ==========
     
     // 插入默认系统配置（如果不存在）
