@@ -21,19 +21,20 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle, Linkedin, Rocket, UserCircle, Users, UserSearch, SearchCheck } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Search, History, CreditCard, Shield, Wallet, Target, User, Settings, Coins, MessageCircle, Linkedin, Rocket, UserCircle, Users, UserSearch, SearchCheck, Star, Sparkles } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { NotificationCenter } from "./NotificationCenter";
 
-const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean }> = [
+const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean }> = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/dashboard" },
   { icon: Linkedin, label: "LinkedIn", path: "/search" },
   { icon: Users, label: "TruePeopleSearch", path: "/tps" },
   { icon: UserSearch, label: "PeopleSearchNow", path: "/people-search-now", isNew: true },
   { icon: SearchCheck, label: "SearchPeopleFree", path: "/search-people-free", isNew: true },
+  { icon: Sparkles, label: "Anywho", path: "/anywho", isRainbow: true },
   { icon: Rocket, label: "正在开发", path: "/roadmap" },
   { icon: History, label: "历史记录", path: "/history" },
   { icon: Wallet, label: "积分充值", path: "/recharge" },
@@ -191,25 +192,81 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            {/* 七彩錆金动画样式 */}
+            <style>{`
+              @keyframes rainbow-shimmer {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+              @keyframes star-sparkle {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.7; transform: scale(1.2); }
+              }
+              .rainbow-menu-text {
+                background: linear-gradient(
+                  90deg,
+                  #ffd700, #ffb347, #ff6b6b, #ff69b4, #9b59b6, #3498db, #2ecc71, #ffd700
+                );
+                background-size: 200% auto;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: rainbow-shimmer 3s linear infinite;
+              }
+              .rainbow-menu-item {
+                background: linear-gradient(
+                  90deg,
+                  rgba(255, 215, 0, 0.05),
+                  rgba(255, 105, 180, 0.05),
+                  rgba(155, 89, 182, 0.05),
+                  rgba(52, 152, 219, 0.05)
+                );
+                background-size: 200% auto;
+                animation: rainbow-shimmer 4s linear infinite;
+              }
+              .rainbow-menu-item:hover {
+                background: linear-gradient(
+                  90deg,
+                  rgba(255, 215, 0, 0.15),
+                  rgba(255, 105, 180, 0.15),
+                  rgba(155, 89, 182, 0.15),
+                  rgba(52, 152, 219, 0.15)
+                );
+                background-size: 200% auto;
+              }
+              .star-sparkle {
+                animation: star-sparkle 1.5s ease-in-out infinite;
+              }
+            `}</style>
             <SidebarMenu className="px-2 py-1">
               {menuItems.filter(item => !item.adminOnly || user?.role === 'admin').map(item => {
                 const isActive = location === item.path;
                 const isNewItem = item.isNew;
+                const isRainbowItem = item.isRainbow;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal ${isNewItem ? 'hover:bg-emerald-500/10' : ''}`}
+                      className={`h-10 transition-all font-normal ${isNewItem ? 'hover:bg-emerald-500/10' : ''} ${isRainbowItem ? 'rainbow-menu-item rounded-lg' : ''}`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? (isNewItem ? "text-emerald-400" : "text-primary") : (isNewItem ? "text-emerald-500" : "")}`}
+                        className={`h-4 w-4 ${isActive ? (isNewItem ? "text-emerald-400" : isRainbowItem ? "text-yellow-400" : "text-primary") : (isNewItem ? "text-emerald-500" : isRainbowItem ? "text-amber-400" : "")}`}
                       />
-                      <span className={isNewItem ? "text-emerald-400 font-medium" : ""}>{item.label}</span>
+                      <span className={isNewItem ? "text-emerald-400 font-medium" : isRainbowItem ? "rainbow-menu-text font-bold" : ""}>{item.label}</span>
                       {isNewItem && (
                         <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                           NEW
+                        </span>
+                      )}
+                      {isRainbowItem && (
+                        <span className="ml-auto flex items-center gap-1">
+                          <Star className="h-3 w-3 text-yellow-400 fill-yellow-400 star-sparkle" />
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-yellow-500/20 via-pink-500/20 to-purple-500/20 text-yellow-300 border border-yellow-500/30">
+                            推荐
+                          </span>
                         </span>
                       )}
                     </SidebarMenuButton>
