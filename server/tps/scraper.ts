@@ -245,7 +245,40 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
   const $ = cheerio.load(html);
   const results: TpsDetailResult[] = [];
   const name = searchResult.name;
-  const age = searchResult.age;
+  
+  // 优先使用搜索结果中的年龄，如果没有则尝试从详情页解析
+  let age = searchResult.age;
+  if (age === undefined) {
+    // 尝试从详情页标题解析年龄，格式通常是 "Name, Age XX"
+    const title = $('title').text();
+    const titleAgeMatch = title.match(/,\s*Age\s*(\d+)/i);
+    if (titleAgeMatch) {
+      age = parseInt(titleAgeMatch[1], 10);
+    }
+    
+    // 如果标题中没有，尝试从页面内容解析
+    if (age === undefined) {
+      const pageText = $('body').text();
+      // 匹配 "Age: XX" 或 "XX years old" 格式
+      const agePatterns = [
+        /\bAge[:\s]*(\d{1,3})\b/i,
+        /\b(\d{1,3})\s*years?\s*old\b/i,
+        /\bborn\s+(?:in\s+)?\d{4}.*?\((\d{1,3})\)/i,
+      ];
+      for (const pattern of agePatterns) {
+        const match = pageText.match(pattern);
+        if (match) {
+          const parsedAge = parseInt(match[1], 10);
+          // 合理年龄范围检查 (18-120)
+          if (parsedAge >= 18 && parsedAge <= 120) {
+            age = parsedAge;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
   let city = '';
   let state = '';
   const title = $('title').text();
@@ -582,56 +615,25 @@ export async function fetchDetailsInBatch(
     }
   }
   
-  onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length}`);
+  // 调试日志：检查搜索结果中的年龄信息
+  let tasksWithAge = 0;
+  let tasksWithoutAge = 0;
+  for (const task of tasksToFetch) {
+    if (task.searchResult.age !== undefined) {
+      tasksWithAge++;
+    } else {
+      tasksWithoutAge++;
+    }
+  }
+  onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length} (有年龄: ${tasksWithAge}, 无年龄: ${tasksWithoutAge})`);
   
   const cacheToSave: Array<{ link: string; data: TpsDetailResult }> = [];
   let completed = 0;
-  
-  const runWithConcurrency = async () => {
-    const queue = [...tasksToFetch];
-    const processNext = async () => {
-      if (queue.length === 0) return;
-      const task = queue.shift()!;
-      const link = task.searchResult.detailLink;
-      const detailUrl = link.startsWith('http') ? link : `${baseUrl}${link}`;
-      
-      try {
-        const html = await fetchWithScrapedo(detailUrl, token);
-        detailPageRequests++;
-        const details = parseDetailPage(html, task.searchResult);
-        for (const detail of details) {
-          if (detail.phone && detail.phone.length >= 10) {
-            cacheToSave.push({ link, data: detail });
-          }
-        }
-        const filtered = details.filter(r => shouldIncludeResult(r, filters));
-        filteredOut += details.length - filtered.length;
-        const linkTasks = tasksByLink.get(link) || [task];
-        for (const t of linkTasks) {
-          results.push({ task: t, details: filtered });
-        }
-      } catch (error: any) {
-        onProgress(`获取详情失败: ${link} - ${error.message || error}`);
-      } finally {
-        completed++;
-        if (completed % 10 === 0 || completed === tasksToFetch.length) {
-          const percent = Math.round((completed / tasksToFetch.length) * 100);
-          onProgress(`📥 详情进度: ${completed}/${tasksToFetch.length} (${percent}%)`);
-        }
-      }
-    };
-
-    const promises = Array(concurrency).fill(Promise.resolve()).map(async () => {
-        while(tasksToFetch.length > 0) {
-            await processNext();
-        }
-    });
-
-    await Promise.all(promises);
-  };
+  let detailsWithAge = 0;
+  let detailsWithoutAge = 0;
 
   if (tasksToFetch.length > 0) {
-    // A more robust concurrency implementation
+    // 并发控制实现
     const concurrencyPool = new Set<Promise<any>>();
     for (const task of tasksToFetch) {
         if (concurrencyPool.size >= concurrency) {
@@ -645,7 +647,14 @@ export async function fetchDetailsInBatch(
                 const html = await fetchWithScrapedo(detailUrl, token);
                 detailPageRequests++;
                 const details = parseDetailPage(html, task.searchResult);
+                
+                // 调试日志：统计解析结果中的年龄信息
                 for (const detail of details) {
+                    if (detail.age !== undefined) {
+                      detailsWithAge++;
+                    } else {
+                      detailsWithoutAge++;
+                    }
                     if (detail.phone && detail.phone.length >= 10) {
                         cacheToSave.push({ link, data: detail });
                     }
@@ -662,7 +671,7 @@ export async function fetchDetailsInBatch(
                 completed++;
                 if (completed % 10 === 0 || completed === tasksToFetch.length) {
                     const percent = Math.round((completed / tasksToFetch.length) * 100);
-          onProgress(`📥 详情进度: ${completed}/${tasksToFetch.length} (${percent}%)`);
+                    onProgress(`📥 详情进度: ${completed}/${tasksToFetch.length} (${percent}%)`);
                 }
                 concurrencyPool.delete(promise);
             }
@@ -670,6 +679,11 @@ export async function fetchDetailsInBatch(
         concurrencyPool.add(promise);
     }
     await Promise.all(Array.from(concurrencyPool));
+  }
+  
+  // 调试日志：输出年龄解析统计
+  if (tasksToFetch.length > 0) {
+    onProgress(`📊 年龄解析统计: 有年龄 ${detailsWithAge} 条, 无年龄 ${detailsWithoutAge} 条`);  
   }
   
   if (cacheToSave.length > 0) {
