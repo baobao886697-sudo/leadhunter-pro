@@ -12,7 +12,7 @@ import {
   Database, Globe, TrendingUp, Users, Building2, Linkedin, Twitter, 
   Facebook, Mail, MapPin, BarChart3, Lock, Clock, Award, Star,
   ChevronRight, Play, Layers, Network, Cpu, Eye, EyeOff, ChevronDown,
-  AlertTriangle, Loader2, UserSearch
+  AlertTriangle, Loader2, UserSearch, User
 } from "lucide-react";
 
 // 生成设备指纹（保持原有逻辑）
@@ -123,6 +123,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [userName, setUserName] = useState("");
   
   // 强制登录状态
   const [showForceLogin, setShowForceLogin] = useState(false);
@@ -233,6 +234,7 @@ export default function Home() {
       registerMutation.mutate({ 
         email, 
         password, 
+        name: userName || undefined,
         inviteCode: inviteCode || undefined,
         deviceId 
       });
@@ -246,6 +248,7 @@ export default function Home() {
     setPassword("");
     setConfirmPassword("");
     setInviteCode("");
+    setUserName("");
   };
 
   return (
@@ -855,6 +858,14 @@ export default function Home() {
                 </div>
               </div>
 
+              {authMode === 'login' && (
+                <div className="text-right">
+                  <Link href="/forgot-password" className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors">
+                    忘记密码？
+                  </Link>
+                </div>
+              )}
+
               {authMode === 'register' && (
                 <>
                   <div className="space-y-2">
@@ -869,6 +880,23 @@ export default function Home() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         className="pl-10 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                         required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="modal-user-name" className="text-slate-300">
+                      姓名 <span className="text-slate-500">(选填)</span>
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                      <Input
+                        id="modal-user-name"
+                        type="text"
+                        placeholder="您的姓名"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        className="pl-10 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                       />
                     </div>
                   </div>

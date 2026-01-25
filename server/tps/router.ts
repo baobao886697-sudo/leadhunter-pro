@@ -38,7 +38,7 @@ import {
   logCreditChange,
   logApi,
 } from "./db";
-import { getDb } from "../db";
+import { getDb, logUserActivity } from "../db";
 import { tpsSearchTasks } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
@@ -718,6 +718,15 @@ async function executeTpsSearchUnifiedQueue(
       cacheHits: totalCacheHits,
       creditsUsed: actualCost,
       logs,
+    });
+
+    // 记录用户活动日志
+    await logUserActivity({
+      userId,
+      action: 'TPS搜索',
+      details: `搜索完成: ${input.names.length}个姓名, ${totalResults}条结果, 消耗${actualCost.toFixed(1)}积分`,
+      ipAddress: null,
+      userAgent: null
     });
     
   } catch (error: any) {

@@ -494,18 +494,6 @@ export default function Admin() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setDetailUserId(1);
-                    setUserDetailDialogOpen(true);
-                  }}
-                  className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  测试Dialog
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => setBulkMessageDialogOpen(true)}
                   className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
                 >
@@ -974,7 +962,7 @@ export default function Admin() {
                             {log.responseStatus}
                           </TableCell>
                           <TableCell className="text-slate-400">
-                            {log.responseTime}ms
+                            {log.responseTime != null ? `${log.responseTime}ms` : '-'}
                           </TableCell>
                           <TableCell>
                             {log.success ? (
@@ -1220,7 +1208,7 @@ export default function Admin() {
                     <li>搜索积分：0.3（与 EXE 版本保持一致）</li>
                     <li>详情积分：0.3（与 EXE 版本保持一致）</li>
                     <li>最大并发：40（Scrape.do 推荐值）</li>
-                    <li>缓存天数：30（减少重复请求）</li>
+                    <li>缓存天数：180（减少重复请求）</li>
                   </ul>
                   <p><strong className="text-white">注意事项：</strong></p>
                   <ul className="list-disc list-inside space-y-1">

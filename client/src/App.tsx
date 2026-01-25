@@ -25,6 +25,8 @@ import Roadmap from "./pages/Roadmap";
 import TpsSearch from "./pages/TpsSearch";
 import TpsTask from "./pages/TpsTask";
 import TpsHistory from "./pages/TpsHistory";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function Router() {
   return (
@@ -32,6 +34,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password/:token" component={ResetPassword} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/search" component={Search} />
       <Route path="/results/:taskId" component={Results} />

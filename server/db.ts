@@ -51,13 +51,13 @@ export async function getDb() {
 
 // ============ 用户相关 ============
 
-export async function createUser(email: string, passwordHash: string): Promise<User | undefined> {
+export async function createUser(email: string, passwordHash: string, name?: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const openId = crypto.randomBytes(16).toString('hex');
   // 注册赠送100积分
   const REGISTER_BONUS_CREDITS = 100;
-  await db.insert(users).values({ openId, email, passwordHash, credits: REGISTER_BONUS_CREDITS });
+  await db.insert(users).values({ openId, email, passwordHash, credits: REGISTER_BONUS_CREDITS, name: name || null });
   return getUserByEmail(email);
 }
 

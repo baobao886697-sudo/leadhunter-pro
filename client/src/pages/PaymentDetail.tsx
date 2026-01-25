@@ -357,7 +357,7 @@ export default function PaymentDetail() {
                         background: isPaid ? "#dcfce7" : isPending ? "#fef3c7" : "#fee2e2",
                         color: isPaid ? "#166534" : isPending ? "#92400e" : "#991b1b"
                       }}>
-                        {isPaid ? "✓ 已付款" : isPending ? "○ 待付款" : "× 已取消"}
+                        {isPaid ? "✓ 已付款" : isPending ? "○ 待付款" : orderDetail.status === "expired" ? "× 已过期" : "× 已取消"}
                       </p>
                     </div>
                   </div>

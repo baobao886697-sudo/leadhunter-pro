@@ -71,7 +71,7 @@ export default function History() {
               搜索历史
             </h1>
             <p className="text-slate-400 mt-2">
-              查看您的搜索任务记录，结果保留7天
+              查看您的搜索任务记录，结果保留180天
             </p>
           </div>
           <Link href="/search">

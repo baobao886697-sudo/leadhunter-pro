@@ -163,7 +163,7 @@ export const appRouter = router({
         }
 
         const passwordHash = await bcrypt.hash(input.password, 12);
-        const user = await createUser(input.email, passwordHash);
+        const user = await createUser(input.email, passwordHash, input.name);
 
         if (!user) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "注册失败" });
@@ -224,6 +224,15 @@ export const appRouter = router({
         const ipAddress = ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket?.remoteAddress || null;
         const userAgent = ctx.req.headers["user-agent"] || null;
         await logLogin(user.id, deviceId, ipAddress, userAgent, true);
+
+        // 记录用户活动日志
+        await logUserActivity({
+          userId: user.id,
+          action: input.force ? '强制登录' : '用户登录',
+          details: `设备ID: ${deviceId}`,
+          ipAddress,
+          userAgent
+        });
 
         // 创建会话
         const openId = user.openId || `email_${user.id}`;
@@ -691,6 +700,15 @@ export const appRouter = router({
             message: "创建订单失败",
           });
         }
+
+        // 记录用户活动日志
+        await logUserActivity({
+          userId: ctx.user.id,
+          action: '创建充值订单',
+          details: `订单号: ${order.orderId}, 充值${order.credits}积分, 金额${order.amount}USDT`,
+          ipAddress: ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket?.remoteAddress || null,
+          userAgent: ctx.req.headers["user-agent"] || null
+        });
 
         return {
           orderId: order.orderId,
