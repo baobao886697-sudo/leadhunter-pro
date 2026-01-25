@@ -550,7 +550,7 @@ export async function fetchDetailsInBatch(
   let filteredOut = 0;
   
   const baseUrl = 'https://www.truepeoplesearch.com';
-  const uniqueLinks = Array.from(new Set(tasks.map(t => t.searchResult.detailLink)));
+  const uniqueLinks = [...new Set(tasks.map(t => t.searchResult.detailLink))];
   
   onProgress(`检查缓存: ${uniqueLinks.length} 个链接...`);
   const cachedMap = await getCachedDetails(uniqueLinks);
@@ -566,71 +566,20 @@ export async function fetchDetailsInBatch(
     tasksByLink.get(link)!.push(task);
   }
   
-  // 调试：跟踪每个子任务的链接分配情况
-  const subTaskLinkCounts = new Map<number, { cached: number; cachedFiltered: number; toFetch: number; noPhone: number }>();
-  
-  for (const [link, linkTasks] of Array.from(tasksByLink)) {
+  for (const [link, linkTasks] of tasksByLink) {
     const cachedArray = cachedMap.get(link);
-    const hasValidPhone = cachedArray && cachedArray.length > 0 && cachedArray.some(c => c.phone && c.phone.length >= 10);
-    
-    if (hasValidPhone) {
+    if (cachedArray && cachedArray.length > 0 && cachedArray.some(c => c.phone && c.phone.length >= 10)) {
       cacheHits++;
-      const filteredCached = cachedArray!.filter(r => shouldIncludeResult(r, filters));
-      const filteredCount = cachedArray!.length - filteredCached.length;
-      filteredOut += filteredCount;
-      
-      // 即使过滤后为空，也要为所有任务创建空结果记录，确保子任务不会丢失
-      for (const task of linkTasks) {
-        results.push({ task, details: filteredCached });
-        // 调试统计
-        if (!subTaskLinkCounts.has(task.subTaskIndex)) {
-          subTaskLinkCounts.set(task.subTaskIndex, { cached: 0, cachedFiltered: 0, toFetch: 0, noPhone: 0 });
-        }
-        subTaskLinkCounts.get(task.subTaskIndex)!.cached++;
-        if (filteredCached.length === 0 && filteredCount > 0) {
-          subTaskLinkCounts.get(task.subTaskIndex)!.cachedFiltered++;
+      const filteredCached = cachedArray.filter(r => shouldIncludeResult(r, filters));
+      filteredOut += cachedArray.length - filteredCached.length;
+      if (filteredCached.length > 0) {
+        for (const task of linkTasks) {
+          results.push({ task, details: filteredCached });
         }
       }
     } else {
-      // 缓存未命中或没有有效电话，需要重新获取
-      // 注意：这里只添加第一个任务，但后续获取结果时会分配给所有任务
       tasksToFetch.push(linkTasks[0]);
-      
-      // 调试统计
-      for (const task of linkTasks) {
-        if (!subTaskLinkCounts.has(task.subTaskIndex)) {
-          subTaskLinkCounts.set(task.subTaskIndex, { cached: 0, cachedFiltered: 0, toFetch: 0, noPhone: 0 });
-        }
-        if (cachedArray && cachedArray.length > 0) {
-          subTaskLinkCounts.get(task.subTaskIndex)!.noPhone++;
-        } else {
-          subTaskLinkCounts.get(task.subTaskIndex)!.toFetch++;
-        }
-      }
     }
-  }
-  
-  // 输出调试信息（只显示有问题的子任务，避免日志过多）
-  for (const [subTaskIndex, counts] of Array.from(subTaskLinkCounts)) {
-    // 只有当有被过滤的结果时才输出详细日志
-    if (counts.cachedFiltered > 0 || counts.noPhone > 0) {
-      let msg = `📊 [子任务 ${subTaskIndex + 1}] 缓存: ${counts.cached}`;
-      if (counts.cachedFiltered > 0) {
-        msg += ` (过滤 ${counts.cachedFiltered})`;
-      }
-      msg += `, 新获取: ${counts.toFetch}`;
-      if (counts.noPhone > 0) {
-        msg += `, 无效电话: ${counts.noPhone}`;
-      }
-      onProgress(msg);
-    }
-  }
-  
-  // 输出总体统计
-  const totalCached = Array.from(subTaskLinkCounts.values()).reduce((sum, c) => sum + c.cached, 0);
-  const totalFiltered = Array.from(subTaskLinkCounts.values()).reduce((sum, c) => sum + c.cachedFiltered, 0);
-  if (totalFiltered > 0) {
-    onProgress(`📊 [缓存统计] 命中 ${totalCached} 条, 其中 ${totalFiltered} 条因不符合筛选条件被排除`);
   }
   
   onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length}`);
@@ -686,10 +635,9 @@ export async function fetchDetailsInBatch(
     const concurrencyPool = new Set<Promise<any>>();
     for (const task of tasksToFetch) {
         if (concurrencyPool.size >= concurrency) {
-            await Promise.race(Array.from(concurrencyPool));
+            await Promise.race(concurrencyPool);
         }
 
-        let promiseRef!: Promise<void>;
         const promise = (async () => {
             const link = task.searchResult.detailLink;
             const detailUrl = link.startsWith('http') ? link : `${baseUrl}${link}`;
@@ -714,12 +662,11 @@ export async function fetchDetailsInBatch(
                 completed++;
                 if (completed % 10 === 0 || completed === tasksToFetch.length) {
                     const percent = Math.round((completed / tasksToFetch.length) * 100);
-                    onProgress(`📥 详情进度: ${completed}/${tasksToFetch.length} (${percent}%)`);
+          onProgress(`📥 详情进度: ${completed}/${tasksToFetch.length} (${percent}%)`);
                 }
-                concurrencyPool.delete(promiseRef);
+                concurrencyPool.delete(promise);
             }
         })();
-        promiseRef = promise;
         concurrencyPool.add(promise);
     }
     await Promise.all(Array.from(concurrencyPool));
@@ -730,14 +677,7 @@ export async function fetchDetailsInBatch(
     await setCachedDetails(cacheToSave);
   }
   
-  // 详情获取完成日志
-  onProgress(`✅ 详情获取完成`);
-  onProgress(`   · 总结果: ${results.length} 条`);
-  onProgress(`   · 缓存命中: ${cacheHits} 条 (节省 API 调用)`);
-  onProgress(`   · 新获取: ${detailPageRequests} 条`);
-  if (filteredOut > 0) {
-    onProgress(`   · 过滤排除: ${filteredOut} 条 (不符合筛选条件)`);
-  }
+  onProgress(`详情获取完成: ${results.length} 条结果，缓存命中 ${cacheHits}，新获取 ${detailPageRequests}`);
   
   return {
     results,

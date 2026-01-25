@@ -19,7 +19,6 @@ import {
   TpsDetailResult,
   TpsSearchResult,
   DetailTask,
-  DetailTaskWithIndex,
   TPS_CONFIG,
 } from "./scraper";
 import {
@@ -424,22 +423,10 @@ async function executeTpsSearchUnifiedQueue(
   
   // 增强启动日志
   addLog(`═══════════════════════════════════════════════════`);
-  addLog(`🌸 开始 TPS 搜索 (v3.5 过滤提示版)`);
+  addLog(`🌸 开始 TPS 搜索 (v3.4 增强日志版)`);
   addLog(`📜 总任务数: ${subTasks.length}`);
   addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务 × 25页 / 详情 ${TOTAL_CONCURRENCY} 并发`);
   addLog(`🔍 搜索模式: ${input.mode === 'nameOnly' ? '仅姓名' : '姓名+地点'}`);
-  
-  // 显示过滤条件
-  const filters = input.filters || {};
-  const minAge = filters.minAge ?? config.defaultMinAge ?? 50;
-  const maxAge = filters.maxAge ?? config.defaultMaxAge ?? 79;
-  addLog(`🎯 过滤条件: 年龄 ${minAge}-${maxAge} 岁`);
-  if (filters.excludeTMobile) addLog(`   · 排除 T-Mobile 运营商`);
-  if (filters.excludeComcast) addLog(`   · 排除 Comcast 运营商`);
-  if (filters.excludeLandline) addLog(`   · 排除座机号码`);
-  if (filters.minYear) addLog(`   · 报告年份 ≥ ${filters.minYear}`);
-  if (filters.minPropertyValue) addLog(`   · 房产价值 ≥ $${filters.minPropertyValue.toLocaleString()}`);
-  
   addLog(`═══════════════════════════════════════════════════`);
   
   // 更新任务状态
@@ -485,7 +472,7 @@ async function executeTpsSearchUnifiedQueue(
     addLog(`📋 阶段一：并发搜索 (${SEARCH_CONCURRENCY} 任务并发 × 25页并发)...`);
     
     // 收集所有详情任务
-    const allDetailTasks: DetailTaskWithIndex[] = [];
+    const allDetailTasks: DetailTask[] = [];
     const subTaskResults: Map<number, { searchResults: TpsSearchResult[]; searchPages: number }> = new Map();
     
     let completedSearches = 0;
@@ -577,7 +564,7 @@ async function executeTpsSearchUnifiedQueue(
     const searchPageCostSoFar = totalSearchPages * searchCost;
     
     // 去重详情链接，计算需要获取的详情数
-    const uniqueDetailLinks = Array.from(new Set(allDetailTasks.map(t => t.searchResult.detailLink)));
+    const uniqueDetailLinks = [...new Set(allDetailTasks.map(t => t.searchResult.detailLink))];
     const estimatedDetailCostRemaining = uniqueDetailLinks.length * detailCost;
     const totalEstimatedCost = searchPageCostSoFar + estimatedDetailCostRemaining;
     
@@ -632,7 +619,7 @@ async function executeTpsSearchUnifiedQueue(
       addLog(`📋 阶段二：统一队列获取详情（${TOTAL_CONCURRENCY} 并发）...`);
       
       // 去重详情链接
-      const uniqueLinks = Array.from(new Set(allDetailTasks.map(t => t.searchResult.detailLink)));
+      const uniqueLinks = [...new Set(allDetailTasks.map(t => t.searchResult.detailLink))];
       addLog(`🔗 去重后 ${uniqueLinks.length} 个唯一详情链接`);
       
       // 统一获取详情
@@ -658,17 +645,10 @@ async function executeTpsSearchUnifiedQueue(
       for (const { task, details } of detailResult.results) {
         rawResultsBySubTask.set(task.subTaskIndex, (rawResultsBySubTask.get(task.subTaskIndex) || 0) + details.length);
       }
-      for (const [idx, count] of Array.from(rawResultsBySubTask)) {
+      for (const [idx, count] of rawResultsBySubTask) {
         const subTask = subTasks.find(t => t.index === idx);
         if (subTask) {
           addLog(`📊 [调试] 子任务 ${idx + 1} (${subTask.name} @ ${subTask.location || '无地点'}) 收到 ${count} 条原始结果`);
-        }
-      }
-      
-      // 调试：检查哪些子任务没有收到结果
-      for (const subTask of subTasks) {
-        if (!rawResultsBySubTask.has(subTask.index)) {
-          addLog(`⚠️ [调试] 子任务 ${subTask.index + 1} (${subTask.name} @ ${subTask.location || '无地点'}) 未收到任何结果`);
         }
       }
       
@@ -690,7 +670,7 @@ async function executeTpsSearchUnifiedQueue(
       }
       
       // 保存结果到数据库
-      for (const [subTaskIndex, results] of Array.from(resultsBySubTask)) {
+      for (const [subTaskIndex, results] of resultsBySubTask) {
         const subTask = subTasks.find(t => t.index === subTaskIndex);
         if (subTask && results.length > 0) {
           await saveTpsSearchResults(taskDbId, subTaskIndex, subTask.name, subTask.location, results);
@@ -699,10 +679,10 @@ async function executeTpsSearchUnifiedQueue(
       }
       
       addLog(`════════ 详情阶段完成 ════════`);
-      addLog(`📊 详情页请求: ${totalDetailPages} 页 (新获取)`);
-      addLog(`📊 缓存命中: ${totalCacheHits} 条 (节省API调用)`);
-      addLog(`📊 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
-      addLog(`📊 有效结果: ${totalResults} 条 (最终输出)`);
+      addLog(`📊 详情页请求: ${totalDetailPages} 页`);
+      addLog(`📊 缓存命中: ${totalCacheHits} 条`);
+      addLog(`📊 详情过滤: ${totalFilteredOut} 条被排除`);
+      addLog(`📊 有效结果: ${totalResults} 条`);
     }
     
     // 更新最终进度
@@ -739,19 +719,13 @@ async function executeTpsSearchUnifiedQueue(
     addLog(`═══════════════════════════════════════════════════`);
     addLog(`🎉 任务完成!`);
     addLog(`═══════════════════════════════════════════════════`);
-    addLog(`📱 最终结果: ${totalResults} 条有效数据`);
+    addLog(`📱 总结果数: ${totalResults}`);
     addLog(`💰 总消耗: ${actualCost.toFixed(1)} 积分`);
-    addLog(``);
-    addLog(`════════ 费用明细 ════════`);
-    addLog(`   🔍 搜索页: ${totalSearchPages} 页 × ${searchCost} = ${(totalSearchPages * searchCost).toFixed(1)} 积分`);
-    addLog(`   📄 详情页: ${totalDetailPages} 页 × ${detailCost} = ${(totalDetailPages * detailCost).toFixed(1)} 积分`);
-    addLog(``);
-    addLog(`════════ 效率统计 ════════`);
-    addLog(`   📦 缓存命中: ${totalCacheHits} 条 (节省 ${(totalCacheHits * detailCost).toFixed(1)} 积分)`);
-    addLog(`   🚫 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
-    if (totalFilteredOut > 0) {
-      addLog(`   💡 提示: 被过滤的结果不符合年龄、运营商等筛选条件`);
-    }
+    addLog(`════════ 详细统计 ════════`);
+    addLog(`   搜索页请求: ${totalSearchPages} 页 (费用: ${(totalSearchPages * searchCost).toFixed(1)})`);
+    addLog(`   详情页请求: ${totalDetailPages} 页 (费用: ${(totalDetailPages * detailCost).toFixed(1)})`);
+    addLog(`   缓存命中: ${totalCacheHits} 条 (节省: ${(totalCacheHits * detailCost).toFixed(1)} 积分)`);
+    addLog(`   过滤排除: ${totalFilteredOut} 条`);
     addLog(`═══════════════════════════════════════════════════`);
     
     await completeTpsSearchTask(taskDbId, {
@@ -759,7 +733,6 @@ async function executeTpsSearchUnifiedQueue(
       searchPageRequests: totalSearchPages,
       detailPageRequests: totalDetailPages,
       cacheHits: totalCacheHits,
-      filteredOut: totalFilteredOut,
       creditsUsed: actualCost,
       logs,
     });
@@ -769,8 +742,8 @@ async function executeTpsSearchUnifiedQueue(
       userId,
       action: 'TPS搜索',
       details: `搜索完成: ${input.names.length}个姓名, ${totalResults}条结果, 消耗${actualCost.toFixed(1)}积分`,
-      ipAddress: undefined,
-      userAgent: undefined
+      ipAddress: null,
+      userAgent: null
     });
     
   } catch (error: any) {
