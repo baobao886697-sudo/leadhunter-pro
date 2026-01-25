@@ -360,6 +360,7 @@ export const tpsSearchTasks = mysqlTable("tps_search_tasks", {
   searchPageRequests: int("searchPageRequests").default(0).notNull(), // 搜索页请求数
   detailPageRequests: int("detailPageRequests").default(0).notNull(), // 详情页请求数
   cacheHits: int("cacheHits").default(0).notNull(), // 缓存命中数
+  filteredOut: int("filteredOut").default(0).notNull(), // 被过滤排除的结果数
   creditsUsed: decimal("creditsUsed", { precision: 10, scale: 2 }).default("0").notNull(),
   status: mysqlEnum("status", ["pending", "running", "completed", "failed", "cancelled", "insufficient_credits"]).default("pending").notNull(),
   progress: int("progress").default(0).notNull(), // 进度百分比

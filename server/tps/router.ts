@@ -423,10 +423,22 @@ async function executeTpsSearchUnifiedQueue(
   
   // 增强启动日志
   addLog(`═══════════════════════════════════════════════════`);
-  addLog(`🌸 开始 TPS 搜索 (v3.4 增强日志版)`);
+  addLog(`🌸 开始 TPS 搜索 (v3.5 过滤提示版)`);
   addLog(`📜 总任务数: ${subTasks.length}`);
   addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务 × 25页 / 详情 ${TOTAL_CONCURRENCY} 并发`);
   addLog(`🔍 搜索模式: ${input.mode === 'nameOnly' ? '仅姓名' : '姓名+地点'}`);
+  
+  // 显示过滤条件
+  const filters = input.filters || {};
+  const minAge = filters.minAge ?? config.defaultMinAge ?? 50;
+  const maxAge = filters.maxAge ?? config.defaultMaxAge ?? 79;
+  addLog(`🎯 过滤条件: 年龄 ${minAge}-${maxAge} 岁`);
+  if (filters.excludeTMobile) addLog(`   · 排除 T-Mobile 运营商`);
+  if (filters.excludeComcast) addLog(`   · 排除 Comcast 运营商`);
+  if (filters.excludeLandline) addLog(`   · 排除座机号码`);
+  if (filters.minYear) addLog(`   · 报告年份 ≥ ${filters.minYear}`);
+  if (filters.minPropertyValue) addLog(`   · 房产价值 ≥ $${filters.minPropertyValue.toLocaleString()}`);
+  
   addLog(`═══════════════════════════════════════════════════`);
   
   // 更新任务状态
@@ -686,10 +698,10 @@ async function executeTpsSearchUnifiedQueue(
       }
       
       addLog(`════════ 详情阶段完成 ════════`);
-      addLog(`📊 详情页请求: ${totalDetailPages} 页`);
-      addLog(`📊 缓存命中: ${totalCacheHits} 条`);
-      addLog(`📊 详情过滤: ${totalFilteredOut} 条被排除`);
-      addLog(`📊 有效结果: ${totalResults} 条`);
+      addLog(`📊 详情页请求: ${totalDetailPages} 页 (新获取)`);
+      addLog(`📊 缓存命中: ${totalCacheHits} 条 (节省API调用)`);
+      addLog(`📊 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
+      addLog(`📊 有效结果: ${totalResults} 条 (最终输出)`);
     }
     
     // 更新最终进度
@@ -726,13 +738,19 @@ async function executeTpsSearchUnifiedQueue(
     addLog(`═══════════════════════════════════════════════════`);
     addLog(`🎉 任务完成!`);
     addLog(`═══════════════════════════════════════════════════`);
-    addLog(`📱 总结果数: ${totalResults}`);
+    addLog(`📱 最终结果: ${totalResults} 条有效数据`);
     addLog(`💰 总消耗: ${actualCost.toFixed(1)} 积分`);
-    addLog(`════════ 详细统计 ════════`);
-    addLog(`   搜索页请求: ${totalSearchPages} 页 (费用: ${(totalSearchPages * searchCost).toFixed(1)})`);
-    addLog(`   详情页请求: ${totalDetailPages} 页 (费用: ${(totalDetailPages * detailCost).toFixed(1)})`);
-    addLog(`   缓存命中: ${totalCacheHits} 条 (节省: ${(totalCacheHits * detailCost).toFixed(1)} 积分)`);
-    addLog(`   过滤排除: ${totalFilteredOut} 条`);
+    addLog(``);
+    addLog(`════════ 费用明细 ════════`);
+    addLog(`   🔍 搜索页: ${totalSearchPages} 页 × ${searchCost} = ${(totalSearchPages * searchCost).toFixed(1)} 积分`);
+    addLog(`   📄 详情页: ${totalDetailPages} 页 × ${detailCost} = ${(totalDetailPages * detailCost).toFixed(1)} 积分`);
+    addLog(``);
+    addLog(`════════ 效率统计 ════════`);
+    addLog(`   📦 缓存命中: ${totalCacheHits} 条 (节省 ${(totalCacheHits * detailCost).toFixed(1)} 积分)`);
+    addLog(`   🚫 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
+    if (totalFilteredOut > 0) {
+      addLog(`   💡 提示: 被过滤的结果不符合年龄、运营商等筛选条件`);
+    }
     addLog(`═══════════════════════════════════════════════════`);
     
     await completeTpsSearchTask(taskDbId, {
@@ -740,6 +758,7 @@ async function executeTpsSearchUnifiedQueue(
       searchPageRequests: totalSearchPages,
       detailPageRequests: totalDetailPages,
       cacheHits: totalCacheHits,
+      filteredOut: totalFilteredOut,
       creditsUsed: actualCost,
       logs,
     });

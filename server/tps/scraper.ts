@@ -610,14 +610,27 @@ export async function fetchDetailsInBatch(
     }
   }
   
-  // 输出调试信息
+  // 输出调试信息（只显示有问题的子任务，避免日志过多）
   for (const [subTaskIndex, counts] of subTaskLinkCounts) {
-    let msg = `📊 [链接分配] 子任务 ${subTaskIndex + 1}: 缓存命中 ${counts.cached}`;
-    if (counts.cachedFiltered > 0) {
-      msg += ` (其中 ${counts.cachedFiltered} 个被过滤)`;
+    // 只有当有被过滤的结果时才输出详细日志
+    if (counts.cachedFiltered > 0 || counts.noPhone > 0) {
+      let msg = `📊 [子任务 ${subTaskIndex + 1}] 缓存: ${counts.cached}`;
+      if (counts.cachedFiltered > 0) {
+        msg += ` (过滤 ${counts.cachedFiltered})`;
+      }
+      msg += `, 新获取: ${counts.toFetch}`;
+      if (counts.noPhone > 0) {
+        msg += `, 无效电话: ${counts.noPhone}`;
+      }
+      onProgress(msg);
     }
-    msg += `, 待获取 ${counts.toFetch}, 无有效电话 ${counts.noPhone}`;
-    onProgress(msg);
+  }
+  
+  // 输出总体统计
+  const totalCached = Array.from(subTaskLinkCounts.values()).reduce((sum, c) => sum + c.cached, 0);
+  const totalFiltered = Array.from(subTaskLinkCounts.values()).reduce((sum, c) => sum + c.cachedFiltered, 0);
+  if (totalFiltered > 0) {
+    onProgress(`📊 [缓存统计] 命中 ${totalCached} 条, 其中 ${totalFiltered} 条因不符合筛选条件被排除`);
   }
   
   onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length}`);
@@ -715,7 +728,14 @@ export async function fetchDetailsInBatch(
     await setCachedDetails(cacheToSave);
   }
   
-  onProgress(`详情获取完成: ${results.length} 条结果，缓存命中 ${cacheHits}，新获取 ${detailPageRequests}`);
+  // 详情获取完成日志
+  onProgress(`✅ 详情获取完成`);
+  onProgress(`   · 总结果: ${results.length} 条`);
+  onProgress(`   · 缓存命中: ${cacheHits} 条 (节省 API 调用)`);
+  onProgress(`   · 新获取: ${detailPageRequests} 条`);
+  if (filteredOut > 0) {
+    onProgress(`   · 过滤排除: ${filteredOut} 条 (不符合筛选条件)`);
+  }
   
   return {
     results,

@@ -223,6 +223,11 @@ export default function TpsTask() {
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 缓存命中: {task?.cacheHits || 0}
+                {(task as any)?.filteredOut > 0 && (
+                  <span className="text-orange-400 ml-2">
+                    · 过滤排除: {(task as any).filteredOut}
+                  </span>
+                )}
               </p>
             </CardContent>
           </Card>
