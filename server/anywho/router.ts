@@ -58,6 +58,10 @@ const anywhoFiltersSchema = z.object({
 const anywhoSearchInputSchema = z.object({
   names: z.array(z.string().min(1)).min(1).max(100),
   locations: z.array(z.string()).optional(),
+  // 新增：独立的城市、州、邮编参数
+  cities: z.array(z.string()).optional(),
+  states: z.array(z.string()).optional(),
+  zipcodes: z.array(z.string()).optional(),
   mode: z.enum(["nameOnly", "nameLocation"]),
   filters: anywhoFiltersSchema,
 });

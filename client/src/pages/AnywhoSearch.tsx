@@ -62,6 +62,11 @@ export default function AnywhoSearch() {
   const [namesInput, setNamesInput] = useState("");
   const [locationsInput, setLocationsInput] = useState("");
   
+  // 姓名+地点模式的独立输入
+  const [citiesInput, setCitiesInput] = useState("");
+  const [statesInput, setStatesInput] = useState("");
+  const [zipcodesInput, setZipcodesInput] = useState("");
+  
   // 过滤条件 - 新的默认值
   const [filters, setFilters] = useState({
     minAge: 50,           // 默认最小年龄 50
@@ -109,6 +114,39 @@ export default function AnywhoSearch() {
   const names = namesInput.trim().split("\n").filter(n => n.trim());
   const locations = locationsInput.trim().split("\n").filter(l => l.trim());
   
+  // 姓名+地点模式的独立列表
+  const cities = citiesInput.trim().split("\n").filter(c => c.trim());
+  const states = statesInput.trim().split("\n").filter(s => s.trim());
+  const zipcodes = zipcodesInput.trim().split("\n").filter(z => z.trim());
+  
+  // 构建地点组合（城市+州+邮编）
+  const buildLocationCombinations = () => {
+    const combos: string[] = [];
+    // 如果有城市，使用城市
+    if (cities.length > 0) {
+      cities.forEach(city => {
+        // 如果有州，组合城市+州
+        if (states.length > 0) {
+          states.forEach(state => {
+            combos.push(`${city}, ${state}`);
+          });
+        } else {
+          combos.push(city);
+        }
+      });
+    } else if (states.length > 0) {
+      // 只有州
+      states.forEach(state => combos.push(state));
+    }
+    // 如果有邮编，单独添加
+    if (zipcodes.length > 0) {
+      zipcodes.forEach(zip => combos.push(zip));
+    }
+    return combos;
+  };
+  
+  const locationCombinations = buildLocationCombinations();
+  
   // Anywho 费率
   const searchCost = anywhoConfig?.searchCost || 0.5;
   const detailCost = anywhoConfig?.detailCost || 0.5;
@@ -116,7 +154,7 @@ export default function AnywhoSearch() {
   // 预估消耗计算
   const estimatedSearches = mode === "nameOnly" 
     ? names.length 
-    : names.length * Math.max(locations.length, 1);
+    : names.length * Math.max(locationCombinations.length, 1);
   const maxPages = 10;  // Anywho 最大页数
   const avgDetailsPerSearch = 30;  // 预估每个搜索平均详情数
   const estimatedSearchPageCost = estimatedSearches * maxPages * searchCost;
@@ -144,8 +182,8 @@ export default function AnywhoSearch() {
       return;
     }
     
-    if (mode === "nameLocation" && locations.length === 0) {
-      toast.error("姓名+地点模式需要输入地点");
+    if (mode === "nameLocation" && locationCombinations.length === 0) {
+      toast.error("姓名+地点模式需要输入至少一个地点条件（城市、州或邮编）");
       return;
     }
     
@@ -159,7 +197,10 @@ export default function AnywhoSearch() {
     
     searchMutation.mutate({
       names,
-      locations: mode === "nameLocation" ? locations : undefined,
+      locations: mode === "nameLocation" ? locationCombinations : undefined,
+      cities: mode === "nameLocation" ? cities : undefined,
+      states: mode === "nameLocation" ? states : undefined,
+      zipcodes: mode === "nameLocation" ? zipcodes : undefined,
       mode,
       filters,
     });
@@ -260,39 +301,95 @@ export default function AnywhoSearch() {
                   </TabsContent>
                   
                   <TabsContent value="nameLocation" className="mt-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="names2">姓名列表（每行一个）</Label>
-                        <Textarea
-                          id="names2"
-                          placeholder="John Smith&#10;Jane Doe"
-                          value={namesInput}
-                          onChange={(e) => setNamesInput(e.target.value)}
-                          className="mt-2 min-h-[150px] font-mono bg-slate-800/50"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          已输入 {names.length} 个姓名
-                        </p>
-                      </div>
-                      <div>
-                        <Label htmlFor="locations">地点列表（每行一个）</Label>
-                        <Textarea
-                          id="locations"
-                          placeholder="New York, NY&#10;Los Angeles, CA&#10;Chicago, IL"
-                          value={locationsInput}
-                          onChange={(e) => setLocationsInput(e.target.value)}
-                          className="mt-2 min-h-[150px] font-mono bg-slate-800/50"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          已输入 {locations.length} 个地点
-                        </p>
+                    {/* 姓名输入 */}
+                    <div>
+                      <Label htmlFor="names2">姓名列表（每行一个）</Label>
+                      <Textarea
+                        id="names2"
+                        placeholder="John Smith&#10;Jane Doe&#10;Robert Johnson"
+                        value={namesInput}
+                        onChange={(e) => setNamesInput(e.target.value)}
+                        className="mt-2 min-h-[120px] font-mono bg-slate-800/50"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        已输入 {names.length} 个姓名
+                      </p>
+                    </div>
+                    
+                    {/* 地点输入 - 三个独立输入框 */}
+                    <div className="border-t border-slate-700 pt-4">
+                      <p className="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        地点条件（可分开输入，会自动组合）
+                      </p>
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* 城市 */}
+                        <div>
+                          <Label htmlFor="cities" className="flex items-center gap-1">
+                            <Building className="h-3 w-3" />
+                            城市 (City)
+                          </Label>
+                          <Textarea
+                            id="cities"
+                            placeholder="New York&#10;Los Angeles&#10;Chicago"
+                            value={citiesInput}
+                            onChange={(e) => setCitiesInput(e.target.value)}
+                            className="mt-2 min-h-[100px] font-mono bg-slate-800/50 text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {cities.length} 个城市
+                          </p>
+                        </div>
+                        
+                        {/* 州 */}
+                        <div>
+                          <Label htmlFor="states" className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            州 (State)
+                          </Label>
+                          <Textarea
+                            id="states"
+                            placeholder="NY&#10;CA&#10;IL"
+                            value={statesInput}
+                            onChange={(e) => setStatesInput(e.target.value)}
+                            className="mt-2 min-h-[100px] font-mono bg-slate-800/50 text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {states.length} 个州
+                          </p>
+                        </div>
+                        
+                        {/* 邮编 */}
+                        <div>
+                          <Label htmlFor="zipcodes" className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            邮编 (ZIP)
+                          </Label>
+                          <Textarea
+                            id="zipcodes"
+                            placeholder="10001&#10;90001&#10;60601"
+                            value={zipcodesInput}
+                            onChange={(e) => setZipcodesInput(e.target.value)}
+                            className="mt-2 min-h-[100px] font-mono bg-slate-800/50 text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {zipcodes.length} 个邮编
+                          </p>
+                        </div>
                       </div>
                     </div>
+                    
+                    {/* 搜索组合预览 */}
                     <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                       <p className="text-sm text-amber-400 flex items-center gap-2">
                         <Info className="h-4 w-4" />
-                        将搜索 {names.length} × {locations.length} = {names.length * locations.length} 个组合
+                        将搜索 {names.length} 个姓名 × {locationCombinations.length} 个地点 = {names.length * locationCombinations.length} 个组合
                       </p>
+                      {locationCombinations.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          地点组合: {locationCombinations.slice(0, 5).join(', ')}{locationCombinations.length > 5 ? ` ... 等 ${locationCombinations.length} 个` : ''}
+                        </p>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>

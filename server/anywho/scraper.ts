@@ -181,16 +181,54 @@ function parseStateName(location: string): string | null {
 }
 
 /**
+ * 解析城市名
+ */
+function parseCityName(location: string): string | null {
+  // 尝试解析 "City, State" 格式
+  const parts = location.split(',');
+  if (parts.length >= 1) {
+    const city = parts[0].trim();
+    if (city && city.length > 0) {
+      return city.toLowerCase().replace(/\s+/g, '+');
+    }
+  }
+  return null;
+}
+
+/**
  * 构建搜索 URL
+ * Anywho URL 格式: /people/{name}/{state}/{city}
+ * 例如: /people/john+smith/new+york/new+york
  */
 function buildSearchUrl(name: string, location?: string, page: number = 1): string {
   const encodedName = name.trim().toLowerCase().replace(/\s+/g, '+');
   
   let locationPath = '';
   if (location) {
-    const stateName = parseStateName(location);
-    if (stateName) {
-      locationPath = `/${stateName.toLowerCase()}`;
+    // 检查是否是邮编（纯数字）
+    const isZipcode = /^\d{5}(-\d{4})?$/.test(location.trim());
+    
+    if (isZipcode) {
+      // 邮编搜索：直接使用邮编作为地点
+      // Anywho 支持邮编搜索，但格式可能不同
+      locationPath = `/${location.trim()}`;
+    } else {
+      // 解析州名
+      const stateName = parseStateName(location);
+      // 解析城市名
+      const cityName = parseCityName(location);
+      
+      if (stateName) {
+        locationPath = `/${stateName.toLowerCase().replace(/\s+/g, '+')}`;
+        // 如果有城市，添加城市路径
+        if (cityName) {
+          locationPath += `/${cityName}`;
+        }
+      } else if (cityName) {
+        // 只有城市，没有州
+        // 尝试直接使用城市名
+        locationPath = `/${cityName}`;
+      }
     }
   }
   
