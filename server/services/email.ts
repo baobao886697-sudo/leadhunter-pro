@@ -5,15 +5,31 @@
  * 功能：
  * - 发送密码重置邮件
  * - 发送邮箱验证邮件
+ * 
+ * 注意：使用延迟初始化，避免缺少 API Key 时导致应用崩溃
  */
 
 import { Resend } from 'resend';
 
-// 初始化 Resend 客户端
-const resend = new Resend(process.env.RESEND_API_KEY);
+// 延迟初始化 Resend 客户端
+let resend: Resend | null = null;
+
+function getResendClient(): Resend | null {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 // 发件人地址（使用 Resend 默认域名，或配置自定义域名）
 const FROM_EMAIL = process.env.FROM_EMAIL || 'DataReach <onboarding@resend.dev>';
+
+/**
+ * 检查邮件服务是否可用
+ */
+export function isEmailServiceAvailable(): boolean {
+  return !!process.env.RESEND_API_KEY;
+}
 
 /**
  * 发送密码重置邮件
@@ -22,10 +38,17 @@ const FROM_EMAIL = process.env.FROM_EMAIL || 'DataReach <onboarding@resend.dev>'
  * @returns 是否发送成功
  */
 export async function sendPasswordResetEmail(email: string, token: string): Promise<boolean> {
+  const client = getResendClient();
+  
+  if (!client) {
+    console.warn('[Email] 邮件服务未配置 (缺少 RESEND_API_KEY)，跳过发送密码重置邮件');
+    return false;
+  }
+  
   try {
     const resetUrl = `${process.env.VITE_APP_URL || 'https://www.datareach.co'}/reset-password?token=${token}`;
     
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await client.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: 'DataReach - 密码重置请求',
@@ -74,10 +97,17 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
  * @returns 是否发送成功
  */
 export async function sendVerificationEmail(email: string, token: string): Promise<boolean> {
+  const client = getResendClient();
+  
+  if (!client) {
+    console.warn('[Email] 邮件服务未配置 (缺少 RESEND_API_KEY)，跳过发送验证邮件');
+    return false;
+  }
+  
   try {
     const verifyUrl = `${process.env.VITE_APP_URL || 'https://www.datareach.co'}/verify-email?token=${token}`;
     
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await client.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: 'DataReach - 验证您的邮箱',
