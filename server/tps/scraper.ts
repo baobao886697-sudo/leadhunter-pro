@@ -566,19 +566,48 @@ export async function fetchDetailsInBatch(
     tasksByLink.get(link)!.push(task);
   }
   
+  // 调试：跟踪每个子任务的链接分配情况
+  const subTaskLinkCounts = new Map<number, { cached: number; toFetch: number; noPhone: number }>();
+  
   for (const [link, linkTasks] of tasksByLink) {
     const cachedArray = cachedMap.get(link);
-    if (cachedArray && cachedArray.length > 0 && cachedArray.some(c => c.phone && c.phone.length >= 10)) {
+    const hasValidPhone = cachedArray && cachedArray.length > 0 && cachedArray.some(c => c.phone && c.phone.length >= 10);
+    
+    if (hasValidPhone) {
       cacheHits++;
-      const filteredCached = cachedArray.filter(r => shouldIncludeResult(r, filters));
-      filteredOut += cachedArray.length - filteredCached.length;
+      const filteredCached = cachedArray!.filter(r => shouldIncludeResult(r, filters));
+      filteredOut += cachedArray!.length - filteredCached.length;
       // 即使过滤后为空，也要为所有任务创建空结果记录，确保子任务不会丢失
       for (const task of linkTasks) {
         results.push({ task, details: filteredCached });
+        // 调试统计
+        if (!subTaskLinkCounts.has(task.subTaskIndex)) {
+          subTaskLinkCounts.set(task.subTaskIndex, { cached: 0, toFetch: 0, noPhone: 0 });
+        }
+        subTaskLinkCounts.get(task.subTaskIndex)!.cached++;
       }
     } else {
+      // 缓存未命中或没有有效电话，需要重新获取
+      // 注意：这里只添加第一个任务，但后续获取结果时会分配给所有任务
       tasksToFetch.push(linkTasks[0]);
+      
+      // 调试统计
+      for (const task of linkTasks) {
+        if (!subTaskLinkCounts.has(task.subTaskIndex)) {
+          subTaskLinkCounts.set(task.subTaskIndex, { cached: 0, toFetch: 0, noPhone: 0 });
+        }
+        if (cachedArray && cachedArray.length > 0) {
+          subTaskLinkCounts.get(task.subTaskIndex)!.noPhone++;
+        } else {
+          subTaskLinkCounts.get(task.subTaskIndex)!.toFetch++;
+        }
+      }
     }
+  }
+  
+  // 输出调试信息
+  for (const [subTaskIndex, counts] of subTaskLinkCounts) {
+    onProgress(`📊 [链接分配] 子任务 ${subTaskIndex + 1}: 缓存命中 ${counts.cached}, 待获取 ${counts.toFetch}, 无有效电话 ${counts.noPhone}`);
   }
   
   onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length}`);
