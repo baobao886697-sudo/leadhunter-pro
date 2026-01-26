@@ -855,7 +855,8 @@ async function executeAnywhoSearch(
         filteredResults = filteredResults.filter(r => {
           // 检查主号码或 allPhones 数组中是否有有效号码
           const hasMainPhone = r.phone && r.phone.trim() !== '';
-          const hasAnyPhone = r.allPhones && r.allPhones.length > 0 && r.allPhones.some((p: any) => p.number && p.number.trim() !== '');
+          // allPhones 是字符串数组 string[]，不是对象数组
+          const hasAnyPhone = r.allPhones && r.allPhones.length > 0 && r.allPhones.some((p: string) => p && p.trim() !== '');
           return hasMainPhone || hasAnyPhone;
         });
         const noPhoneFiltered = beforeNoPhoneFilter - filteredResults.length;
