@@ -401,16 +401,48 @@ export async function saveAnywhoDetailCache(details: Array<{
 // ==================== 积分相关 ====================
 
 /**
- * 扣除用户积分
+ * 扣除用户积分并记录日志
+ * @param userId 用户ID
+ * @param amount 扣除金额
+ * @param taskId 关联的任务ID（可选）
+ * @param description 描述（可选，默认为 "Anywho 搜索"）
  */
-export async function deductCredits(userId: number, amount: number) {
+export async function deductCredits(
+  userId: number, 
+  amount: number, 
+  taskId?: string,
+  description: string = "Anywho 搜索"
+) {
   const database = await db();
+  const roundedAmount = Math.ceil(amount);
   
+  // 获取当前余额
+  const user = await database.select({ credits: users.credits })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  
+  const currentCredits = user[0]?.credits || 0;
+  const balanceAfter = currentCredits - roundedAmount;
+  
+  // 扣除积分
   await database.update(users)
     .set({
-      credits: sql`credits - ${Math.ceil(amount)}`,
+      credits: sql`credits - ${roundedAmount}`,
     })
     .where(eq(users.id, userId));
+  
+  // 记录积分变动日志
+  await logCreditChange({
+    userId,
+    amount: -roundedAmount,  // 负数表示扣除
+    balanceAfter,
+    type: 'search',
+    description,
+    relatedTaskId: taskId,
+  });
+  
+  console.log(`[Anywho] 扣除积分: userId=${userId}, amount=${roundedAmount}, balanceAfter=${balanceAfter}`);
 }
 
 /**

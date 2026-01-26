@@ -864,15 +864,16 @@ export async function searchOnly(
         waitSelector: 'a[href*="/people/"]'
       });
       
+      // API 已调用，无论成功失败都计费（scrape.do 即使失败也会收费）
+      totalPagesSearched++;
+      
       if (!html) {
-        console.error(`[Anywho] [${ageRange}] 第 ${page} 页抓取失败`);
+        console.error(`[Anywho] [${ageRange}] 第 ${page} 页抓取失败（已计费）`);
         break;
       }
       
       const pageResults = parseSearchResults(html);
       console.log(`[Anywho] [${ageRange}] 第 ${page} 页找到 ${pageResults.length} 个有效结果`);
-      
-      totalPagesSearched++;
       
       if (pageResults.length === 0) {
         console.log(`[Anywho] [${ageRange}] 第 ${page} 页无结果，停止该年龄段搜索`);

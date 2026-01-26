@@ -856,8 +856,8 @@ async function executeAnywhoSearch(
     const detailCost = parseFloat(config.detailCost || config.searchCost);  // 详情页费用
     const creditsUsed = (totalSearchPages * searchCost) + (totalDetailPages * detailCost);
     
-    // 扣除积分
-    await deductCredits(userId, creditsUsed);
+    // 扣除积分并记录日志
+    await deductCredits(userId, creditsUsed, taskId, `Anywho 搜索: ${totalResults} 条结果`);
     
     // 完成任务
     await completeAnywhoSearchTask(taskId, {
