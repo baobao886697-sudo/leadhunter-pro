@@ -864,11 +864,11 @@ export async function searchOnly(
         waitSelector: 'a[href*="/people/"]'
       });
       
-      // API 已调用，无论成功失败都计费（scrape.do 即使失败也会收费）
+      // API 已调用，计入请求数
       totalPagesSearched++;
       
       if (!html) {
-        console.error(`[Anywho] [${ageRange}] 第 ${page} 页抓取失败（已计费）`);
+        console.error(`[Anywho] [${ageRange}] 第 ${page} 页抓取失败`);
         break;
       }
       
