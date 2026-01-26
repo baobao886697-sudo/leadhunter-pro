@@ -812,12 +812,21 @@ async function executeAnywhoSearch(
         }
       }
       
-      // 合并详情信息到筛选结果
+      // 合并详情信息到筛选结果，并使用详情页的智能选择号码
       for (const result of filteredResults) {
         const detail = detailMap.get(result.detailLink);
         if (detail) {
-          result.carrier = detail.carrier || result.carrier;
-          result.phoneType = detail.phoneType || result.phoneType;
+          // 使用详情页的智能选择号码（优先 Mobile + 地址匹配）
+          // 只有当详情页有有效号码时才替换
+          if (detail.phone && detail.phone.trim() !== '') {
+            result.phone = detail.phone;
+            result.carrier = detail.carrier || result.carrier;
+            result.phoneType = detail.phoneType || result.phoneType;
+          } else {
+            // 详情页没有号码，保留搜索页的号码
+            result.carrier = detail.carrier || result.carrier;
+            result.phoneType = detail.phoneType || result.phoneType;
+          }
           result.marriageStatus = detail.marriageStatus || result.marriageStatus;
           result.isDeceased = detail.isDeceased;
           if (detail.allPhones && detail.allPhones.length > 0) {
