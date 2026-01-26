@@ -486,9 +486,9 @@ async function executeAnywhoSearch(
   
   try {
     // ==================== 启动日志 ====================
-    await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🌸 开始 Anywho 双年龄搜索 (优化版)`);
-    await addLog(`═══════════════════════════════════════════════════`);
+    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    await addLog(`🔍 开始搜索`);
+    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     
     // 显示搜索配置
     await addLog(`📋 搜索配置:`);
@@ -510,8 +510,7 @@ async function executeAnywhoSearch(
     const ageRangesToSearch = determineAgeRanges(minAge, maxAge);
     
     await addLog(`📋 过滤条件:`);
-    await addLog(`   • 用户年龄范围: ${minAge} - ${maxAge} 岁`);
-    await addLog(`   • Anywho 年龄段: ${ageRangesToSearch.join(', ')} (共 ${ageRangesToSearch.length} 个)`);
+    await addLog(`   • 年龄范围: ${minAge} - ${maxAge} 岁`);
     await addLog(`   • 号码年份: ≥ ${minYear} 年`);
     await addLog(`   • 排除已故: ${filters.excludeDeceased !== false ? '是' : '否'}`);
     if (filters.excludeMarried) await addLog(`   • 排除已婚: 是`);
@@ -523,17 +522,12 @@ async function executeAnywhoSearch(
     const estimatedSearchPages = subTasks.length * maxPages * ageRangesToSearch.length;
     const estimatedSearchCost = estimatedSearchPages * searchCost;
     
-    await addLog(`💰 费用预估 (最大值):`);
-    await addLog(`   • 搜索页费用: 最多 ${subTasks.length} 任务 × ${maxPages} 页 × ${ageRangesToSearch.length} 年龄段 = ${estimatedSearchPages} 页`);
-    await addLog(`   • 单页费用: ${searchCost} 积分`);
-    await addLog(`   • 预估总费用: ~${estimatedSearchCost.toFixed(1)} 积分`);
-    await addLog(`   💡 说明: 双年龄搜索确保获取 ${minAge}-${maxAge} 岁完整数据`);
+    await addLog(`💰 费用预估:`);
+    await addLog(`   • 预估最大费用: ~${estimatedSearchCost.toFixed(1)} 积分`);
     
-    await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务并发`);
+    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     
     // ==================== 双年龄搜索并提取数据 ====================
-    await addLog(`📋 开始双年龄搜索 (${SEARCH_CONCURRENCY} 任务并发)...`);
     
     const allSearchResults: Array<{
       searchResult: AnywhoSearchResult;
@@ -579,7 +573,7 @@ async function executeAnywhoSearch(
           }
           
           // 记录每个子任务的搜索结果
-          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果, ${pagesSearched} 页 (搜索了 ${ageRangesSearched} 个年龄段)`);
+          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果`);
           
           return { success: true, count: results.length };
         } catch (error: any) {
@@ -600,15 +594,10 @@ async function executeAnywhoSearch(
       });
     }
     
-    // 搜索阶段完成日志
-    await addLog(`════════ 双年龄搜索阶段完成 ════════`);
-    await addLog(`📊 搜索页请求: ${totalSearchPages} 页`);
-    await addLog(`📊 年龄段: ${ageRangesToSearch.join(', ')}`);
-    await addLog(`📊 原始结果: ${allSearchResults.length} 条 (包含所有年龄段)`);
-    await addLog(`📊 下一步: 过滤出 ${minAge}-${maxAge} 岁的结果`);
+    // 搜索阶段完成
+    await addLog(`📊 搜索完成，正在应用过滤条件...`);
     
     // ==================== 转换并应用过滤 ====================
-    await addLog(`📋 转换数据并应用过滤条件...`);
     
     const allResults: Array<{
       subTaskIndex: number;
@@ -757,26 +746,14 @@ async function executeAnywhoSearch(
     totalFilteredOut = initialCount - filteredResults.length;
     
     // 过滤阶段完成日志
-    await addLog(`════════ 过滤阶段完成 ════════`);
-    await addLog(`📊 原始结果: ${initialCount} 条`);
-    if (filteredDeceased > 0) await addLog(`   • 排除已故: ${filteredDeceased} 条`);
-    if (filteredAge > 0) await addLog(`   • 年龄过滤 (${filterMinAge}-${filterMaxAge}岁): ${filteredAge} 条`);
-    if (filteredYear > 0) await addLog(`   • 号码年份过滤 (≥${filterMinYear}年): ${filteredYear} 条`);
-    if (filteredMarried > 0) await addLog(`   • 排除已婚: ${filteredMarried} 条`);
-    if (filteredTMobile > 0) await addLog(`   • 排除 T-Mobile: ${filteredTMobile} 条`);
-    if (filteredComcast > 0) await addLog(`   • 排除 Comcast: ${filteredComcast} 条`);
-    if (filteredLandline > 0) await addLog(`   • 排除 Landline: ${filteredLandline} 条`);
-    await addLog(`📊 总过滤: ${totalFilteredOut} 条`);
-    await addLog(`📊 筛选后结果: ${filteredResults.length} 条`);
+    await addLog(`📊 过滤完成: ${filteredResults.length} 条符合条件，${totalFilteredOut} 条已过滤`);
     
     // ==================== 混合模式：获取详情页完整信息 ====================
     let totalDetailPages = 0;
     let detailSuccessCount = 0;
     
     if (filteredResults.length > 0) {
-      await addLog(`════════ 开始获取详情页完整信息 ════════`);
-      await addLog(`📝 将从详情页获取: 运营商、电话类型、婚姻状况`);
-      await addLog(`📝 待处理: ${filteredResults.length} 条结果`);
+      await addLog(`📊 正在获取详细信息...`);
       
       // 构建搜索结果映射
       const searchResultMap = new Map<string, AnywhoSearchResult>();
@@ -800,7 +777,7 @@ async function executeAnywhoSearch(
             detailPageRequests: completed,
           });
           if (current) {
-            await addLog(`✅ [${completed}/${total}] ${current.name} - 运营商: ${current.carrier || '未知'}, 类型: ${current.phoneType}, 婚姻: ${current.marriageStatus || '未知'}`);
+            await addLog(`✅ [${completed}/${total}] ${current.name} - 已获取`);
           }
         },
         (msg) => addLog(msg)
@@ -834,9 +811,7 @@ async function executeAnywhoSearch(
         }
       }
       
-      await addLog(`════════ 详情页获取完成 ════════`);
-      await addLog(`📊 详情页请求: ${totalDetailPages} 次`);
-      await addLog(`📊 成功获取: ${detailSuccessCount} 条`);
+      await addLog(`📊 详细信息获取完成`);
       
       // ==================== 详情页获取后再次过滤已故人员 ====================
       if (filters.excludeDeceased !== false) {
@@ -844,7 +819,7 @@ async function executeAnywhoSearch(
         filteredResults = filteredResults.filter(r => !r.isDeceased);
         const deceasedFiltered = beforeDeceasedFilter - filteredResults.length;
         if (deceasedFiltered > 0) {
-          await addLog(`📊 详情页后排除已故: ${deceasedFiltered} 条`);
+          // 已故过滤完成，不显示日志
           totalFilteredOut += deceasedFiltered;
         }
       }
@@ -860,7 +835,7 @@ async function executeAnywhoSearch(
         });
         const noPhoneFiltered = beforeNoPhoneFilter - filteredResults.length;
         if (noPhoneFiltered > 0) {
-          await addLog(`📊 排除无电话号码: ${noPhoneFiltered} 条`);
+          // 无电话过滤完成，不显示日志
           totalFilteredOut += noPhoneFiltered;
         }
       }
@@ -894,41 +869,33 @@ async function executeAnywhoSearch(
     });
     
     // ==================== 完成日志 ====================
-    await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🎉 任务完成!`);
-    await addLog(`═══════════════════════════════════════════════════`);
+    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    await addLog(`🎉 搜索完成!`);
+    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     
     // 搜索结果摘要
-    await addLog(`📊 搜索结果摘要:`);
-    await addLog(`   • 有效结果: ${totalResults} 条联系人信息`);
-    await addLog(`   • 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
-    await addLog(`   • 详情页成功: ${detailSuccessCount}/${totalDetailPages} 条`);
+    await addLog(`📊 搜索结果:`);
+    await addLog(`   • 有效结果: ${totalResults} 条联系人`);
+    await addLog(`   • 已过滤: ${totalFilteredOut} 条`);
     
     // 费用明细
     const searchCredits = totalSearchPages * searchCost;
     const detailCredits = totalDetailPages * detailCost;
     
-    await addLog(`💰 费用明细 (混合模式):`);
-    await addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${searchCredits.toFixed(1)} 积分`);
-    await addLog(`   • 详情页费用: ${totalDetailPages} 页 × ${detailCost} = ${detailCredits.toFixed(1)} 积分`);
+    await addLog(`💰 费用明细:`);
+    await addLog(`   • 搜索费用: ${searchCredits.toFixed(1)} 积分`);
+    await addLog(`   • 详情费用: ${detailCredits.toFixed(1)} 积分`);
     await addLog(`   ──────────────────────────────`);
     await addLog(`   • 实际消耗: ${creditsUsed.toFixed(1)} 积分`);
-    
-    // 费用效率分析
-    await addLog(`📈 费用效率:`);
     if (totalResults > 0) {
       const costPerResult = creditsUsed / totalResults;
-      await addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`);
+      await addLog(`   • 每条成本: ${costPerResult.toFixed(2)} 积分`);
     }
-    await addLog(`   • 混合模式: 搜索页基本信息 + 详情页完整信息`);
-    
-    await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`💡 提示: 混合模式获取完整信息（运营商、电话类型、婚姻状况）`);
-    await addLog(`═══════════════════════════════════════════════════`);
+    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     
   } catch (error: any) {
     console.error(`[Anywho] 任务 ${taskId} 执行失败:`, error);
     await failAnywhoSearchTask(taskId, error.message || "未知错误");
-    await addLog(`任务失败: ${error.message}`);
+    await addLog(`❗ 搜索失败: ${error.message}`);
   }
 }

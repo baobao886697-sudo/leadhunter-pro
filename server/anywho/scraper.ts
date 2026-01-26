@@ -992,9 +992,9 @@ export async function fetchDetailFromPage(
   detail: AnywhoDetailResult | null;
   success: boolean;
 }> {
-  const log = (msg: string) => {
+  // 内部日志，不向用户显示
+  const internalLog = (msg: string) => {
     console.log(msg);
-    if (onLog) onLog(msg);
   };
   
   try {
@@ -1002,7 +1002,7 @@ export async function fetchDetailFromPage(
       ? detailLink 
       : `${ANYWHO_CONFIG.BASE_URL}${detailLink}`;
     
-    log(`[Anywho] 抓取详情页: ${fullUrl}`);
+    internalLog(`[Anywho] 抓取详情页: ${fullUrl}`);
     
     const html = await scrapeUrl(fullUrl, token, {
       render: true,
@@ -1011,7 +1011,7 @@ export async function fetchDetailFromPage(
     });
     
     if (!html) {
-      log(`[Anywho] 详情页抓取失败`);
+      internalLog(`[Anywho] 详情页抓取失败`);
       // 如果详情页抓取失败，返回搜索结果转换的基本信息
       return {
         detail: convertSearchResultToDetail(searchResult),
@@ -1023,7 +1023,7 @@ export async function fetchDetailFromPage(
     const detailFromPage = parseDetailPage(html);
     
     if (!detailFromPage) {
-      log(`[Anywho] 详情页解析失败`);
+      internalLog(`[Anywho] 详情页解析失败`);
       return {
         detail: convertSearchResultToDetail(searchResult),
         success: false,
@@ -1042,7 +1042,7 @@ export async function fetchDetailFromPage(
       allPhones: detailFromPage.allPhones || [searchResult.phones?.[0] || ''],
     };
     
-    log(`[Anywho] 详情页解析成功: 运营商=${mergedDetail.carrier}, 类型=${mergedDetail.phoneType}, 婚姻=${mergedDetail.marriageStatus}`);
+    internalLog(`[Anywho] 详情页解析成功: 运营商=${mergedDetail.carrier}, 类型=${mergedDetail.phoneType}, 婚姻=${mergedDetail.marriageStatus}`);
     
     return {
       detail: mergedDetail,
@@ -1072,12 +1072,12 @@ export async function fetchDetailsFromPages(
   requestCount: number;
   successCount: number;
 }> {
-  const log = (msg: string) => {
+  // 内部日志，不向用户显示
+  const internalLog = (msg: string) => {
     console.log(msg);
-    if (onLog) onLog(msg);
   };
   
-  log(`[Anywho] 开始批量获取详情页: ${searchResults.length} 个结果, 并发数: ${concurrency}`);
+  internalLog(`[Anywho] 开始批量获取详情页: ${searchResults.length} 个结果, 并发数: ${concurrency}`);
   
   const details: AnywhoDetailResult[] = [];
   let requestCount = 0;
@@ -1120,7 +1120,7 @@ export async function fetchDetailsFromPages(
     }
   }
   
-  log(`[Anywho] 详情页获取完成: ${successCount}/${requestCount} 成功`);
+  internalLog(`[Anywho] 详情页获取完成: ${successCount}/${requestCount} 成功`);
   
   return {
     details,
