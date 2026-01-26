@@ -853,11 +853,10 @@ async function executeAnywhoSearch(
       {
         const beforeNoPhoneFilter = filteredResults.length;
         filteredResults = filteredResults.filter(r => {
-          // 检查主号码或 allPhones 数组中是否有有效号码
+          // 只保留有主号码的记录，确保 CSV 导出的每条记录都有电话号码
+          // 主号码是经过智能选择的最佳号码（优先 Mobile + 地址匹配）
           const hasMainPhone = r.phone && r.phone.trim() !== '';
-          // allPhones 是字符串数组 string[]，不是对象数组
-          const hasAnyPhone = r.allPhones && r.allPhones.length > 0 && r.allPhones.some((p: string) => p && p.trim() !== '');
-          return hasMainPhone || hasAnyPhone;
+          return hasMainPhone;
         });
         const noPhoneFiltered = beforeNoPhoneFilter - filteredResults.length;
         if (noPhoneFiltered > 0) {
