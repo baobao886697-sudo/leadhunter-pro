@@ -16,9 +16,11 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { 
   searchOnly,
   convertSearchResultToDetail,
+  determineAgeRanges,
   AnywhoFilters, 
   AnywhoDetailResult,
   AnywhoSearchResult,
+  AnywhoAgeRange,
   DetailTask,
   ANYWHO_CONFIG,
 } from "./scraper";
@@ -83,7 +85,7 @@ export const anywhoRouter = router({
     };
   }),
 
-  // 预估搜索消耗 - 更新：不再需要详情页费用
+  // 预估搜索消耗 - 更新：双年龄搜索，费用 x2
   estimateCost: protectedProcedure
     .input(anywhoSearchInputSchema)
     .query(async ({ input }) => {
@@ -100,8 +102,14 @@ export const anywhoRouter = router({
         subTaskCount = input.names.length * locations.length;
       }
       
-      // 搜索页费用（不再需要详情页费用）
-      const maxSearchPages = subTaskCount * maxPages;
+      // 根据用户年龄过滤设置确定需要搜索的年龄段数量
+      const minAge = input.filters?.minAge ?? 50;
+      const maxAge = input.filters?.maxAge ?? 79;
+      const ageRanges = determineAgeRanges(minAge, maxAge);
+      const ageRangeCount = ageRanges.length;
+      
+      // 搜索页费用：子任务数 × 每任务页数 × 年龄段数量
+      const maxSearchPages = subTaskCount * maxPages * ageRangeCount;
       const maxSearchCost = maxSearchPages * searchCost;
       
       // 总费用 = 只有搜索页费用
@@ -110,6 +118,8 @@ export const anywhoRouter = router({
       return {
         subTaskCount,
         maxPages,
+        ageRangeCount,
+        ageRanges,
         maxSearchPages,
         maxSearchCost: Math.ceil(maxSearchCost * 10) / 10,
         avgDetailsPerTask: 0,  // 不再需要详情页
@@ -118,7 +128,7 @@ export const anywhoRouter = router({
         estimatedCost: Math.ceil(estimatedCost * 10) / 10,
         searchCost,
         detailCost: 0,  // 不再需要详情页费用
-        note: "直接从搜索结果页提取数据，无需访问详情页",
+        note: `双年龄搜索 (${ageRanges.join(', ')})，直接从搜索结果页提取数据`,
       };
     }),
 
@@ -471,7 +481,7 @@ async function executeAnywhoSearch(
   try {
     // ==================== 启动日志 ====================
     await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🌸 开始 Anywho 搜索 (优化版 - 直接提取搜索结果)`);
+    await addLog(`🌸 开始 Anywho 双年龄搜索 (优化版)`);
     await addLog(`═══════════════════════════════════════════════════`);
     
     // 显示搜索配置
@@ -490,8 +500,12 @@ async function executeAnywhoSearch(
     const maxAge = filters.maxAge ?? 79;
     const minYear = filters.minYear ?? 2025;
     
+    // 根据用户年龄范围确定需要搜索的 Anywho 年龄段
+    const ageRangesToSearch = determineAgeRanges(minAge, maxAge);
+    
     await addLog(`📋 过滤条件:`);
-    await addLog(`   • 年龄范围: ${minAge} - ${maxAge} 岁`);
+    await addLog(`   • 用户年龄范围: ${minAge} - ${maxAge} 岁`);
+    await addLog(`   • Anywho 年龄段: ${ageRangesToSearch.join(', ')} (共 ${ageRangesToSearch.length} 个)`);
     await addLog(`   • 号码年份: ≥ ${minYear} 年`);
     await addLog(`   • 排除已故: ${filters.excludeDeceased !== false ? '是' : '否'}`);
     if (filters.excludeMarried) await addLog(`   • 排除已婚: 是`);
@@ -499,21 +513,21 @@ async function executeAnywhoSearch(
     if (filters.excludeComcast) await addLog(`   • 排除 Comcast: 是`);
     if (filters.excludeLandline) await addLog(`   • 排除 Landline: 是`);
     
-    // 显示预估费用（只需搜索页费用）
-    const estimatedSearchPages = subTasks.length * maxPages;
+    // 显示预估费用（双年龄搜索）
+    const estimatedSearchPages = subTasks.length * maxPages * ageRangesToSearch.length;
     const estimatedSearchCost = estimatedSearchPages * searchCost;
     
     await addLog(`💰 费用预估 (最大值):`);
-    await addLog(`   • 搜索页费用: 最多 ${estimatedSearchPages} 页 × ${searchCost} = ${estimatedSearchCost.toFixed(1)} 积分`);
-    await addLog(`   • 详情页费用: 0 积分 (直接从搜索结果提取数据)`);
+    await addLog(`   • 搜索页费用: 最多 ${subTasks.length} 任务 × ${maxPages} 页 × ${ageRangesToSearch.length} 年龄段 = ${estimatedSearchPages} 页`);
+    await addLog(`   • 单页费用: ${searchCost} 积分`);
     await addLog(`   • 预估总费用: ~${estimatedSearchCost.toFixed(1)} 积分`);
-    await addLog(`   💡 优化: 无需访问详情页，大幅节省费用！`);
+    await addLog(`   💡 说明: 双年龄搜索确保获取 ${minAge}-${maxAge} 岁完整数据`);
     
     await addLog(`═══════════════════════════════════════════════════`);
     await addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务并发`);
     
-    // ==================== 搜索并提取数据 ====================
-    await addLog(`📋 开始搜索并提取数据 (${SEARCH_CONCURRENCY} 任务并发)...`);
+    // ==================== 双年龄搜索并提取数据 ====================
+    await addLog(`📋 开始双年龄搜索 (${SEARCH_CONCURRENCY} 任务并发)...`);
     
     const allSearchResults: Array<{
       searchResult: AnywhoSearchResult;
@@ -537,11 +551,13 @@ async function executeAnywhoSearch(
         const taskName = subTask.location ? `${subTask.name} @ ${subTask.location}` : subTask.name;
         
         try {
-          const { results, pagesSearched } = await searchOnly(
+          // 使用双年龄搜索
+          const { results, pagesSearched, ageRangesSearched } = await searchOnly(
             subTask.name,
             subTask.location,
             maxPages,
-            token
+            token,
+            ageRangesToSearch  // 传入需要搜索的年龄段
           );
           
           totalSearchPages += pagesSearched;
@@ -557,7 +573,7 @@ async function executeAnywhoSearch(
           }
           
           // 记录每个子任务的搜索结果
-          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果, ${pagesSearched} 页`);
+          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果, ${pagesSearched} 页 (年龄段: ${ageRangesSearched.join(', ')})`);
           
           return { success: true, count: results.length };
         } catch (error: any) {
@@ -579,9 +595,11 @@ async function executeAnywhoSearch(
     }
     
     // 搜索阶段完成日志
-    await addLog(`════════ 搜索阶段完成 ════════`);
+    await addLog(`════════ 双年龄搜索阶段完成 ════════`);
     await addLog(`📊 搜索页请求: ${totalSearchPages} 页`);
-    await addLog(`📊 原始结果: ${allSearchResults.length} 条`);
+    await addLog(`📊 年龄段: ${ageRangesToSearch.join(', ')}`);
+    await addLog(`📊 原始结果: ${allSearchResults.length} 条 (包含所有年龄段)`);
+    await addLog(`📊 下一步: 过滤出 ${minAge}-${maxAge} 岁的结果`);
     
     // ==================== 转换并应用过滤 ====================
     await addLog(`📋 转换数据并应用过滤条件...`);

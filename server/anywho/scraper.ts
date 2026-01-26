@@ -220,9 +220,19 @@ function parseCityName(location: string): string | null {
 }
 
 /**
- * 构建搜索 URL
+ * Anywho 支持的年龄段
+ * 平台只提供 4 个固定的年龄过滤选项
  */
-function buildSearchUrl(name: string, location?: string, page: number = 1): string {
+export type AnywhoAgeRange = '0-30' | '31-60' | '61-80' | '80+';
+
+/**
+ * 构建搜索 URL
+ * @param name 搜索姓名
+ * @param location 搜索地点（可选）
+ * @param page 页码
+ * @param ageRange 年龄段（可选，Anywho 固定的 4 个选项之一）
+ */
+function buildSearchUrl(name: string, location?: string, page: number = 1, ageRange?: AnywhoAgeRange): string {
   const encodedName = name.trim().toLowerCase().replace(/\s+/g, '+');
   
   let locationPath = '';
@@ -248,8 +258,17 @@ function buildSearchUrl(name: string, location?: string, page: number = 1): stri
   
   let url = `${ANYWHO_CONFIG.BASE_URL}/people/${encodedName}${locationPath}`;
   
+  // 构建查询参数
+  const params: string[] = [];
   if (page > 1) {
-    url += `?page=${page}`;
+    params.push(`page=${page}`);
+  }
+  if (ageRange) {
+    params.push(`age_range=${ageRange}`);
+  }
+  
+  if (params.length > 0) {
+    url += `?${params.join('&')}`;
   }
   
   return url;
@@ -686,69 +705,123 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
 }
 
 /**
+ * 根据用户年龄范围确定需要搜索的 Anywho 年龄段
+ * Anywho 只支持 4 个固定年龄段: 0-30, 31-60, 61-80, 80+
+ * 如果用户要 50-79 岁，需要同时搜索 31-60 和 61-80 两个年龄段
+ */
+export function determineAgeRanges(minAge: number, maxAge: number): AnywhoAgeRange[] {
+  const ranges: AnywhoAgeRange[] = [];
+  
+  // 检查是否需要搜索 0-30 年龄段
+  if (minAge <= 30 && maxAge >= 0) {
+    ranges.push('0-30');
+  }
+  
+  // 检查是否需要搜索 31-60 年龄段
+  if (minAge <= 60 && maxAge >= 31) {
+    ranges.push('31-60');
+  }
+  
+  // 检查是否需要搜索 61-80 年龄段
+  if (minAge <= 80 && maxAge >= 61) {
+    ranges.push('61-80');
+  }
+  
+  // 检查是否需要搜索 80+ 年龄段
+  if (maxAge > 80) {
+    ranges.push('80+');
+  }
+  
+  return ranges;
+}
+
+/**
  * 仅搜索（不获取详情）- 增强版
  * 直接从搜索结果页提取完整数据
+ * 
+ * @param name 搜索姓名
+ * @param location 搜索地点（可选）
+ * @param maxPages 每个年龄段的最大搜索页数
+ * @param token Scrape.do API token
+ * @param ageRanges 要搜索的年龄段列表（可选，默认搜索 31-60 和 61-80）
+ * @param onProgress 进度回调
  */
 export async function searchOnly(
   name: string,
   location: string | undefined,
   maxPages: number,
   token: string,
-  onProgress?: (page: number, results: AnywhoSearchResult[]) => void
+  ageRanges?: AnywhoAgeRange[],
+  onProgress?: (page: number, results: AnywhoSearchResult[], ageRange?: AnywhoAgeRange) => void
 ): Promise<{
   results: AnywhoSearchResult[];
   pagesSearched: number;
+  ageRangesSearched: AnywhoAgeRange[];
 }> {
-  console.log(`[Anywho] 开始搜索: ${name}, 地点: ${location || '全国'}, 最大页数: ${maxPages}`);
+  // 默认搜索 31-60 和 61-80 两个年龄段（覆盖 50-79 岁的需求）
+  const rangesToSearch = ageRanges && ageRanges.length > 0 ? ageRanges : ['31-60', '61-80'] as AnywhoAgeRange[];
+  
+  console.log(`[Anywho] 开始双年龄搜索: ${name}, 地点: ${location || '全国'}, 年龄段: ${rangesToSearch.join(', ')}, 每段最大页数: ${maxPages}`);
   
   const allResults: AnywhoSearchResult[] = [];
-  let pagesSearched = 0;
+  let totalPagesSearched = 0;
   
-  for (let page = 1; page <= Math.min(maxPages, ANYWHO_CONFIG.MAX_PAGES); page++) {
-    const searchUrl = buildSearchUrl(name, location, page);
-    console.log(`[Anywho] 抓取第 ${page} 页: ${searchUrl}`);
+  // 遍历每个年龄段进行搜索
+  for (const ageRange of rangesToSearch) {
+    console.log(`[Anywho] 开始搜索年龄段: ${ageRange}`);
     
-    const html = await scrapeUrl(searchUrl, token, { 
-      render: true,
-      useSuper: true,
-      customWait: 3000,
-      waitSelector: 'a[href*="/people/"]'
-    });
-    
-    if (!html) {
-      console.error(`[Anywho] 第 ${page} 页抓取失败`);
-      break;
+    for (let page = 1; page <= Math.min(maxPages, ANYWHO_CONFIG.MAX_PAGES); page++) {
+      const searchUrl = buildSearchUrl(name, location, page, ageRange);
+      console.log(`[Anywho] 抓取 [${ageRange}] 第 ${page} 页: ${searchUrl}`);
+      
+      const html = await scrapeUrl(searchUrl, token, { 
+        render: true,
+        useSuper: true,
+        customWait: 3000,
+        waitSelector: 'a[href*="/people/"]'
+      });
+      
+      if (!html) {
+        console.error(`[Anywho] [${ageRange}] 第 ${page} 页抓取失败`);
+        break;
+      }
+      
+      const pageResults = parseSearchResults(html);
+      console.log(`[Anywho] [${ageRange}] 第 ${page} 页找到 ${pageResults.length} 个有效结果`);
+      
+      if (pageResults.length === 0) {
+        break;
+      }
+      
+      allResults.push(...pageResults);
+      totalPagesSearched++;
+      
+      if (onProgress) {
+        onProgress(page, pageResults, ageRange);
+      }
+      
+      if (page < maxPages) {
+        await new Promise(resolve => setTimeout(resolve, ANYWHO_CONFIG.BATCH_DELAY));
+      }
     }
     
-    const pageResults = parseSearchResults(html);
-    console.log(`[Anywho] 第 ${page} 页找到 ${pageResults.length} 个有效结果`);
-    
-    if (pageResults.length === 0) {
-      break;
-    }
-    
-    allResults.push(...pageResults);
-    pagesSearched = page;
-    
-    if (onProgress) {
-      onProgress(page, pageResults);
-    }
-    
-    if (page < maxPages) {
+    // 年龄段之间的延迟
+    if (rangesToSearch.indexOf(ageRange) < rangesToSearch.length - 1) {
       await new Promise(resolve => setTimeout(resolve, ANYWHO_CONFIG.BATCH_DELAY));
     }
   }
   
-  // 去重
+  // 去重（不同年龄段可能返回相同的人）
   const uniqueResults = allResults.filter((result, index, self) =>
     index === self.findIndex(r => r.detailLink === result.detailLink)
   );
   
-  console.log(`[Anywho] 搜索完成: 共 ${uniqueResults.length} 个唯一结果, 搜索了 ${pagesSearched} 页`);
+  console.log(`[Anywho] 双年龄搜索完成: 共 ${uniqueResults.length} 个唯一结果, 搜索了 ${totalPagesSearched} 页, 年龄段: ${rangesToSearch.join(', ')}`);
   
   return {
     results: uniqueResults,
-    pagesSearched,
+    pagesSearched: totalPagesSearched,
+    ageRangesSearched: rangesToSearch,
   };
 }
 
@@ -833,7 +906,7 @@ export async function fullSearch(
   maxPages: number,
   token: string,
   filters: AnywhoFilters = {},
-  onSearchProgress?: (page: number, results: AnywhoSearchResult[]) => void,
+  onSearchProgress?: (page: number, results: AnywhoSearchResult[], ageRange?: AnywhoAgeRange) => void,
   onDetailProgress?: (completed: number, total: number) => void
 ): Promise<{
   searchResults: AnywhoSearchResult[];
@@ -841,11 +914,17 @@ export async function fullSearch(
   pagesSearched: number;
   requestCount: number;
 }> {
+  // 根据过滤条件确定需要搜索的年龄段
+  const minAge = filters.minAge ?? 50;
+  const maxAge = filters.maxAge ?? 79;
+  const ageRanges = determineAgeRanges(minAge, maxAge);
+  
   const { results: searchResults, pagesSearched } = await searchOnly(
     name,
     location,
     maxPages,
     token,
+    ageRanges,
     onSearchProgress
   );
   

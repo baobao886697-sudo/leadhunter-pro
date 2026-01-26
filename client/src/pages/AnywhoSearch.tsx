@@ -145,14 +145,28 @@ export default function AnywhoSearch() {
   const searchCost = anywhoConfig?.searchCost || 0.5;
   const detailCost = anywhoConfig?.detailCost || 0.5;
   
-  // 预估消耗计算
+  // 根据用户年龄范围确定需要搜索的 Anywho 年龄段数量
+  // Anywho 只支持 4 个固定年龄段: 0-30, 31-60, 61-80, 80+
+  const determineAgeRangeCount = (minAge: number, maxAge: number): number => {
+    let count = 0;
+    if (minAge <= 30 && maxAge >= 0) count++;   // 0-30
+    if (minAge <= 60 && maxAge >= 31) count++;  // 31-60
+    if (minAge <= 80 && maxAge >= 61) count++;  // 61-80
+    if (maxAge > 80) count++;                   // 80+
+    return Math.max(count, 1);
+  };
+  
+  const ageRangeCount = determineAgeRangeCount(filters.minAge, filters.maxAge);
+  
+  // 预估消耗计算 - 双年龄搜索
   const estimatedSearches = mode === "nameOnly" 
     ? names.length 
     : names.length * Math.max(locationCombinations.length, 1);
-  const maxPages = 10;  // Anywho 最大页数
+  const maxPages = 10;  // Anywho 每个年龄段最大页数
   const avgDetailsPerSearch = 30;  // 预估每个搜索平均详情数
-  const estimatedSearchPageCost = estimatedSearches * maxPages * searchCost;
-  const estimatedDetailPageCost = estimatedSearches * avgDetailsPerSearch * detailCost;
+  // 搜索页费用 = 任务数 × 每任务页数 × 年龄段数量
+  const estimatedSearchPageCost = estimatedSearches * maxPages * ageRangeCount * searchCost;
+  const estimatedDetailPageCost = 0;  // 不再需要详情页费用
   const estimatedCost = estimatedSearchPageCost + estimatedDetailPageCost;
   
   // 提交搜索
@@ -548,12 +562,16 @@ export default function AnywhoSearch() {
                   <span>{estimatedSearches} 个</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">最大搜索页数</span>
-                  <span>每任务 {maxPages} 页</span>
+                  <span className="text-muted-foreground">年龄段数量</span>
+                  <span className="text-purple-400">{ageRangeCount} 个</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">预估详情数</span>
-                  <span>每任务 ~{avgDetailsPerSearch} 条</span>
+                  <span className="text-muted-foreground">每年龄段最大页数</span>
+                  <span>{maxPages} 页</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">总搜索页数</span>
+                  <span>{estimatedSearches * maxPages * ageRangeCount} 页</span>
                 </div>
                 <div className="border-t border-slate-700 pt-3">
                   <div className="flex justify-between">
@@ -562,6 +580,9 @@ export default function AnywhoSearch() {
                       ~{estimatedCost.toFixed(1)} 积分
                     </span>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    💡 双年龄搜索确保获取 {filters.minAge}-{filters.maxAge} 岁完整数据
+                  </p>
                 </div>
               </CardContent>
             </Card>
