@@ -143,6 +143,7 @@ async function scrapeUrl(
     token,
     url,
     geoCode,
+    output: 'markdown',  // 返回 Markdown 格式，便于解析
   });
   
   if (useSuper) {
@@ -352,11 +353,7 @@ function formatName(s: string): string {
 export function parseSearchResults(html: string): AnywhoSearchResult[] {
   const results: AnywhoSearchResult[] = [];
   
-  // 调试: 输出 HTML 前 3000 字符
-  console.log(`[Anywho] HTML 长度: ${html.length}`);
-  console.log(`[Anywho] HTML 前 3000 字符:\n${html.substring(0, 3000)}`);
-  
-  // 首先找到所有人员块的起始位置
+// 首先找到所有人员块的起始位置
   // 格式: ## Name\n\n, Age XX\n\n[View Details]
   const personStartPattern = /## ([A-Z][a-zA-Z\s.]+)\n\n,\s*Age\s*(\d+)\n\n\[View Details\]\(([^\)]+)\)/g;
   
