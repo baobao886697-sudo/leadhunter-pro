@@ -829,6 +829,17 @@ async function executeAnywhoSearch(
       await addLog(`════════ 详情页获取完成 ════════`);
       await addLog(`📊 详情页请求: ${totalDetailPages} 次`);
       await addLog(`📊 成功获取: ${detailSuccessCount} 条`);
+      
+      // ==================== 详情页获取后再次过滤已故人员 ====================
+      if (filters.excludeDeceased !== false) {
+        const beforeDeceasedFilter = filteredResults.length;
+        filteredResults = filteredResults.filter(r => !r.isDeceased);
+        const deceasedFiltered = beforeDeceasedFilter - filteredResults.length;
+        if (deceasedFiltered > 0) {
+          await addLog(`📊 详情页后排除已故: ${deceasedFiltered} 条`);
+          totalFilteredOut += deceasedFiltered;
+        }
+      }
     }
     
     totalResults = filteredResults.length;
