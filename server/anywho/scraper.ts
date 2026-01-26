@@ -561,7 +561,12 @@ export function convertSearchResultToDetail(searchResult: AnywhoSearchResult): A
 }
 
 /**
- * 解析详情页面（保留用于缓存数据）
+ * 解析详情页面 - 增强版
+ * 从详情页提取完整信息：运营商、电话类型、婚姻状况等
+ * 
+ * 详情页格式示例：
+ * - 电话: "757-944-8735\nPortsmouth, VA•T-Mobile"
+ * - 婚姻: "Our records currently show that John is single."
  */
 export function parseDetailPage(html: string): AnywhoDetailResult | null {
   try {
@@ -600,9 +605,10 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
       }
     }
     
-    // 3. 提取婚姻状态
+    // 3. 提取婚姻状态 - 增强版
     let marriageStatus: string | null = null;
     const marriagePatterns = [
+      /records\s+(?:currently\s+)?show\s+that\s+\w+\s+is\s+(single|married|divorced|widowed)/i,
       /(?:is|appears to be)\s+(single|married|divorced|widowed)/i,
       /marital\s+status[:\s]*(single|married|divorced|widowed)/i,
     ];
@@ -615,14 +621,45 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
       }
     }
     
-    // 4. 提取电话号码
-    const phones: string[] = [];
-    const phonePattern = /(\d{3}[-.]?\d{3}[-.]?\d{4})/g;
-    let phoneMatch;
-    while ((phoneMatch = phonePattern.exec(text)) !== null) {
-      const phone = phoneMatch[1].replace(/[-.]/, '');
-      if (/^\d{10}$/.test(phone.replace(/\D/g, '')) && !phones.includes(phone)) {
-        phones.push(phone);
+    // 4. 提取电话号码和运营商信息 - 增强版
+    // 格式: "757-944-8735\nPortsmouth, VA•T-Mobile"
+    const phoneInfoList: Array<{phone: string; carrier: string; phoneType: string}> = [];
+    
+    // 匹配电话号码后面跟着的运营商信息
+    const phoneCarrierPattern = /(\d{3}[-.]?\d{3}[-.]?\d{4})[\s\n]*[^\d]*?•\s*(T-Mobile|Verizon\s*(?:Wireless)?|AT&T|Sprint|Cricket|Metro|US Cellular|Comcast|Xfinity|Spectrum|CenturyLink|Frontier|Windstream|TPX Communications|Bandwidth|Level 3|Lumen)/gi;
+    let pcMatch;
+    while ((pcMatch = phoneCarrierPattern.exec(text)) !== null) {
+      const phone = pcMatch[1].replace(/[-.]/, '').replace(/\D/g, '');
+      const carrier = pcMatch[2].trim();
+      
+      // 根据运营商推断电话类型
+      let phoneType = 'Unknown';
+      const mobileCarriers = ['T-Mobile', 'Verizon', 'Verizon Wireless', 'AT&T', 'Sprint', 'Cricket', 'Metro', 'US Cellular'];
+      const landlineCarriers = ['Comcast', 'Xfinity', 'Spectrum', 'CenturyLink', 'Frontier', 'Windstream'];
+      const voipCarriers = ['Bandwidth', 'Level 3', 'Lumen', 'TPX Communications'];
+      
+      if (mobileCarriers.some(c => carrier.toLowerCase().includes(c.toLowerCase()))) {
+        phoneType = 'Mobile';
+      } else if (landlineCarriers.some(c => carrier.toLowerCase().includes(c.toLowerCase()))) {
+        phoneType = 'Landline';
+      } else if (voipCarriers.some(c => carrier.toLowerCase().includes(c.toLowerCase()))) {
+        phoneType = 'VoIP';
+      }
+      
+      if (phone.length === 10 && !phoneInfoList.some(p => p.phone === phone)) {
+        phoneInfoList.push({ phone, carrier, phoneType });
+      }
+    }
+    
+    // 如果没有匹配到带运营商的电话，尝试普通电话提取
+    if (phoneInfoList.length === 0) {
+      const phonePattern = /(\d{3}[-.]?\d{3}[-.]?\d{4})/g;
+      let phoneMatch;
+      while ((phoneMatch = phonePattern.exec(text)) !== null) {
+        const phone = phoneMatch[1].replace(/[-.]/, '').replace(/\D/g, '');
+        if (phone.length === 10 && !phoneInfoList.some(p => p.phone === phone)) {
+          phoneInfoList.push({ phone, carrier: '', phoneType: 'Unknown' });
+        }
       }
     }
     
@@ -630,7 +667,8 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
     let currentAddress = '';
     const addressPatterns = [
       /CURRENT ADDRESS[:\s]*([^P\n]+?)(?:PREVIOUS|CONTACT|$)/i,
-      /Lives in[:\s]*([^.]+)/i,
+      /Lives in[:\s]*([^.\n]+)/i,
+      /currently lives at\s+([^.\n]+)/i,
     ];
     
     for (const pattern of addressPatterns) {
@@ -641,12 +679,12 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
       }
     }
     
-    // 6. 提取邮箱
+    // 6. 提取邮箱（包括部分隐藏的邮箱）
     const emails: string[] = [];
-    const emailPattern = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+    const emailPattern = /([a-zA-Z0-9*._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
     let emailMatch;
     while ((emailMatch = emailPattern.exec(text)) !== null) {
-      const email = emailMatch[1].toLowerCase();
+      const email = emailMatch[1].toLowerCase().replace(/\*/g, '*');
       if (!emails.includes(email) && !email.includes('anywho')) {
         emails.push(email);
       }
@@ -678,22 +716,8 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
     const deathDatePattern = /may have passed away on \d{2}\/\d{4}/i;
     const isDeceased = deathDatePattern.test(text);
     
-    // 9. 提取运营商
-    let carrier = '';
-    const carrierMatch = text.match(/(AT&T|Verizon|T-Mobile|Sprint|TPX Communications|US Cellular|Cricket|Metro)/i);
-    if (carrierMatch) {
-      carrier = carrierMatch[0];
-    }
-    
-    // 10. 提取电话类型
-    let phoneType = 'Unknown';
-    if (/mobile|cell|wireless/i.test(text)) {
-      phoneType = 'Mobile';
-    } else if (/landline|home|residential/i.test(text)) {
-      phoneType = 'Landline';
-    } else if (/voip/i.test(text)) {
-      phoneType = 'VoIP';
-    }
+    // 获取主要电话信息
+    const primaryPhone = phoneInfoList[0] || { phone: '', carrier: '', phoneType: 'Unknown' };
     
     // 解析名字
     const nameParts = name.split(' ');
@@ -708,9 +732,10 @@ export function parseDetailPage(html: string): AnywhoDetailResult | null {
       city,
       state,
       location: `${city}, ${state}`,
-      phone: phones[0] || '',
-      phoneType,
-      carrier,
+      phone: primaryPhone.phone,
+      phoneType: primaryPhone.phoneType,
+      carrier: primaryPhone.carrier,
+      allPhones: phoneInfoList.map(p => p.phone),
       reportYear: new Date().getFullYear(),
       isPrimary: true,
       propertyValue: 0,
@@ -879,6 +904,156 @@ export async function fetchDetailsInBatch(
   return {
     results,
     requestCount: 0,
+  };
+}
+
+/**
+ * 从详情页获取完整信息（运营商、电话类型、婚姻状况）
+ * 混合模式：搜索页基本信息 + 详情页完整信息
+ */
+export async function fetchDetailFromPage(
+  detailLink: string,
+  token: string,
+  searchResult: AnywhoSearchResult,
+  onLog?: (message: string) => void
+): Promise<{
+  detail: AnywhoDetailResult | null;
+  success: boolean;
+}> {
+  const log = (msg: string) => {
+    console.log(msg);
+    if (onLog) onLog(msg);
+  };
+  
+  try {
+    const fullUrl = detailLink.startsWith('http') 
+      ? detailLink 
+      : `${ANYWHO_CONFIG.BASE_URL}${detailLink}`;
+    
+    log(`[Anywho] 抓取详情页: ${fullUrl}`);
+    
+    const html = await scrapeUrl(fullUrl, token, {
+      render: true,
+      useSuper: true,
+      customWait: 3000,
+    });
+    
+    if (!html) {
+      log(`[Anywho] 详情页抓取失败`);
+      // 如果详情页抓取失败，返回搜索结果转换的基本信息
+      return {
+        detail: convertSearchResultToDetail(searchResult),
+        success: false,
+      };
+    }
+    
+    // 解析详情页
+    const detailFromPage = parseDetailPage(html);
+    
+    if (!detailFromPage) {
+      log(`[Anywho] 详情页解析失败`);
+      return {
+        detail: convertSearchResultToDetail(searchResult),
+        success: false,
+      };
+    }
+    
+    // 合并搜索结果和详情页的信息
+    // 优先使用详情页的信息，但保留搜索结果中的某些字段
+    const mergedDetail: AnywhoDetailResult = {
+      ...convertSearchResultToDetail(searchResult),
+      // 从详情页覆盖的字段
+      carrier: detailFromPage.carrier || '',
+      phoneType: detailFromPage.phoneType || 'Unknown',
+      marriageStatus: detailFromPage.marriageStatus,
+      isDeceased: detailFromPage.isDeceased,
+      allPhones: detailFromPage.allPhones || [searchResult.phones?.[0] || ''],
+    };
+    
+    log(`[Anywho] 详情页解析成功: 运营商=${mergedDetail.carrier}, 类型=${mergedDetail.phoneType}, 婚姻=${mergedDetail.marriageStatus}`);
+    
+    return {
+      detail: mergedDetail,
+      success: true,
+    };
+  } catch (error) {
+    console.error(`[Anywho] 获取详情页失败:`, error);
+    return {
+      detail: convertSearchResultToDetail(searchResult),
+      success: false,
+    };
+  }
+}
+
+/**
+ * 批量获取详情页信息 - 混合模式
+ * 对筛选后的搜索结果批量访问详情页，获取完整信息
+ */
+export async function fetchDetailsFromPages(
+  searchResults: AnywhoSearchResult[],
+  token: string,
+  concurrency: number = 3,
+  onProgress?: (completed: number, total: number, current: AnywhoDetailResult | null) => void,
+  onLog?: (message: string) => void
+): Promise<{
+  details: AnywhoDetailResult[];
+  requestCount: number;
+  successCount: number;
+}> {
+  const log = (msg: string) => {
+    console.log(msg);
+    if (onLog) onLog(msg);
+  };
+  
+  log(`[Anywho] 开始批量获取详情页: ${searchResults.length} 个结果, 并发数: ${concurrency}`);
+  
+  const details: AnywhoDetailResult[] = [];
+  let requestCount = 0;
+  let successCount = 0;
+  
+  // 分批处理，控制并发
+  for (let i = 0; i < searchResults.length; i += concurrency) {
+    const batch = searchResults.slice(i, i + concurrency);
+    
+    const batchPromises = batch.map(async (result) => {
+      requestCount++;
+      const { detail, success } = await fetchDetailFromPage(
+        result.detailLink,
+        token,
+        result,
+        onLog
+      );
+      
+      if (success) {
+        successCount++;
+      }
+      
+      return detail;
+    });
+    
+    const batchResults = await Promise.all(batchPromises);
+    
+    for (const detail of batchResults) {
+      if (detail) {
+        details.push(detail);
+        if (onProgress) {
+          onProgress(details.length, searchResults.length, detail);
+        }
+      }
+    }
+    
+    // 批次间延迟，避免请求过快
+    if (i + concurrency < searchResults.length) {
+      await new Promise(resolve => setTimeout(resolve, ANYWHO_CONFIG.BATCH_DELAY));
+    }
+  }
+  
+  log(`[Anywho] 详情页获取完成: ${successCount}/${requestCount} 成功`);
+  
+  return {
+    details,
+    requestCount,
+    successCount,
   };
 }
 

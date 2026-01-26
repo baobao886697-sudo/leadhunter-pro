@@ -155,15 +155,17 @@ export default function AnywhoSearch() {
   
   const ageRangeCount = determineAgeRangeCount(filters.minAge, filters.maxAge);
   
-  // 预估消耗计算 - 双年龄搜索
+  // 预估消耗计算 - 混合模式（搜索页 + 详情页）
   const estimatedSearches = mode === "nameOnly" 
     ? names.length 
     : names.length * Math.max(locationCombinations.length, 1);
   const maxPages = 10;  // Anywho 每个年龄段最大页数
-  const avgDetailsPerSearch = 30;  // 预估每个搜索平均详情数
+  const avgResultsPerSearch = 15;  // 预估每个搜索平均结果数（筛选后）
   // 搜索页费用 = 任务数 × 每任务页数 × 年龄段数量
   const estimatedSearchPageCost = estimatedSearches * maxPages * ageRangeCount * searchCost;
-  const estimatedDetailPageCost = 0;  // 不再需要详情页费用
+  // 详情页费用 = 预估结果数 × 单页费用（混合模式：获取运营商、电话类型、婚姻状况）
+  const estimatedDetailResults = estimatedSearches * avgResultsPerSearch;
+  const estimatedDetailPageCost = estimatedDetailResults * searchCost;  // 详情页与搜索页同价
   const estimatedCost = estimatedSearchPageCost + estimatedDetailPageCost;
   
   // 提交搜索
@@ -550,7 +552,7 @@ export default function AnywhoSearch() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-purple-500" />
-                  费用预估
+                  费用预估 (混合模式)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -563,22 +565,25 @@ export default function AnywhoSearch() {
                   <span className="text-purple-400">{ageRangeCount} 个</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">每年龄段最大页数</span>
-                  <span>{maxPages} 页</span>
+                  <span className="text-muted-foreground">搜索页费用</span>
+                  <span>{estimatedSearches * maxPages * ageRangeCount} 页 × {searchCost} = {estimatedSearchPageCost.toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">总搜索页数</span>
-                  <span>{estimatedSearches * maxPages * ageRangeCount} 页</span>
+                  <span className="text-muted-foreground">详情页费用</span>
+                  <span>~{estimatedDetailResults} 条 × {searchCost} = {estimatedDetailPageCost.toFixed(1)}</span>
                 </div>
                 <div className="border-t border-slate-700 pt-3">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">预估消耗</span>
+                    <span className="text-muted-foreground">预估总消耗</span>
                     <span className="text-xl font-bold text-purple-400">
                       ~{estimatedCost.toFixed(1)} 积分
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    💡 双年龄搜索确保获取 {filters.minAge}-{filters.maxAge} 岁完整数据
+                    💡 混合模式: 搜索页基本信息 + 详情页完整信息
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    📝 获取: 运营商、电话类型、婚姻状况
                   </p>
                 </div>
               </CardContent>

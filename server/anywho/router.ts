@@ -17,6 +17,7 @@ import {
   searchOnly,
   convertSearchResultToDetail,
   determineAgeRanges,
+  fetchDetailsFromPages,
   AnywhoFilters, 
   AnywhoDetailResult,
   AnywhoSearchResult,
@@ -761,7 +762,74 @@ async function executeAnywhoSearch(
     if (filteredComcast > 0) await addLog(`   • 排除 Comcast: ${filteredComcast} 条`);
     if (filteredLandline > 0) await addLog(`   • 排除 Landline: ${filteredLandline} 条`);
     await addLog(`📊 总过滤: ${totalFilteredOut} 条`);
-    await addLog(`📊 有效结果: ${filteredResults.length} 条`);
+    await addLog(`📊 筛选后结果: ${filteredResults.length} 条`);
+    
+    // ==================== 混合模式：获取详情页完整信息 ====================
+    let totalDetailPages = 0;
+    let detailSuccessCount = 0;
+    
+    if (filteredResults.length > 0) {
+      await addLog(`════════ 开始获取详情页完整信息 ════════`);
+      await addLog(`📝 将从详情页获取: 运营商、电话类型、婚姻状况`);
+      await addLog(`📝 待处理: ${filteredResults.length} 条结果`);
+      
+      // 构建搜索结果映射
+      const searchResultMap = new Map<string, AnywhoSearchResult>();
+      for (const item of allSearchResults) {
+        searchResultMap.set(item.searchResult.detailLink, item.searchResult);
+      }
+      
+      // 批量获取详情页
+      const searchResultsForDetail = filteredResults
+        .map(r => searchResultMap.get(r.detailLink))
+        .filter((r): r is AnywhoSearchResult => r !== undefined);
+      
+      const { details, requestCount, successCount } = await fetchDetailsFromPages(
+        searchResultsForDetail,
+        token,
+        3,  // 并发数
+        async (completed, total, current) => {
+          const progress = 80 + Math.floor((completed / total) * 15);  // 详情页占 15% 进度
+          await updateAnywhoSearchTaskProgress(taskId, {
+            progress,
+            detailPageRequests: completed,
+          });
+          if (current) {
+            await addLog(`✅ [${completed}/${total}] ${current.name} - 运营商: ${current.carrier || '未知'}, 类型: ${current.phoneType}, 婚姻: ${current.marriageStatus || '未知'}`);
+          }
+        },
+        (msg) => addLog(msg)
+      );
+      
+      totalDetailPages = requestCount;
+      detailSuccessCount = successCount;
+      
+      // 更新筛选结果中的详情信息
+      const detailMap = new Map<string, AnywhoDetailResult>();
+      for (let i = 0; i < searchResultsForDetail.length; i++) {
+        if (details[i]) {
+          detailMap.set(searchResultsForDetail[i].detailLink, details[i]);
+        }
+      }
+      
+      // 合并详情信息到筛选结果
+      for (const result of filteredResults) {
+        const detail = detailMap.get(result.detailLink);
+        if (detail) {
+          result.carrier = detail.carrier || result.carrier;
+          result.phoneType = detail.phoneType || result.phoneType;
+          result.marriageStatus = detail.marriageStatus || result.marriageStatus;
+          result.isDeceased = detail.isDeceased;
+          if (detail.allPhones && detail.allPhones.length > 0) {
+            result.allPhones = detail.allPhones;
+          }
+        }
+      }
+      
+      await addLog(`════════ 详情页获取完成 ════════`);
+      await addLog(`📊 详情页请求: ${totalDetailPages} 次`);
+      await addLog(`📊 成功获取: ${detailSuccessCount} 条`);
+    }
     
     totalResults = filteredResults.length;
     
@@ -770,8 +838,9 @@ async function executeAnywhoSearch(
       await saveAnywhoSearchResults(taskDbId, filteredResults);
     }
     
-    // 计算消耗积分（只有搜索页费用）
-    const creditsUsed = totalSearchPages * searchCost;
+    // 计算消耗积分（搜索页 + 详情页）
+    const detailCost = parseFloat(config.detailCost || config.searchCost);  // 详情页费用
+    const creditsUsed = (totalSearchPages * searchCost) + (totalDetailPages * detailCost);
     
     // 扣除积分
     await deductCredits(userId, creditsUsed);
@@ -781,7 +850,7 @@ async function executeAnywhoSearch(
       totalResults,
       creditsUsed: creditsUsed.toFixed(2),
       searchPageRequests: totalSearchPages,
-      detailPageRequests: 0,  // 不再访问详情页
+      detailPageRequests: totalDetailPages,  // 混合模式：记录详情页请求数
       cacheHits: 0,
     });
     
@@ -794,11 +863,15 @@ async function executeAnywhoSearch(
     await addLog(`📊 搜索结果摘要:`);
     await addLog(`   • 有效结果: ${totalResults} 条联系人信息`);
     await addLog(`   • 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
+    await addLog(`   • 详情页成功: ${detailSuccessCount}/${totalDetailPages} 条`);
     
     // 费用明细
-    await addLog(`💰 费用明细:`);
-    await addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${creditsUsed.toFixed(1)} 积分`);
-    await addLog(`   • 详情页费用: 0 积分 (直接从搜索结果提取)`);
+    const searchCredits = totalSearchPages * searchCost;
+    const detailCredits = totalDetailPages * detailCost;
+    
+    await addLog(`💰 费用明细 (混合模式):`);
+    await addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${searchCredits.toFixed(1)} 积分`);
+    await addLog(`   • 详情页费用: ${totalDetailPages} 页 × ${detailCost} = ${detailCredits.toFixed(1)} 积分`);
     await addLog(`   ──────────────────────────────`);
     await addLog(`   • 实际消耗: ${creditsUsed.toFixed(1)} 积分`);
     
@@ -808,10 +881,10 @@ async function executeAnywhoSearch(
       const costPerResult = creditsUsed / totalResults;
       await addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`);
     }
-    await addLog(`   • 优化效果: 无需详情页请求，节省大量费用！`);
+    await addLog(`   • 混合模式: 搜索页基本信息 + 详情页完整信息`);
     
     await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`💡 提示: 直接从搜索结果页提取数据，避免详情页 CAPTCHA 问题`);
+    await addLog(`💡 提示: 混合模式获取完整信息（运营商、电话类型、婚姻状况）`);
     await addLog(`═══════════════════════════════════════════════════`);
     
   } catch (error: any) {
