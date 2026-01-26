@@ -870,7 +870,11 @@ async function executeAnywhoSearch(
     
     // 保存结果
     if (filteredResults.length > 0) {
+      console.log(`[saveResults] 保存 ${filteredResults.length} 条结果到任务 taskDbId=${taskDbId}`);
       await saveAnywhoSearchResults(taskDbId, filteredResults);
+      console.log(`[saveResults] 保存完成`);
+    } else {
+      console.log(`[saveResults] 没有结果需要保存, filteredResults.length=${filteredResults.length}`);
     }
     
     // 计算消耗积分（搜索页 + 详情页）
