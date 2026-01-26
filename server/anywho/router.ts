@@ -840,6 +840,22 @@ async function executeAnywhoSearch(
           totalFilteredOut += deceasedFiltered;
         }
       }
+      
+      // ==================== 排除没有电话号码的记录 ====================
+      {
+        const beforeNoPhoneFilter = filteredResults.length;
+        filteredResults = filteredResults.filter(r => {
+          // 检查主号码或 allPhones 数组中是否有有效号码
+          const hasMainPhone = r.phone && r.phone.trim() !== '';
+          const hasAnyPhone = r.allPhones && r.allPhones.length > 0 && r.allPhones.some((p: any) => p.number && p.number.trim() !== '');
+          return hasMainPhone || hasAnyPhone;
+        });
+        const noPhoneFiltered = beforeNoPhoneFilter - filteredResults.length;
+        if (noPhoneFiltered > 0) {
+          await addLog(`📊 排除无电话号码: ${noPhoneFiltered} 条`);
+          totalFilteredOut += noPhoneFiltered;
+        }
+      }
     }
     
     totalResults = filteredResults.length;
