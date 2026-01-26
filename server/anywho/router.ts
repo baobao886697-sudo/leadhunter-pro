@@ -536,62 +536,89 @@ async function executeAnywhoSearch(
       subTaskIndex: number;
     }> = [];
     
-    // 分批执行搜索
-    for (let i = 0; i < subTasks.length; i += SEARCH_CONCURRENCY) {
-      // 检查是否取消
-      if (await checkCancelled()) {
-        await addLog("任务已被用户取消");
-        return;
-      }
+    // Worker 池模式并发搜索（参考 TPS 高效实现）
+    // 4 个 worker 持续从队列获取任务，任务完成后立即获取下一个
+    const searchQueue = subTasks.map((task, index) => ({ ...task, index }));
+    let currentSearchIndex = 0;
+    
+    const processSearch = async (subTask: { name: string; location?: string; index: number }) => {
+      const taskName = subTask.location ? `${subTask.name} @ ${subTask.location}` : subTask.name;
       
-      const batch = subTasks.slice(i, i + SEARCH_CONCURRENCY);
-      
-      const searchPromises = batch.map(async (subTask, batchIndex) => {
-        const subTaskIndex = i + batchIndex;
-        const taskName = subTask.location ? `${subTask.name} @ ${subTask.location}` : subTask.name;
+      try {
+        // 使用双年龄搜索
+        const { results, pagesSearched, ageRangesSearched } = await searchOnly(
+          subTask.name,
+          subTask.location,
+          maxPages,
+          token,
+          ageRangesToSearch  // 传入需要搜索的年龄段
+        );
         
-        try {
-          // 使用双年龄搜索
-          const { results, pagesSearched, ageRangesSearched } = await searchOnly(
-            subTask.name,
-            subTask.location,
-            maxPages,
-            token,
-            ageRangesToSearch  // 传入需要搜索的年龄段
-          );
-          
-          totalSearchPages += pagesSearched;
-          
-          // 收集搜索结果
-          for (const result of results) {
-            allSearchResults.push({
-              searchResult: result,
-              searchName: subTask.name,
-              searchLocation: subTask.location,
-              subTaskIndex,
-            });
+        totalSearchPages += pagesSearched;
+        
+        // 收集搜索结果
+        for (const result of results) {
+          allSearchResults.push({
+            searchResult: result,
+            searchName: subTask.name,
+            searchLocation: subTask.location,
+            subTaskIndex: subTask.index,
+          });
+        }
+        
+        completedSubTasks++;
+        
+        // 记录每个子任务的搜索结果
+        await addLog(`✅ [${completedSubTasks}/${subTasks.length}] ${taskName} - ${results.length} 条结果`);
+        
+        // 更新进度
+        const progress = Math.floor((completedSubTasks / subTasks.length) * 80);
+        await updateAnywhoSearchTaskProgress(taskId, {
+          progress,
+          completedSubTasks,
+          searchPageRequests: totalSearchPages,
+        });
+        
+        return { success: true, count: results.length };
+      } catch (error: any) {
+        completedSubTasks++;
+        await addLog(`❌ [${completedSubTasks}/${subTasks.length}] ${taskName} 搜索失败: ${error.message}`);
+        return { success: false, count: 0 };
+      }
+    };
+    
+    // Worker 池：4 个 worker 持续运行
+    const runConcurrentSearches = async () => {
+      const runWorker = async (): Promise<void> => {
+        while (currentSearchIndex < searchQueue.length) {
+          // 检查是否取消
+          if (await checkCancelled()) {
+            return;
           }
           
-          // 记录每个子任务的搜索结果
-          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果`);
-          
-          return { success: true, count: results.length };
-        } catch (error: any) {
-          await addLog(`❌ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} 搜索失败: ${error.message}`);
-          return { success: false, count: 0 };
+          const task = searchQueue[currentSearchIndex++];
+          if (task) {
+            await processSearch(task);
+          }
         }
-      });
+      };
       
-      await Promise.all(searchPromises);
+      // 启动 4 个 worker
+      const workers = Math.min(SEARCH_CONCURRENCY, searchQueue.length);
+      const workerPromises: Promise<void>[] = [];
+      for (let i = 0; i < workers; i++) {
+        workerPromises.push(runWorker());
+      }
       
-      completedSubTasks = Math.min(i + batch.length, subTasks.length);
-      const progress = Math.floor((completedSubTasks / subTasks.length) * 80);  // 搜索占 80% 进度
-      
-      await updateAnywhoSearchTaskProgress(taskId, {
-        progress,
-        completedSubTasks,
-        searchPageRequests: totalSearchPages,
-      });
+      await Promise.all(workerPromises);
+    };
+    
+    await runConcurrentSearches();
+    
+    // 检查是否被取消
+    if (await checkCancelled()) {
+      await addLog("任务已被用户取消");
+      return;
     }
     
     // 搜索阶段完成
@@ -769,7 +796,7 @@ async function executeAnywhoSearch(
       const { details, requestCount, successCount } = await fetchDetailsFromPages(
         searchResultsForDetail,
         token,
-        10,  // 并发数（高性能模式）
+        20,  // 并发数（4线程+20并发高性能模式）
         async (completed, total, current) => {
           const progress = 80 + Math.floor((completed / total) * 15);  // 详情页占 15% 进度
           await updateAnywhoSearchTaskProgress(taskId, {
