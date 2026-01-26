@@ -18,7 +18,7 @@ export const ANYWHO_CONFIG = {
   SCRAPE_API: "https://api.scrape.do/",
   TOTAL_CONCURRENCY: 10,  // 总并发数
   TASK_CONCURRENCY: 4,    // 搜索任务并发数
-  MAX_PAGES: 5,           // 最大搜索页数
+  MAX_PAGES: 4,           // 最大搜索页数（保守优化）
   BATCH_DELAY: 100,       // 批次间延迟(ms)（4线程+20并发高性能模式）
   REQUEST_TIMEOUT: 120000, // 请求超时(ms)
 };

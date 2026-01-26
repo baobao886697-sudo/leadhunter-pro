@@ -796,7 +796,7 @@ async function executeAnywhoSearch(
       const { details, requestCount, successCount } = await fetchDetailsFromPages(
         searchResultsForDetail,
         token,
-        20,  // 并发数（4线程+20并发高性能模式）
+        25,  // 并发数（保守优化模式）
         async (completed, total, current) => {
           const progress = 80 + Math.floor((completed / total) * 15);  // 详情页占 15% 进度
           await updateAnywhoSearchTaskProgress(taskId, {
