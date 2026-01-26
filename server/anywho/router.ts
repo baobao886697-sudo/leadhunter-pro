@@ -309,13 +309,18 @@ export const anywhoRouter = router({
       let page = 1;
       const pageSize = 1000;
       
+      console.log(`[exportResults] 开始导出任务 ${input.taskId}, task.id=${task.id}`);
+      
       while (true) {
         const { results, total } = await getAnywhoSearchResults(task.id, page, pageSize);
+        console.log(`[exportResults] 获取第 ${page} 页, 结果数=${results.length}, 总数=${total}`);
         allResults.push(...results);
         
         if (allResults.length >= total) break;
         page++;
       }
+      
+      console.log(`[exportResults] 总共获取 ${allResults.length} 条结果`);
       
       // CSV 表头
       const headers = [
