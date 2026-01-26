@@ -252,7 +252,7 @@ export default function AnywhoTask() {
                 <div>
                   <p className="text-sm text-gray-400">消耗积分</p>
                   <p className="text-2xl font-bold text-amber-400 mt-1">
-                    {typeof task?.creditsUsed === 'number' ? task.creditsUsed.toFixed(1) : (parseFloat(task?.creditsUsed || '0') || 0).toFixed(1)}
+                    {task?.creditsUsed != null ? Number(task.creditsUsed).toFixed(1) : '0.0'}
                   </p>
                 </div>
                 <CreditCard className="h-8 w-8 text-green-500" />

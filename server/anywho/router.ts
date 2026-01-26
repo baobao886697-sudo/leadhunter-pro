@@ -573,7 +573,7 @@ async function executeAnywhoSearch(
           }
           
           // 记录每个子任务的搜索结果
-          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果, ${pagesSearched} 页 (年龄段: ${ageRangesSearched.join(', ')})`);
+          await addLog(`✅ [${subTaskIndex + 1}/${subTasks.length}] ${taskName} - ${results.length} 条结果, ${pagesSearched} 页 (搜索了 ${ageRangesSearched} 个年龄段)`);
           
           return { success: true, count: results.length };
         } catch (error: any) {

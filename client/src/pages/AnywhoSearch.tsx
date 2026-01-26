@@ -92,9 +92,6 @@ export default function AnywhoSearch() {
   // 获取 Anywho 配置
   const { data: anywhoConfig } = trpc.anywho.getConfig.useQuery(undefined, {
     retry: false,
-    onError: () => {
-      // 配置不存在时静默处理
-    }
   });
   
   // 从后端配置初始化默认年龄范围
