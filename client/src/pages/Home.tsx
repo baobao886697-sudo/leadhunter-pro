@@ -235,8 +235,7 @@ export default function Home() {
         email, 
         password, 
         name: userName || undefined,
-        inviteCode: inviteCode || undefined,
-        deviceId 
+        inviteCode: inviteCode || undefined
       });
     }
   };
