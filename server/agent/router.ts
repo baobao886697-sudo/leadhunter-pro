@@ -317,6 +317,7 @@ async function verifyAgentLogin(email: string, password: string) {
       balance: user.agentBalance || '0',
       frozenBalance: user.agentFrozenBalance || '0',
       totalEarned: user.agentTotalEarned || '0',
+      walletAddress: user.agentWalletAddress || '',
     },
   };
 }

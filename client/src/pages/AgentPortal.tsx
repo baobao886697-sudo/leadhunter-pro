@@ -38,6 +38,7 @@ interface AgentInfo {
   balance: string;
   frozenBalance: string;
   totalEarned: string;
+  walletAddress?: string;
 }
 
 const levelNames: Record<string, string> = {
