@@ -82,6 +82,27 @@ export default function AgentPortal() {
     { enabled: !!agentInfo }
   );
 
+  // 当仪表盘数据更新时，同步更新 localStorage 中的余额信息
+  useEffect(() => {
+    if (dashboardData && agentInfo) {
+      const updatedInfo = {
+        ...agentInfo,
+        balance: dashboardData.balance,
+        frozenBalance: dashboardData.frozenBalance,
+        totalEarned: dashboardData.totalEarned,
+      };
+      // 只有当数据发生变化时才更新
+      if (
+        agentInfo.balance !== dashboardData.balance ||
+        agentInfo.frozenBalance !== dashboardData.frozenBalance ||
+        agentInfo.totalEarned !== dashboardData.totalEarned
+      ) {
+        setAgentInfo(updatedInfo);
+        localStorage.setItem("agent_info", JSON.stringify(updatedInfo));
+      }
+    }
+  }, [dashboardData]);
+
   const { data: teamData, refetch: refetchTeam } = trpc.agent.getTeam.useQuery(
     undefined,
     { enabled: !!agentInfo && activeTab === "team" }
@@ -110,6 +131,14 @@ export default function AgentPortal() {
     toast.success("邀请链接已复制到剪贴板");
   };
 
+  // 更新 agentInfo 并同步到 localStorage
+  const updateAgentInfo = (updates: Partial<AgentInfo>) => {
+    if (!agentInfo) return;
+    const updatedInfo = { ...agentInfo, ...updates };
+    setAgentInfo(updatedInfo);
+    localStorage.setItem("agent_info", JSON.stringify(updatedInfo));
+  };
+
   if (!agentInfo) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -117,6 +146,11 @@ export default function AgentPortal() {
       </div>
     );
   }
+
+  // 获取实时余额（优先使用 API 数据）
+  const currentBalance = dashboardData?.balance || agentInfo.balance;
+  const currentFrozenBalance = dashboardData?.frozenBalance || agentInfo.frozenBalance;
+  const currentTotalEarned = dashboardData?.totalEarned || agentInfo.totalEarned;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -183,7 +217,7 @@ export default function AgentPortal() {
                     <div>
                       <p className="text-sm text-slate-400">可提现余额</p>
                       <p className="text-2xl font-bold text-green-500">
-                        ${dashboardData?.balance || agentInfo.balance}
+                        ${currentBalance}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
@@ -199,7 +233,7 @@ export default function AgentPortal() {
                     <div>
                       <p className="text-sm text-slate-400">冻结中佣金</p>
                       <p className="text-2xl font-bold text-yellow-500">
-                        ${dashboardData?.frozenBalance || agentInfo.frozenBalance}
+                        ${currentFrozenBalance}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-yellow-500/20 rounded-full flex items-center justify-center">
@@ -215,7 +249,7 @@ export default function AgentPortal() {
                     <div>
                       <p className="text-sm text-slate-400">累计收益</p>
                       <p className="text-2xl font-bold text-blue-500">
-                        ${dashboardData?.totalEarned || agentInfo.totalEarned}
+                        ${currentTotalEarned}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
@@ -279,7 +313,7 @@ export default function AgentPortal() {
                   <div className="flex items-center justify-between py-2 border-b border-slate-700">
                     <span className="text-slate-400">新增用户</span>
                     <span className="text-white font-semibold flex items-center gap-1">
-                      <UserPlus className="w-4 h-4 text-green-500" />
+                      <UserPlus className="w-4 h-4 text-blue-500" />
                       {dashboardData?.monthNewUsers || 0}
                     </span>
                   </div>
@@ -299,7 +333,7 @@ export default function AgentPortal() {
               </Card>
             </div>
 
-            {/* Recent Activity */}
+            {/* Recent Commissions */}
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-white text-lg">最近佣金</CardTitle>
@@ -316,30 +350,23 @@ export default function AgentPortal() {
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                             item.level === 1 ? "bg-green-500/20" : "bg-blue-500/20"
                           }`}>
-                            {item.level === 1 ? (
-                              <ArrowUpRight className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <ArrowDownRight className="w-4 h-4 text-blue-500" />
-                            )}
+                            <span className={`text-xs font-bold ${
+                              item.level === 1 ? "text-green-500" : "text-blue-500"
+                            }`}>
+                              L{item.level}
+                            </span>
                           </div>
                           <div>
-                            <p className="text-sm text-white">
-                              {item.level === 1 ? "一级佣金" : "二级佣金"}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              来自 {item.fromUser} 的充值
-                            </p>
+                            <p className="text-sm text-white">{item.fromUser}</p>
+                            <p className="text-xs text-slate-400">{item.time}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-green-500 font-semibold">+${item.amount}</p>
-                          <p className="text-xs text-slate-400">{item.time}</p>
-                        </div>
+                        <span className="text-green-500 font-semibold">+${item.amount}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-center text-slate-400 py-8">暂无佣金记录</p>
+                  <p className="text-center text-slate-400 py-4">暂无佣金记录</p>
                 )}
               </CardContent>
             </Card>
@@ -350,16 +377,16 @@ export default function AgentPortal() {
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Level 1 Users */}
               <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center">
-                      <span className="text-xs text-green-500">1</span>
-                    </div>
-                    直推用户
-                  </CardTitle>
-                  <CardDescription>
-                    您直接邀请的用户 ({teamData?.level1Users?.length || 0} 人)
-                  </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white">直推用户</CardTitle>
+                    <CardDescription>
+                      您直接邀请的用户 ({teamData?.level1Users?.length || 0} 人)
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => refetchTeam()}>
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   {teamData?.level1Users && teamData.level1Users.length > 0 ? (
@@ -368,7 +395,7 @@ export default function AgentPortal() {
                         <div key={index} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg">
                           <div>
                             <p className="text-sm text-white">{user.displayName || user.email}</p>
-                            <p className="text-xs text-slate-400">注册于 {user.createdAt}</p>
+                            <p className="text-xs text-slate-400">{user.createdAt}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm text-green-500">充值 ${user.totalRecharge}</p>
@@ -386,12 +413,7 @@ export default function AgentPortal() {
               {/* Level 2 Users */}
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center">
-                      <span className="text-xs text-blue-500">2</span>
-                    </div>
-                    间推用户
-                  </CardTitle>
+                  <CardTitle className="text-white">间推用户</CardTitle>
                   <CardDescription>
                     您的直推用户邀请的用户 ({teamData?.level2Users?.length || 0} 人)
                   </CardDescription>
@@ -461,13 +483,14 @@ export default function AgentPortal() {
                         <div className="text-right">
                           <p className="text-green-500 font-semibold">+${item.amount}</p>
                           <Badge className={
-                            item.status === "available" 
+                            item.status === "available" || item.status === "settled"
                               ? "bg-green-500/20 text-green-500" 
-                              : item.status === "frozen"
+                              : item.status === "frozen" || item.status === "pending"
                               ? "bg-yellow-500/20 text-yellow-500"
                               : "bg-slate-500/20 text-slate-400"
                           }>
-                            {item.status === "available" ? "已结算" : item.status === "frozen" ? "冻结中" : "已提现"}
+                            {item.status === "available" || item.status === "settled" ? "已结算" : 
+                             item.status === "frozen" || item.status === "pending" ? "冻结中" : "已提现"}
                           </Badge>
                         </div>
                       </div>
@@ -484,8 +507,11 @@ export default function AgentPortal() {
           <TabsContent value="withdraw" className="space-y-6">
             <WithdrawSection 
               agentInfo={agentInfo} 
+              currentBalance={currentBalance}
               withdrawalsData={withdrawalsData}
               refetchWithdrawals={refetchWithdrawals}
+              refetchDashboard={refetchDashboard}
+              updateAgentInfo={updateAgentInfo}
             />
           </TabsContent>
 
@@ -601,7 +627,7 @@ export default function AgentPortal() {
               </Card>
 
               {/* 修改钱包地址 */}
-              <WalletAddressCard agentInfo={agentInfo} />
+              <WalletAddressCard agentInfo={agentInfo} updateAgentInfo={updateAgentInfo} />
 
               {/* 佣金比例说明 */}
               <Card className="bg-slate-800/50 border-slate-700">
@@ -691,25 +717,46 @@ export default function AgentPortal() {
   );
 }
 
-// Withdraw Section Component
+// Withdraw Section Component - 修复版本
 function WithdrawSection({ 
   agentInfo, 
+  currentBalance,
   withdrawalsData,
-  refetchWithdrawals 
+  refetchWithdrawals,
+  refetchDashboard,
+  updateAgentInfo,
 }: { 
   agentInfo: AgentInfo;
+  currentBalance: string;
   withdrawalsData: any;
   refetchWithdrawals: () => void;
+  refetchDashboard: () => void;
+  updateAgentInfo: (updates: Partial<AgentInfo>) => void;
 }) {
 
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [walletAddress, setWalletAddress] = useState("");
+  const [walletAddress, setWalletAddress] = useState(agentInfo.walletAddress || "");
+
+  // 当 agentInfo.walletAddress 变化时更新输入框
+  useEffect(() => {
+    if (agentInfo.walletAddress) {
+      setWalletAddress(agentInfo.walletAddress);
+    }
+  }, [agentInfo.walletAddress]);
 
   const submitWithdraw = trpc.agent.submitWithdrawal.useMutation({
     onSuccess: () => {
       toast.success("提现申请已提交，请等待管理员审核");
+      
+      // 计算新余额并更新
+      const amount = parseFloat(withdrawAmount);
+      const newBalance = (parseFloat(currentBalance) - amount).toFixed(2);
+      updateAgentInfo({ balance: newBalance });
+      
+      // 清空输入并刷新数据
       setWithdrawAmount("");
       refetchWithdrawals();
+      refetchDashboard();
     },
     onError: (error) => {
       toast.error(error.message || "提现失败");
@@ -722,10 +769,24 @@ function WithdrawSection({
       toast.error("最低提现金额为 50 USDT");
       return;
     }
+    
+    // 检查余额是否足够
+    if (amount > parseFloat(currentBalance)) {
+      toast.error("可提现余额不足");
+      return;
+    }
+    
     if (!walletAddress) {
       toast.error("请输入您的 USDT TRC20 钱包地址");
       return;
     }
+    
+    // 验证钱包地址格式
+    if (!walletAddress.startsWith('T') || walletAddress.length !== 34) {
+      toast.error("请输入有效的 TRC20 钱包地址（以T开头，34位字符）");
+      return;
+    }
+    
     submitWithdraw.mutate({ amount, walletAddress });
   };
 
@@ -735,7 +796,7 @@ function WithdrawSection({
         <CardHeader>
           <CardTitle className="text-white">申请提现</CardTitle>
           <CardDescription>
-            可提现余额: <span className="text-green-500 font-bold">${agentInfo.balance}</span>
+            可提现余额: <span className="text-green-500 font-bold">${currentBalance}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -747,7 +808,12 @@ function WithdrawSection({
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder="最低 50 USDT"
               className="bg-slate-900/50 border-slate-600"
+              min={50}
+              max={parseFloat(currentBalance)}
             />
+            <p className="text-xs text-slate-500">
+              可提现: ${currentBalance} USDT
+            </p>
           </div>
           <div className="space-y-2">
             <Label className="text-white">收款地址 (TRC20)</Label>
@@ -757,11 +823,14 @@ function WithdrawSection({
               placeholder="T..."
               className="bg-slate-900/50 border-slate-600 font-mono"
             />
+            <p className="text-xs text-slate-500">
+              请确保地址正确，错误地址可能导致资产丢失
+            </p>
           </div>
           <Button 
             className="w-full bg-gradient-to-r from-green-500 to-emerald-500"
             onClick={handleWithdraw}
-            disabled={submitWithdraw.isPending}
+            disabled={submitWithdraw.isPending || parseFloat(currentBalance) < 50}
           >
             {submitWithdraw.isPending ? "提交中..." : "申请提现"}
           </Button>
@@ -791,7 +860,7 @@ function WithdrawSection({
                     <p className="text-xs text-slate-400">{item.createdAt}</p>
                   </div>
                   <Badge className={
-                    item.status === "completed" 
+                    item.status === "completed" || item.status === "paid"
                       ? "bg-green-500/20 text-green-500" 
                       : item.status === "pending"
                       ? "bg-yellow-500/20 text-yellow-500"
@@ -799,7 +868,7 @@ function WithdrawSection({
                       ? "bg-blue-500/20 text-blue-500"
                       : "bg-red-500/20 text-red-500"
                   }>
-                    {item.status === "completed" ? "已完成" : 
+                    {item.status === "completed" || item.status === "paid" ? "已完成" : 
                      item.status === "pending" ? "待审核" :
                      item.status === "approved" ? "已批准" : "已拒绝"}
                   </Badge>
@@ -816,8 +885,14 @@ function WithdrawSection({
 }
 
 
-// Wallet Address Card Component
-function WalletAddressCard({ agentInfo }: { agentInfo: AgentInfo }) {
+// Wallet Address Card Component - 修复版本
+function WalletAddressCard({ 
+  agentInfo, 
+  updateAgentInfo 
+}: { 
+  agentInfo: AgentInfo;
+  updateAgentInfo: (updates: Partial<AgentInfo>) => void;
+}) {
   const [newAddress, setNewAddress] = useState(agentInfo.walletAddress || "");
   const [isEditing, setIsEditing] = useState(false);
 
@@ -825,6 +900,8 @@ function WalletAddressCard({ agentInfo }: { agentInfo: AgentInfo }) {
     onSuccess: () => {
       toast.success("钱包地址已更新");
       setIsEditing(false);
+      // 更新 agentInfo 和 localStorage
+      updateAgentInfo({ walletAddress: newAddress });
     },
     onError: (error) => {
       toast.error(error.message || "更新失败");
@@ -833,7 +910,11 @@ function WalletAddressCard({ agentInfo }: { agentInfo: AgentInfo }) {
 
   const handleSave = () => {
     if (!newAddress || !newAddress.startsWith('T')) {
-      toast.error("请输入有效的 TRC20 地址");
+      toast.error("请输入有效的 TRC20 地址（以T开头）");
+      return;
+    }
+    if (newAddress.length !== 34) {
+      toast.error("TRC20 地址应为 34 位字符");
       return;
     }
     updateWallet.mutate({ walletAddress: newAddress });
