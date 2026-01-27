@@ -603,6 +603,29 @@ export const agentRouter = router({
       return result;
     }),
 
+  // 更新钱包地址
+  updateWalletAddress: protectedProcedure
+    .input(z.object({
+      walletAddress: z.string().min(1, "请输入钱包地址"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user?.isAgent) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "您还不是代理" });
+      }
+      
+      // 验证TRC20地址格式
+      if (!input.walletAddress.startsWith('T') || input.walletAddress.length !== 34) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "请输入有效的TRC20地址" });
+      }
+      
+      const db = getDb();
+      await db.update(users)
+        .set({ agentWalletAddress: input.walletAddress })
+        .where(eq(users.id, ctx.user.id));
+      
+      return { success: true, message: "钱包地址已更新" };
+    }),
+
   // ============ 旧接口保持兼容 ============
   
   info: protectedProcedure.query(async ({ ctx }) => {

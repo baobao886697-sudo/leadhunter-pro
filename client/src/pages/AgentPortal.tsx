@@ -584,14 +584,23 @@ export default function AgentPortal() {
                       {levelNames[agentInfo.level]}
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-700">
                     <span className="text-slate-400">邀请码</span>
                     <code className="text-yellow-500 bg-slate-900 px-2 py-1 rounded font-mono">
                       {agentInfo.inviteCode}
                     </code>
                   </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-slate-400">收款地址</span>
+                    <span className="text-white text-sm font-mono truncate max-w-[200px]">
+                      {agentInfo.walletAddress || '未设置'}
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
+
+              {/* 修改钱包地址 */}
+              <WalletAddressCard agentInfo={agentInfo} />
 
               {/* 佣金比例说明 */}
               <Card className="bg-slate-800/50 border-slate-700">
@@ -802,5 +811,95 @@ function WithdrawSection({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+
+// Wallet Address Card Component
+function WalletAddressCard({ agentInfo }: { agentInfo: AgentInfo }) {
+  const [newAddress, setNewAddress] = useState(agentInfo.walletAddress || "");
+  const [isEditing, setIsEditing] = useState(false);
+
+  const updateWallet = trpc.agent.updateWalletAddress.useMutation({
+    onSuccess: () => {
+      toast.success("钱包地址已更新");
+      setIsEditing(false);
+    },
+    onError: (error) => {
+      toast.error(error.message || "更新失败");
+    }
+  });
+
+  const handleSave = () => {
+    if (!newAddress || !newAddress.startsWith('T')) {
+      toast.error("请输入有效的 TRC20 地址");
+      return;
+    }
+    updateWallet.mutate({ walletAddress: newAddress });
+  };
+
+  return (
+    <Card className="bg-slate-800/50 border-slate-700">
+      <CardHeader>
+        <CardTitle className="text-white flex items-center gap-2">
+          <Wallet className="w-5 h-5" />
+          修改收款地址
+        </CardTitle>
+        <CardDescription>更新您的 USDT TRC20 收款地址</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isEditing ? (
+          <>
+            <div className="space-y-2">
+              <Label className="text-white">新钱包地址</Label>
+              <Input
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                placeholder="T..."
+                className="bg-slate-900/50 border-slate-600 font-mono"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500"
+                onClick={handleSave}
+                disabled={updateWallet.isPending}
+              >
+                {updateWallet.isPending ? "保存中..." : "保存"}
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => {
+                  setIsEditing(false);
+                  setNewAddress(agentInfo.walletAddress || "");
+                }}
+              >
+                取消
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="p-3 bg-slate-900/50 rounded-lg">
+              <p className="text-xs text-slate-400 mb-1">当前地址</p>
+              <p className="text-white font-mono text-sm break-all">
+                {agentInfo.walletAddress || '未设置'}
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => setIsEditing(true)}
+            >
+              修改地址
+            </Button>
+          </>
+        )}
+        <p className="text-xs text-slate-400">
+          注意：请确保地址正确，错误的地址可能导致资产丢失
+        </p>
+      </CardContent>
+    </Card>
   );
 }
