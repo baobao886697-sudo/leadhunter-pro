@@ -166,6 +166,10 @@ export default function AgentPortal() {
               <LinkIcon className="w-4 h-4 mr-2" />
               推广
             </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-yellow-500/20">
+              <Crown className="w-4 h-4 mr-2" />
+              设置
+            </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
@@ -362,7 +366,7 @@ export default function AgentPortal() {
                       {teamData.level1Users.map((user: any, index: number) => (
                         <div key={index} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg">
                           <div>
-                            <p className="text-sm text-white">{user.email}</p>
+                            <p className="text-sm text-white">{user.displayName || user.email}</p>
                             <p className="text-xs text-slate-400">注册于 {user.createdAt}</p>
                           </div>
                           <div className="text-right">
@@ -397,7 +401,7 @@ export default function AgentPortal() {
                       {teamData.level2Users.map((user: any, index: number) => (
                         <div key={index} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg">
                           <div>
-                            <p className="text-sm text-white">{user.email}</p>
+                            <p className="text-sm text-white">{user.displayName || user.email}</p>
                             <p className="text-xs text-slate-400">
                               来自 {user.inviterEmail}
                             </p>
@@ -550,6 +554,122 @@ export default function AgentPortal() {
                     <p className="text-sm text-yellow-500">
                       佣金将在用户充值后 7 天自动解冻，届时可申请提现
                     </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* 账户信息 */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">账户信息</CardTitle>
+                  <CardDescription>您的代理账户基本信息</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-700">
+                    <span className="text-slate-400">代理ID</span>
+                    <span className="text-white font-mono">{agentInfo.id}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-slate-700">
+                    <span className="text-slate-400">邮箱</span>
+                    <span className="text-white">{agentInfo.email}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-slate-700">
+                    <span className="text-slate-400">代理等级</span>
+                    <Badge className={levelColors[agentInfo.level]}>
+                      {levelNames[agentInfo.level]}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-slate-400">邀请码</span>
+                    <code className="text-yellow-500 bg-slate-900 px-2 py-1 rounded font-mono">
+                      {agentInfo.inviteCode}
+                    </code>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 佣金比例说明 */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">佣金比例说明</CardTitle>
+                  <CardDescription>各等级代理的佣金比例</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left py-2 text-slate-400">等级</th>
+                          <th className="text-center py-2 text-slate-400">一级佣金</th>
+                          <th className="text-center py-2 text-slate-400">二级佣金</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className={`border-b border-slate-700 ${agentInfo.level === 'founder' ? 'bg-yellow-500/10' : ''}`}>
+                          <td className="py-2 text-amber-400">👑 创始代理</td>
+                          <td className="py-2 text-center text-green-500 font-bold">15%</td>
+                          <td className="py-2 text-center text-blue-500 font-bold">5%</td>
+                        </tr>
+                        <tr className={`border-b border-slate-700 ${agentInfo.level === 'gold' ? 'bg-yellow-500/10' : ''}`}>
+                          <td className="py-2 text-yellow-400">🥇 金牌代理</td>
+                          <td className="py-2 text-center text-green-500">12%</td>
+                          <td className="py-2 text-center text-blue-500">4%</td>
+                        </tr>
+                        <tr className={`border-b border-slate-700 ${agentInfo.level === 'silver' ? 'bg-yellow-500/10' : ''}`}>
+                          <td className="py-2 text-slate-400">🥈 银牌代理</td>
+                          <td className="py-2 text-center text-green-500">10%</td>
+                          <td className="py-2 text-center text-blue-500">3%</td>
+                        </tr>
+                        <tr className={`${agentInfo.level === 'normal' ? 'bg-yellow-500/10' : ''}`}>
+                          <td className="py-2 text-cyan-400">⭐ 普通代理</td>
+                          <td className="py-2 text-center text-green-500">8%</td>
+                          <td className="py-2 text-center text-blue-500">2%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-4 p-3 bg-slate-900/50 rounded-lg">
+                    <p className="text-xs text-slate-400">
+                      您当前等级：<span className="text-yellow-500 font-bold">{levelNames[agentInfo.level]}</span>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 提现规则 */}
+              <Card className="bg-slate-800/50 border-slate-700 lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-white">提现规则</CardTitle>
+                  <CardDescription>佣金结算和提现说明</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-slate-900/50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-5 h-5 text-yellow-500" />
+                        <span className="text-white font-medium">结算周期</span>
+                      </div>
+                      <p className="text-slate-400 text-sm">佣金在用户充值后 <span className="text-yellow-500 font-bold">7天</span> 自动解冻</p>
+                    </div>
+                    <div className="p-4 bg-slate-900/50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Wallet className="w-5 h-5 text-green-500" />
+                        <span className="text-white font-medium">最低提现</span>
+                      </div>
+                      <p className="text-slate-400 text-sm">单笔最低提现金额 <span className="text-green-500 font-bold">50 USDT</span></p>
+                    </div>
+                    <div className="p-4 bg-slate-900/50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <DollarSign className="w-5 h-5 text-cyan-500" />
+                        <span className="text-white font-medium">结算方式</span>
+                      </div>
+                      <p className="text-slate-400 text-sm">支持 <span className="text-cyan-500 font-bold">USDT TRC20</span> 网络提现</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

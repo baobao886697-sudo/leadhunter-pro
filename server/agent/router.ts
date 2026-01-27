@@ -47,6 +47,24 @@ function getDb() {
   return db;
 }
 
+// 邮箱脱敏函数：保护用户隐私
+function maskEmail(email: string | null | undefined): string {
+  if (!email) return '用户';
+  const [localPart, domain] = email.split('@');
+  if (!domain) return '用户';
+  
+  // 显示前2个字符 + *** + @域名
+  const visibleChars = Math.min(2, localPart.length);
+  const masked = localPart.substring(0, visibleChars) + '***';
+  return `${masked}@${domain}`;
+}
+
+// 获取用户显示名称（优先用户名，否则脱敏邮箱）
+function getUserDisplayName(name: string | null | undefined, email: string | null | undefined): string {
+  if (name && name.trim()) return name;
+  return maskEmail(email);
+}
+
 // ============ 代理申请表操作 ============
 
 // 创建代理申请
@@ -487,7 +505,9 @@ export const agentRouter = router({
       `);
       
       return {
-        ...user,
+        id: user.id,
+        displayName: getUserDisplayName(user.name, user.email),
+        email: maskEmail(user.email), // 脱敏邮箱
         createdAt: new Date(user.createdAt).toLocaleDateString('zh-CN'),
         totalRecharge: parseFloat((rechargeResult[0] as any[])[0]?.total || '0').toFixed(2),
         commission: parseFloat((commissionResult[0] as any[])[0]?.total || '0').toFixed(2),
@@ -495,7 +515,10 @@ export const agentRouter = router({
     }));
     
     const enrichedLevel2 = level2Users.map(user => ({
-      ...user,
+      id: user.id,
+      displayName: getUserDisplayName(user.name, user.email),
+      email: maskEmail(user.email), // 脱敏邮箱
+      inviterEmail: maskEmail(user.inviterEmail), // 脱敏上级邮箱
       createdAt: new Date(user.createdAt).toLocaleDateString('zh-CN'),
       totalRecharge: '0.00',
       commission: '0.00',
@@ -525,7 +548,7 @@ export const agentRouter = router({
     
     const commissions = (result[0] as any[]).map(c => ({
       level: c.commissionLevel === 'level1' ? 1 : 2,
-      fromUser: c.fromUserEmail?.split('@')[0] || '用户',
+      fromUser: maskEmail(c.fromUserEmail),
       orderAmount: parseFloat(c.orderAmount).toFixed(2),
       rate: parseFloat(c.commissionRate).toFixed(0),
       amount: (parseFloat(c.commissionAmount) + parseFloat(c.bonusAmount || '0')).toFixed(2),
@@ -714,7 +737,7 @@ async function getAgentDashboardData(agentId: number) {
   
   const recentCommissions = (recentCommissionsResult[0] as any[]).map(c => ({
     level: c.commissionLevel === 'level1' ? 1 : 2,
-    fromUser: c.fromUserEmail?.split('@')[0] || '用户',
+    fromUser: maskEmail(c.fromUserEmail),
     amount: (parseFloat(c.commissionAmount) + parseFloat(c.bonusAmount || '0')).toFixed(2),
     time: new Date(c.createdAt).toLocaleDateString('zh-CN'),
   }));
