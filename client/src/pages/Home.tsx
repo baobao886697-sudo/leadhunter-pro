@@ -251,7 +251,10 @@ export default function Home() {
     setEmail("");
     setPassword("");
     setConfirmPassword("");
-    setInviteCode("");
+    // 保留URL中的邀请码，不要清空
+    const params = new URLSearchParams(window.location.search);
+    const urlInviteCode = params.get('ref') || params.get('invite') || '';
+    setInviteCode(urlInviteCode);
     setUserName("");
   };
 
