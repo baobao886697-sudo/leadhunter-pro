@@ -465,28 +465,66 @@ export default function AgentCenter() {
         {/* 邀请链接卡片 */}
         <Card className="relative z-10 bg-gradient-to-r from-slate-900/90 to-slate-800/90 border-slate-700 backdrop-blur-sm">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <UserPlus className="w-5 h-5 text-cyan-400" />
-                  <span className="text-white font-medium">我的邀请链接</span>
-                </div>
+            <div className="flex items-center gap-2 mb-4">
+              <UserPlus className="w-5 h-5 text-cyan-400" />
+              <span className="text-white font-medium text-lg">推广邀请</span>
+            </div>
+            
+            {/* 邀请链接 */}
+            <div className="space-y-4">
+              <div>
+                <label className="text-slate-400 text-sm mb-2 block">我的专属邀请链接</label>
                 <div className="flex items-center gap-3">
-                  <code className="flex-1 px-4 py-2 bg-slate-800 rounded-lg text-cyan-400 text-sm truncate">
+                  <code className="flex-1 px-4 py-3 bg-slate-800 rounded-lg text-cyan-400 text-sm truncate border border-slate-700">
                     {inviteData?.inviteLink || '加载中...'}
                   </code>
                   <Button 
-                    variant="outline" 
-                    size="sm" 
                     onClick={copyInviteLink}
-                    className="gap-2 border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+                    className="gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-6"
                   >
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? '已复制' : '复制'}
+                    {copied ? '已复制' : '一键复制'}
                   </Button>
                 </div>
-                <p className="text-slate-500 text-sm mt-2">
-                  邀请码：<span className="text-cyan-400 font-mono">{inviteData?.inviteCode || agentInfo.inviteCode}</span>
+              </div>
+              
+              {/* 邀请码 */}
+              <div className="flex items-center gap-4">
+                <div>
+                  <label className="text-slate-400 text-sm mb-1 block">我的邀请码</label>
+                  <span className="text-2xl font-bold text-cyan-400 font-mono tracking-wider">
+                    {inviteData?.inviteCode || agentInfo.inviteCode}
+                  </span>
+                </div>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteData?.inviteCode || agentInfo.inviteCode || '');
+                    toast.success('邀请码已复制');
+                  }}
+                  className="gap-1 border-slate-600 text-slate-300 hover:bg-slate-800"
+                >
+                  <Copy className="w-3 h-3" />
+                  复制
+                </Button>
+              </div>
+            </div>
+            
+            {/* 使用说明 */}
+            <div className="mt-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-400 font-medium text-sm">推广使用说明</span>
+              </div>
+              <div className="space-y-2 text-sm text-slate-400">
+                <p><span className="text-cyan-400">方式一：</span>直接分享您的专属邀请链接，用户点击后注册时邀请码会<span className="text-green-400">自动填充</span></p>
+                <p><span className="text-cyan-400">方式二：</span>告知用户您的邀请码，用户在注册时手动输入</p>
+                <p><span className="text-cyan-400">链接格式：</span><code className="px-2 py-0.5 bg-slate-700 rounded text-cyan-400">https://datareach.co/?ref=您的邀请码</code></p>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-700">
+                <p className="text-xs text-slate-500">
+                  💡 提示：用户通过您的链接注册后，其所有充值您都将获得佣金返利，永久有效！
                 </p>
               </div>
             </div>
