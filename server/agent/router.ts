@@ -1008,4 +1008,128 @@ export const adminAgentRouter = router({
       normalCount: agents.agents.filter((a: any) => a.agentLevel === 'normal').length,
     };
   }),
+
+  // 调整代理佣金余额（管理员功能）
+  adjustBalance: adminProcedure
+    .input(z.object({
+      agentId: z.number(),
+      type: z.enum(["add", "subtract", "set"]),
+      amount: z.number().min(0),
+      reason: z.string().min(1, "请填写调整原因"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const agent = await db.select().from(users).where(eq(users.id, input.agentId)).limit(1);
+      
+      if (!agent[0] || !agent[0].isAgent) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "代理不存在" });
+      }
+      
+      const currentBalance = parseFloat(agent[0].agentBalance || '0');
+      let newBalance: number;
+      
+      if (input.type === 'add') {
+        newBalance = currentBalance + input.amount;
+      } else if (input.type === 'subtract') {
+        newBalance = Math.max(0, currentBalance - input.amount);
+      } else {
+        newBalance = input.amount;
+      }
+      
+      await db.update(users).set({
+        agentBalance: newBalance.toFixed(2),
+      }).where(eq(users.id, input.agentId));
+      
+      await logAdmin(
+        (ctx as any).adminUser?.username || 'admin',
+        'adjust_agent_balance',
+        'agent',
+        input.agentId.toString(),
+        { type: input.type, amount: input.amount, reason: input.reason, oldBalance: currentBalance, newBalance }
+      );
+      
+      return { success: true, oldBalance: currentBalance, newBalance };
+    }),
+
+  // 清除代理佣金（归零）
+  clearBalance: adminProcedure
+    .input(z.object({
+      agentId: z.number(),
+      reason: z.string().min(1, "请填写清除原因"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const agent = await db.select().from(users).where(eq(users.id, input.agentId)).limit(1);
+      
+      if (!agent[0] || !agent[0].isAgent) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "代理不存在" });
+      }
+      
+      const oldBalance = parseFloat(agent[0].agentBalance || '0');
+      const oldFrozen = parseFloat(agent[0].agentFrozenBalance || '0');
+      
+      await db.update(users).set({
+        agentBalance: '0',
+        agentFrozenBalance: '0',
+      }).where(eq(users.id, input.agentId));
+      
+      await logAdmin(
+        (ctx as any).adminUser?.username || 'admin',
+        'clear_agent_balance',
+        'agent',
+        input.agentId.toString(),
+        { reason: input.reason, oldBalance, oldFrozen }
+      );
+      
+      return { success: true, clearedBalance: oldBalance, clearedFrozen: oldFrozen };
+    }),
+
+  // 获取代理佣金明细（管理员查看）
+  agentCommissions: adminProcedure
+    .input(z.object({
+      agentId: z.number(),
+      page: z.number().optional(),
+      limit: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const page = input.page || 1;
+      const limit = input.limit || 20;
+      const offset = (page - 1) * limit;
+      
+      // 获取佣金记录
+      const commissionsResult = await db.execute(sql`
+        SELECT ac.*, u.email as fromUserEmail
+        FROM agent_commissions ac
+        LEFT JOIN users u ON ac.fromUserId = u.id
+        WHERE ac.agentId = ${input.agentId}
+        ORDER BY ac.createdAt DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `);
+      
+      // 获取总数
+      const countResult = await db.execute(sql`
+        SELECT COUNT(*) as total FROM agent_commissions WHERE agentId = ${input.agentId}
+      `);
+      
+      const commissions = (commissionsResult[0] as any[]).map(c => ({
+        id: c.id,
+        level: c.commissionLevel,
+        fromUserEmail: c.fromUserEmail,
+        orderAmount: parseFloat(c.orderAmount || '0').toFixed(2),
+        commissionRate: parseFloat(c.commissionRate || '0'),
+        commissionAmount: parseFloat(c.commissionAmount || '0').toFixed(2),
+        bonusAmount: parseFloat(c.bonusAmount || '0').toFixed(2),
+        status: c.status,
+        createdAt: c.createdAt,
+        settledAt: c.settledAt,
+      }));
+      
+      return {
+        commissions,
+        total: (countResult[0] as any[])[0]?.total || 0,
+        page,
+        limit,
+      };
+    }),
 });

@@ -48,6 +48,15 @@ export function AgentManager() {
   const [grantAgentDialogOpen, setGrantAgentDialogOpen] = useState(false);
   const [grantUserId, setGrantUserId] = useState('');
   const [grantLevel, setGrantLevel] = useState('normal');
+  
+  // 调整佣金
+  const [adjustBalanceDialogOpen, setAdjustBalanceDialogOpen] = useState(false);
+  const [adjustType, setAdjustType] = useState<'add' | 'subtract' | 'set'>('add');
+  const [adjustAmount, setAdjustAmount] = useState('');
+  const [adjustReason, setAdjustReason] = useState('');
+  
+  // 查看佣金明细
+  const [commissionsDialogOpen, setCommissionsDialogOpen] = useState(false);
 
   // 获取代理列表
   const { data: agentsData, isLoading: agentsLoading, refetch: refetchAgents } = trpc.admin.agent.list.useQuery({
@@ -149,6 +158,39 @@ export function AgentManager() {
       toast.error(error.message || '初始化失败');
     },
   });
+
+  // 调整佣金余额
+  const adjustBalanceMutation = trpc.admin.agent.adjustBalance.useMutation({
+    onSuccess: (data) => {
+      toast.success(`佣金已调整: $${data.oldBalance} → $${data.newBalance}`);
+      setAdjustBalanceDialogOpen(false);
+      setAdjustAmount('');
+      setAdjustReason('');
+      refetchAgents();
+    },
+    onError: (error) => {
+      toast.error(error.message || '调整失败');
+    },
+  });
+
+  // 清除佣金
+  const clearBalanceMutation = trpc.admin.agent.clearBalance.useMutation({
+    onSuccess: (data) => {
+      toast.success(`已清除佣金: 可提现$${data.clearedBalance}, 冻结$${data.clearedFrozen}`);
+      setAdjustBalanceDialogOpen(false);
+      setAdjustReason('');
+      refetchAgents();
+    },
+    onError: (error) => {
+      toast.error(error.message || '清除失败');
+    },
+  });
+
+  // 获取代理佣金明细
+  const { data: commissionsData, isLoading: commissionsLoading, refetch: refetchCommissions } = trpc.admin.agent.agentCommissions.useQuery(
+    { agentId: selectedAgent?.id || 0, page: 1, limit: 50 },
+    { enabled: !!selectedAgent && commissionsDialogOpen }
+  );
 
   // 处理等级修改
   const handleSetLevel = () => {
@@ -437,19 +479,47 @@ export function AgentManager() {
                             ${parseFloat(agent.agentFrozenBalance || '0').toFixed(2)}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedAgent(agent);
-                                setNewLevel(agent.agentLevel || 'normal');
-                                setLevelDialogOpen(true);
-                              }}
-                              className="text-slate-400 hover:text-white"
-                            >
-                              <Award className="w-4 h-4 mr-1" />
-                              调整等级
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedAgent(agent);
+                                  setNewLevel(agent.agentLevel || 'normal');
+                                  setLevelDialogOpen(true);
+                                }}
+                                className="text-slate-400 hover:text-white"
+                              >
+                                <Award className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedAgent(agent);
+                                  setAdjustType('add');
+                                  setAdjustAmount('');
+                                  setAdjustReason('');
+                                  setAdjustBalanceDialogOpen(true);
+                                }}
+                                className="text-green-400 hover:text-green-300"
+                                title="调整佣金"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedAgent(agent);
+                                  setCommissionsDialogOpen(true);
+                                }}
+                                className="text-blue-400 hover:text-blue-300"
+                                title="查看佣金明细"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -873,6 +943,164 @@ export function AgentManager() {
             >
               {processWithdrawalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
               已打款
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 调整佣金弹窗 */}
+      <Dialog open={adjustBalanceDialogOpen} onOpenChange={setAdjustBalanceDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">调整代理佣金</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              代理: {selectedAgent?.email} | 当前可提现: ${parseFloat(selectedAgent?.agentBalance || '0').toFixed(2)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-white">操作类型</Label>
+              <Select value={adjustType} onValueChange={(v) => setAdjustType(v as any)}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="add" className="text-white">➕ 增加佣金</SelectItem>
+                  <SelectItem value="subtract" className="text-white">➖ 扣除佣金</SelectItem>
+                  <SelectItem value="set" className="text-white">📌 设置为指定金额</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">金额 (USDT)</Label>
+              <Input
+                type="number"
+                value={adjustAmount}
+                onChange={(e) => setAdjustAmount(e.target.value)}
+                placeholder="输入金额"
+                className="bg-slate-800 border-slate-700 text-white"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">调整原因 *</Label>
+              <Textarea
+                value={adjustReason}
+                onChange={(e) => setAdjustReason(e.target.value)}
+                placeholder="请填写调整原因..."
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!adjustReason) {
+                  toast.error('请填写清除原因');
+                  return;
+                }
+                clearBalanceMutation.mutate({
+                  agentId: selectedAgent?.id,
+                  reason: adjustReason,
+                });
+              }}
+              disabled={clearBalanceMutation.isPending}
+              className="sm:mr-auto"
+            >
+              {clearBalanceMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
+              清除全部佣金
+            </Button>
+            <Button variant="ghost" onClick={() => setAdjustBalanceDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                if (!adjustAmount || !adjustReason) {
+                  toast.error('请填写金额和原因');
+                  return;
+                }
+                adjustBalanceMutation.mutate({
+                  agentId: selectedAgent?.id,
+                  type: adjustType,
+                  amount: parseFloat(adjustAmount),
+                  reason: adjustReason,
+                });
+              }}
+              disabled={adjustBalanceMutation.isPending}
+              className="bg-green-500 hover:bg-green-600"
+            >
+              {adjustBalanceMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              确认调整
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 查看佣金明细弹窗 */}
+      <Dialog open={commissionsDialogOpen} onOpenChange={setCommissionsDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-white">佣金明细</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              代理: {selectedAgent?.email} | 累计收益: ${parseFloat(selectedAgent?.agentTotalEarned || '0').toFixed(2)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-96 overflow-auto">
+            {commissionsLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
+              </div>
+            ) : commissionsData?.commissions?.length === 0 ? (
+              <p className="text-center text-slate-400 py-8">暂无佣金记录</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-700">
+                    <TableHead className="text-slate-400">时间</TableHead>
+                    <TableHead className="text-slate-400">类型</TableHead>
+                    <TableHead className="text-slate-400">来源用户</TableHead>
+                    <TableHead className="text-slate-400">订单金额</TableHead>
+                    <TableHead className="text-slate-400">佣金比例</TableHead>
+                    <TableHead className="text-slate-400">佣金</TableHead>
+                    <TableHead className="text-slate-400">状态</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {commissionsData?.commissions?.map((c: any) => (
+                    <TableRow key={c.id} className="border-slate-700">
+                      <TableCell className="text-white text-xs">
+                        {new Date(c.createdAt).toLocaleDateString('zh-CN')}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={c.level === 'level1' ? 'text-cyan-400' : 'text-purple-400'}>
+                          {c.level === 'level1' ? '一级' : '二级'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-slate-300 text-xs">{c.fromUserEmail}</TableCell>
+                      <TableCell className="text-white">${c.orderAmount}</TableCell>
+                      <TableCell className="text-slate-300">{c.commissionRate}%</TableCell>
+                      <TableCell className="text-green-400 font-medium">
+                        ${(parseFloat(c.commissionAmount) + parseFloat(c.bonusAmount)).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={
+                          c.status === 'settled' ? 'text-green-400' :
+                          c.status === 'pending' ? 'text-yellow-400' : 'text-slate-400'
+                        }>
+                          {c.status === 'settled' ? '已结算' : c.status === 'pending' ? '冻结中' : c.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCommissionsDialogOpen(false)}>
+              关闭
             </Button>
           </DialogFooter>
         </DialogContent>
