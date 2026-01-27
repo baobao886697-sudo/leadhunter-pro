@@ -321,28 +321,18 @@ async function verifyAgentLogin(email: string, password: string) {
   };
 }
 
-// 验证代理token
-function verifyAgentToken(token: string) {
-  try {
-    const decoded = jwt.verify(token, AGENT_JWT_SECRET) as any;
-    if (!decoded.isAgent) {
-      throw new Error("Invalid agent token");
-    }
-    return decoded;
-  } catch (error) {
-    throw new Error("Token验证失败，请重新登录");
-  }
-}
-
-// 代理认证中间件
+// 代理认证中间件 - 使用上面定义的verifyAgentToken
 async function getAgentFromToken(token?: string) {
   if (!token) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
   }
   
-  const decoded = verifyAgentToken(token);
-  const user = await getUserById(decoded.userId);
+  const agentUser = await verifyAgentToken(token);
+  if (!agentUser) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Token验证失败，请重新登录" });
+  }
   
+  const user = await getUserById(agentUser.userId);
   if (!user || !user.isAgent) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "代理身份验证失败" });
   }
