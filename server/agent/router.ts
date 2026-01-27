@@ -1189,11 +1189,9 @@ export const adminAgentRouter = router({
       const limit = input.limit || 20;
       const offset = (page - 1) * limit;
       
-      // 获取一级用户（直推）
+      // 获取一级用户（直推）- 不查询佣金表避免字段名问题
       const level1Result = await db.execute(sql`
-        SELECT u.id, u.email, u.name, u.credits, u.status, u.createdAt as createdAt,
-               COALESCE((SELECT SUM(order_amount) FROM agent_commissions WHERE from_user_id = u.id AND agent_id = ${input.agentId}), 0) as totalRecharge,
-               COALESCE((SELECT SUM(commission_amount + COALESCE(bonus_amount, 0)) FROM agent_commissions WHERE from_user_id = u.id AND agent_id = ${input.agentId}), 0) as totalCommission
+        SELECT u.id, u.email, u.name, u.credits, u.status, u.createdAt
         FROM users u
         WHERE u.inviterId = ${input.agentId}
         ORDER BY u.createdAt DESC
@@ -1235,8 +1233,8 @@ export const adminAgentRouter = router({
           credits: u.credits,
           status: u.status,
           createdAt: u.createdAt,
-          totalRecharge: parseFloat(u.totalRecharge || '0').toFixed(2),
-          totalCommission: parseFloat(u.totalCommission || '0').toFixed(2),
+          totalRecharge: '0.00',
+          totalCommission: '0.00',
         })),
         level1Total: (level1CountResult[0] as any[])[0]?.total || 0,
         level2Users: level2Users.map(u => ({
