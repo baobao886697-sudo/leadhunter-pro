@@ -235,6 +235,9 @@ export async function calculateAndCreateCommission(
     const commissionAmount = orderAmount * baseRate / 100;
     const bonusAmount = orderAmount * totalBonusRate / 100;
     
+    // 佣金直接结算到可提现余额（实时到账）
+    const totalAmount = commissionAmount + bonusAmount;
+    
     await getDb().insert(agentCommissions).values({
       agentId: level1Agent[0].id,
       fromUserId: userId,
@@ -245,13 +248,13 @@ export async function calculateAndCreateCommission(
       commissionAmount: commissionAmount.toString(),
       bonusType: isFirst ? 'first_charge' : (isActivity ? 'activity' : null),
       bonusAmount: bonusAmount.toString(),
-      status: 'pending',
+      status: 'settled',  // 直接设为已结算状态
     });
     
-    // 更新代理冻结余额
-    const totalAmount = commissionAmount + bonusAmount;
+    // 直接更新代理可提现余额（实时到账）
     await getDb().update(users).set({
-      agentFrozenBalance: sql`${users.agentFrozenBalance} + ${totalAmount}`,
+      agentBalance: sql`${users.agentBalance} + ${totalAmount}`,
+      agentTotalEarnings: sql`${users.agentTotalEarnings} + ${totalAmount}`,
     }).where(eq(users.id, level1Agent[0].id));
     
     // 二级代理佣金
@@ -271,12 +274,13 @@ export async function calculateAndCreateCommission(
           commissionAmount: level2CommissionAmount.toString(),
           bonusType: null,
           bonusAmount: '0',
-          status: 'pending',
+          status: 'settled',  // 直接设为已结算状态
         });
         
-        // 更新二级代理冻结余额
+        // 直接更新二级代理可提现余额（实时到账）
         await getDb().update(users).set({
-          agentFrozenBalance: sql`${users.agentFrozenBalance} + ${level2CommissionAmount}`,
+          agentBalance: sql`${users.agentBalance} + ${level2CommissionAmount}`,
+          agentTotalEarnings: sql`${users.agentTotalEarnings} + ${level2CommissionAmount}`,
         }).where(eq(users.id, level2Agent[0].id));
       }
     }
