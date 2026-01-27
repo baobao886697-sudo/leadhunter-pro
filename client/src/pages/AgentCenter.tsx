@@ -604,13 +604,6 @@ export default function AgentCenter() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
-                      <Clock className="w-5 h-5 text-amber-400 mt-0.5" />
-                      <div>
-                        <p className="text-white font-medium">佣金冻结期</p>
-                        <p className="text-slate-400 text-sm">充值确认后 {rules?.settlement.days || 7} 天自动解冻到可提现余额</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
                       <Wallet className="w-5 h-5 text-green-400 mt-0.5" />
                       <div>
                         <p className="text-white font-medium">最低提现</p>

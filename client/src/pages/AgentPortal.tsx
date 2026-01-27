@@ -577,11 +577,7 @@ export default function AgentPortal() {
                       </span>
                     </div>
                   </div>
-                  <div className="mt-4 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                    <p className="text-sm text-yellow-500">
-                      佣金将在用户充值后 7 天自动解冻，届时可申请提现
-                    </p>
-                  </div>
+                  
                 </CardContent>
               </Card>
             </div>
@@ -684,14 +680,7 @@ export default function AgentPortal() {
                   <CardDescription>佣金结算和提现说明</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-slate-900/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-5 h-5 text-yellow-500" />
-                        <span className="text-white font-medium">结算周期</span>
-                      </div>
-                      <p className="text-slate-400 text-sm">佣金在用户充值后 <span className="text-yellow-500 font-bold">7天</span> 自动解冻</p>
-                    </div>
+                  <div className="grid md:grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-900/50 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <Wallet className="w-5 h-5 text-green-500" />

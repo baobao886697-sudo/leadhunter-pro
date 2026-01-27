@@ -140,7 +140,7 @@ export default function AgentApply() {
                 <div>
                   <h3 className="font-semibold text-white mb-1">USDT 结算</h3>
                   <p className="text-slate-400 text-sm">
-                    佣金以 USDT 结算，7天自动解冻，随时提现到您的钱包
+                    佣金以 USDT 结算，实时到账，随时提现到您的钱包
                   </p>
                 </div>
               </div>
