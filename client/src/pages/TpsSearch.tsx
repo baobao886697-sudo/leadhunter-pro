@@ -23,7 +23,13 @@ import {
   Clock,
   AlertCircle,
   CheckCircle,
-  Sparkles
+  Sparkles,
+  Star,
+  Home,
+  Phone,
+  Crown,
+  Zap,
+  TrendingUp
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -154,19 +160,67 @@ export default function TpsSearch() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
+        {/* 七彩鎏金色标题样式 */}
+        <style>{`
+          .golden-rainbow-title {
+            background: linear-gradient(
+              90deg,
+              #ffd700, #ffb347, #ff6b6b, #ff69b4, #9b59b6, #3498db, #2ecc71, #ffd700
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: golden-shine 3s linear infinite;
+          }
+          @keyframes golden-shine {
+            to {
+              background-position: 200% center;
+            }
+          }
+          .star-pulse {
+            animation: star-pulse 1.5s ease-in-out infinite;
+          }
+          @keyframes star-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+          }
+          .recommend-badge {
+            background: linear-gradient(135deg, #ffd700 0%, #ff6b6b 50%, #9b59b6 100%);
+            background-size: 200% 200%;
+            animation: badge-gradient 2s ease infinite;
+          }
+          @keyframes badge-gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+          }
+        `}</style>
+        
         {/* 页面标题 */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Users className="h-6 w-6 text-cyan-500" />
-              TruePeopleSearch 搜索
+            <h1 className="text-2xl font-bold flex items-center gap-2 flex-wrap">
+              <Star className="h-6 w-6 text-yellow-500 fill-yellow-500 star-pulse" />
+              <Star className="h-6 w-6 text-yellow-500 fill-yellow-500 star-pulse" style={{ animationDelay: '0.2s' }} />
+              <span className="golden-rainbow-title">TruePeopleSearch 搜索</span>
+              <span className="recommend-badge text-xs px-3 py-1 rounded-full text-white font-bold shadow-lg">
+                ⭐ 推荐 ⭐
+              </span>
             </h1>
-            <p className="text-muted-foreground mt-1">
-              搜索美国公开数据，获取联系人电话和地址信息
+            <p className="text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+              <span className="text-amber-400 font-medium">华侨/美国人最新数据</span>
+              <span className="text-slate-500">|</span>
+              <span className="text-emerald-400 font-medium">最新电话号码</span>
+              <span className="text-slate-500">|</span>
+              <span className="text-pink-400 font-medium flex items-center gap-1">
+                <Home className="h-4 w-4" />
+                房产价格信息
+              </span>
             </p>
           </div>
-          <Button variant="outline" onClick={() => setLocation("/tps/history")}>
-            <Clock className="h-4 w-4 mr-2" />
+          <Button variant="outline" onClick={() => setLocation("/tps/history")} className="border-amber-500/50 hover:bg-amber-500/10">
+            <Clock className="h-4 w-4 mr-2 text-amber-500" />
             搜索历史
           </Button>
         </div>
@@ -175,7 +229,7 @@ export default function TpsSearch() {
           {/* 左侧：搜索表单 */}
           <div className="lg:col-span-2 space-y-6">
             {/* 搜索模式选择 */}
-            <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-slate-700">
+            <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/20 border-amber-700/50">
               <CardHeader>
                 <CardTitle className="text-lg">搜索模式</CardTitle>
                 <CardDescription>选择搜索方式</CardDescription>
@@ -343,15 +397,15 @@ export default function TpsSearch() {
           {/* 右侧：费用预估和提交 */}
           <div className="space-y-6">
             {/* 积分余额 */}
-            <Card className="bg-gradient-to-br from-cyan-900/30 to-blue-900/30 border-cyan-700/50">
+            <Card className="bg-gradient-to-br from-amber-900/30 to-orange-900/30 border-amber-700/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <DollarSign className="h-5 w-5 text-cyan-500" />
+                  <DollarSign className="h-5 w-5 text-amber-500" />
                   积分余额
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-cyan-400">
+                <div className="text-3xl font-bold text-amber-400">
                   {profileLoading ? (
                     <Skeleton className="h-9 w-24" />
                   ) : (
@@ -422,87 +476,107 @@ export default function TpsSearch() {
               </CardContent>
             </Card>
 
-            {/* 提交按钮 */}
+            {/* 提交按钮 - 金色渐变 */}
             <Button
               onClick={handleSearch}
               disabled={searchMutation.isPending || names.length === 0}
-              className="w-full h-12 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500"
+              className="w-full h-14 text-lg font-bold bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:from-amber-500 hover:via-orange-400 hover:to-amber-500 shadow-lg shadow-amber-500/25"
             >
               {searchMutation.isPending ? (
                 <>
                   <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  提交中...
+                  搜索中...
                 </>
               ) : (
                 <>
                   <Search className="h-5 w-5 mr-2" />
                   开始搜索
+                  <Star className="h-4 w-4 ml-2 fill-current" />
                 </>
               )}
             </Button>
 
-            {/* 数据优势 */}
-            <Card className="bg-gradient-to-br from-emerald-900/30 to-teal-900/30 border-emerald-700/50">
+            {/* TPS 核心优势 - 突出卖点 */}
+            <Card className="bg-gradient-to-br from-amber-900/30 via-orange-900/20 to-pink-900/30 border-amber-600/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-emerald-500" />
-                  数据优势
+                  <Crown className="h-5 w-5 text-amber-400" />
+                  <span className="golden-rainbow-title">TPS 核心优势</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+              <CardContent className="space-y-4">
+                {/* 核心优势1: 最新数据 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <TrendingUp className="h-5 w-5 text-amber-400" />
                   </div>
                   <div>
-                    <p className="font-medium text-emerald-300">精准年龄筛选</p>
-                    <p className="text-xs text-muted-foreground">智能过滤，精准定位目标客户群体</p>
+                    <p className="font-bold text-amber-300">华侨/美国人最新数据</p>
+                    <p className="text-xs text-muted-foreground">实时同步美国公开数据库，数据新鲜度行业领先</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                
+                {/* 核心优势2: 最新号码 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <Phone className="h-5 w-5 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="font-medium text-emerald-300">电话号码验证</p>
-                    <p className="text-xs text-muted-foreground">多维度数据交叉验证，确保可达性</p>
+                    <p className="font-bold text-emerald-300">智能提取最新号码</p>
+                    <p className="text-xs text-muted-foreground">自动识别并提取每个人的主要联系电话（Primary）</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                
+                {/* 核心优势3: 房产价格 - 重点突出 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20">
+                  <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center flex-shrink-0">
+                    <Home className="h-5 w-5 text-pink-400" />
                   </div>
                   <div>
-                    <p className="font-medium text-emerald-300">实时数据更新</p>
-                    <p className="text-xs text-muted-foreground">数据定期同步，保持信息时效性</p>
+                    <p className="font-bold text-pink-300 flex items-center gap-2">
+                      房产价格信息
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-200">独家</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">快速判断客户资质，筛选高净值目标客户</p>
+                  </div>
+                </div>
+                
+                {/* 核心优势4: 精准筛选 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <Zap className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-blue-300">多维度精准筛选</p>
+                    <p className="text-xs text-muted-foreground">年龄、运营商、号码类型、房产价值多条件过滤</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* 快速入门 */}
-            <Card className="bg-slate-900/50 border-slate-700">
+            <Card className="bg-gradient-to-br from-slate-900/50 to-amber-900/10 border-amber-700/30">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Info className="h-5 w-5 text-blue-500" />
+                  <Sparkles className="h-5 w-5 text-amber-500" />
                   快速入门
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">1</div>
+                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold text-black">1</div>
                   <p className="text-sm">选择搜索模式（仅姓名 / 姓名+地点）</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">2</div>
+                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold text-black">2</div>
                   <p className="text-sm">输入姓名列表，每行一个姓名</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">3</div>
+                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold text-black">3</div>
                   <p className="text-sm">点击“开始搜索”，等待结果</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">4</div>
+                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold text-black">4</div>
                   <p className="text-sm">导出 CSV 文档，开始联系客户</p>
                 </div>
               </CardContent>
