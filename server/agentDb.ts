@@ -389,27 +389,40 @@ export async function processWithdrawal(
       agentBalance: sql`${users.agentBalance} + ${withdrawal[0].amount}`,
     }).where(eq(users.id, withdrawal[0].agentId));
     
-    await getDb().update(agentWithdrawals).set({
+    const rejectData: any = {
       status: 'rejected',
-      adminNote,
       processedBy: adminUsername,
       processedAt: new Date(),
-    }).where(eq(agentWithdrawals.id, withdrawal[0].id));
+    };
+    if (adminNote && adminNote.trim()) {
+      rejectData.adminNote = adminNote.trim();
+    }
+    await getDb().update(agentWithdrawals).set(rejectData).where(eq(agentWithdrawals.id, withdrawal[0].id));
   } else if (action === 'approve') {
-    await getDb().update(agentWithdrawals).set({
+    const approveData: any = {
       status: 'approved',
-      adminNote,
       processedBy: adminUsername,
       processedAt: new Date(),
-    }).where(eq(agentWithdrawals.id, withdrawal[0].id));
+    };
+    if (adminNote && adminNote.trim()) {
+      approveData.adminNote = adminNote.trim();
+    }
+    await getDb().update(agentWithdrawals).set(approveData).where(eq(agentWithdrawals.id, withdrawal[0].id));
   } else if (action === 'paid') {
-    await getDb().update(agentWithdrawals).set({
+    // 构建更新对象，只有当txId有值时才更新
+    const updateData: any = {
       status: 'paid',
-      txId,
-      adminNote,
       processedBy: adminUsername,
       processedAt: new Date(),
-    }).where(eq(agentWithdrawals.id, withdrawal[0].id));
+    };
+    // 只有当txId有实际值时才更新
+    if (txId && txId.trim()) {
+      updateData.txId = txId.trim();
+    }
+    if (adminNote) {
+      updateData.adminNote = adminNote;
+    }
+    await getDb().update(agentWithdrawals).set(updateData).where(eq(agentWithdrawals.id, withdrawal[0].id));
     
     // 更新佣金记录状态为已提现
     // 这里简化处理，实际可能需要更复杂的逻辑
