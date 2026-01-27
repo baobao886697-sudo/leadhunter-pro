@@ -38,7 +38,6 @@ const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; labe
   { icon: Rocket, label: "正在开发", path: "/roadmap" },
   { icon: History, label: "历史记录", path: "/history" },
   { icon: Wallet, label: "积分充值", path: "/recharge" },
-  { icon: Crown, label: "代理中心", path: "/agent", isNew: true },
   { icon: MessageCircle, label: "联系我们", path: "/feedback" },
   { icon: Shield, label: "管理后台", path: "/admin", adminOnly: true },
 ];

@@ -34,6 +34,9 @@ import AnywhoSearch from "./pages/AnywhoSearch";
 import AnywhoTask from "./pages/AnywhoTask";
 import AnywhoHistory from "./pages/AnywhoHistory";
 import AgentCenter from "./pages/AgentCenter";
+import AgentApply from "./pages/AgentApply";
+import AgentPortal from "./pages/AgentPortal";
+import AgentLogin from "./pages/AgentLogin";
 
 function Router() {
   return (
@@ -61,7 +64,10 @@ function Router() {
       <Route path="/anywho" component={AnywhoSearch} />
       <Route path="/anywho/task/:taskId" component={AnywhoTask} />
       <Route path="/anywho/history" component={AnywhoHistory} />
-      <Route path="/agent" component={AgentCenter} />
+      {/* 代理系统路由 */}
+      <Route path="/apply-agent" component={AgentApply} />
+      <Route path="/agent-portal/login" component={AgentLogin} />
+      <Route path="/agent-portal" component={AgentPortal} />
       <Route path="/anywho/intro" component={Anywho} />
       <Route path="/about" component={About} />
       <Route path="/privacy" component={Privacy} />

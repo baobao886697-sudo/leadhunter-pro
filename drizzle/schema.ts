@@ -610,3 +610,26 @@ export const agentSettings = mysqlTable("agent_settings", {
 
 export type AgentSetting = typeof agentSettings.$inferSelect;
 export type InsertAgentSetting = typeof agentSettings.$inferInsert;
+
+
+// 代理申请表
+export const agentApplications = mysqlTable("agent_applications", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  wechat: varchar("wechat", { length: 50 }),
+  company: varchar("company", { length: 100 }),
+  experience: text("experience"),
+  channels: text("channels"),
+  expectedUsers: varchar("expectedUsers", { length: 50 }),
+  walletAddress: varchar("walletAddress", { length: 100 }),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  adminNote: text("adminNote"),
+  processedBy: varchar("processedBy", { length: 50 }),
+  processedAt: timestamp("processedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AgentApplication = typeof agentApplications.$inferSelect;
+export type InsertAgentApplication = typeof agentApplications.$inferInsert;

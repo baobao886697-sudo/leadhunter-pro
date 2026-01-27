@@ -798,6 +798,30 @@ async function ensureTables() {
     `);
     console.log("[Database] Agent settings table ready");
     
+    // 代理申请表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agent_applications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(320) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        wechat VARCHAR(50),
+        company VARCHAR(100),
+        experience TEXT,
+        channels TEXT,
+        expectedUsers VARCHAR(50),
+        walletAddress VARCHAR(100),
+        status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+        adminNote TEXT,
+        processedBy VARCHAR(50),
+        processedAt TIMESTAMP NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        INDEX idx_status (status),
+        INDEX idx_email (email)
+      )
+    `);
+    console.log("[Database] Agent applications table ready");
+    
     // 插入默认代理配置
     await db.execute(sql`
       INSERT IGNORE INTO agent_settings (settingKey, settingValue, description) VALUES

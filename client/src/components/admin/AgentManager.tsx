@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,7 +14,8 @@ import { toast } from "sonner";
 import { 
   Crown, Users, Wallet, TrendingUp, RefreshCw, 
   CheckCircle, XCircle, Clock, DollarSign, Eye,
-  Settings, Award, Loader2, Search
+  Settings, Award, Loader2, Search, UserPlus,
+  FileText, Copy, ExternalLink
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -33,9 +36,28 @@ export function AgentManager() {
   const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [txId, setTxId] = useState('');
+  
+  // 代理申请审核
+  const [applicationDialogOpen, setApplicationDialogOpen] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
+  const [approveLevel, setApproveLevel] = useState('normal');
+  const [applicationNote, setApplicationNote] = useState('');
+  
+  // 直接发放代理
+  const [grantAgentDialogOpen, setGrantAgentDialogOpen] = useState(false);
+  const [grantUserId, setGrantUserId] = useState('');
+  const [grantLevel, setGrantLevel] = useState('normal');
 
   // 获取代理列表
   const { data: agentsData, isLoading: agentsLoading, refetch: refetchAgents } = trpc.admin.agent.list.useQuery({
+    page: 1,
+    limit: 50,
+  });
+
+  // 获取代理申请列表
+  const { data: applicationsData, isLoading: applicationsLoading, refetch: refetchApplications } = trpc.admin.agent.applications.useQuery({
+    status: 'pending',
     page: 1,
     limit: 50,
   });
@@ -59,6 +81,34 @@ export function AgentManager() {
       toast.success('代理等级已更新');
       setLevelDialogOpen(false);
       refetchAgents();
+    },
+    onError: (error) => {
+      toast.error(error.message || '操作失败');
+    },
+  });
+
+  // 处理代理申请
+  const processApplicationMutation = trpc.admin.agent.processApplication.useMutation({
+    onSuccess: () => {
+      toast.success('申请已处理');
+      setApplicationDialogOpen(false);
+      refetchApplications();
+      refetchAgents();
+      refetchStats();
+    },
+    onError: (error) => {
+      toast.error(error.message || '操作失败');
+    },
+  });
+
+  // 直接设置用户为代理
+  const setUserAsAgentMutation = trpc.admin.agent.setUserAsAgent.useMutation({
+    onSuccess: (data) => {
+      toast.success(`已设置为代理，邀请码: ${data.inviteCode}`);
+      setGrantAgentDialogOpen(false);
+      setGrantUserId('');
+      refetchAgents();
+      refetchStats();
     },
     onError: (error) => {
       toast.error(error.message || '操作失败');
@@ -98,12 +148,37 @@ export function AgentManager() {
     });
   };
 
+  // 处理申请审核
+  const handleProcessApplication = (action: 'approve' | 'reject') => {
+    if (!selectedApplication) return;
+    processApplicationMutation.mutate({
+      applicationId: selectedApplication.id,
+      action,
+      level: action === 'approve' ? approveLevel as any : undefined,
+      adminNote: applicationNote || undefined,
+    });
+  };
+
+  // 处理直接发放代理
+  const handleGrantAgent = () => {
+    const userId = parseInt(grantUserId);
+    if (isNaN(userId) || userId <= 0) {
+      toast.error('请输入有效的用户ID');
+      return;
+    }
+    setUserAsAgentMutation.mutate({
+      userId,
+      level: grantLevel as any,
+    });
+  };
+
   // 处理提现审核
   const handleProcessWithdrawal = (action: 'approve' | 'reject' | 'paid') => {
     if (!selectedWithdrawal) return;
     processWithdrawalMutation.mutate({
-      withdrawalId: selectedWithdrawal.id.toString(),
+      withdrawalId: selectedWithdrawal.withdrawal?.withdrawalId || selectedWithdrawal.withdrawalId,
       action,
+      txId: action === 'paid' ? txId : undefined,
       adminNote: action === 'reject' ? rejectReason : undefined,
     });
   };
@@ -119,6 +194,13 @@ export function AgentManager() {
     );
   }) || [];
 
+  // 复制申请链接
+  const copyApplyLink = () => {
+    const link = `${window.location.origin}/apply-agent`;
+    navigator.clipboard.writeText(link);
+    toast.success('申请链接已复制');
+  };
+
   return (
     <div className="space-y-6">
       {/* 标题区域 */}
@@ -132,19 +214,39 @@ export function AgentManager() {
             代理管理
           </h1>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => { refetchAgents(); refetchWithdrawals(); refetchStats(); }}
-          className="border-slate-700 text-slate-300 hover:bg-slate-800"
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          刷新数据
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyApplyLink}
+            className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            复制申请链接
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setGrantAgentDialogOpen(true)}
+            className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            发放代理
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { refetchAgents(); refetchWithdrawals(); refetchStats(); refetchApplications(); }}
+            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            刷新数据
+          </Button>
+        </div>
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="bg-slate-900/80 border-slate-800">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -156,6 +258,22 @@ export function AgentManager() {
               </div>
               <div className="p-3 rounded-xl bg-amber-500/20">
                 <Crown className="w-6 h-6 text-amber-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900/80 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">待审核申请</p>
+                <p className="text-2xl font-bold text-orange-400">
+                  {applicationsLoading ? <Skeleton className="h-8 w-16" /> : applicationsData?.total || 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-orange-500/20">
+                <FileText className="w-6 h-6 text-orange-400" />
               </div>
             </div>
           </CardContent>
@@ -217,9 +335,19 @@ export function AgentManager() {
             <Users className="w-4 h-4 mr-2" />
             代理列表
           </TabsTrigger>
+          <TabsTrigger value="applications" className="data-[state=active]:bg-slate-800">
+            <FileText className="w-4 h-4 mr-2" />
+            申请审核
+            {(applicationsData?.total || 0) > 0 && (
+              <Badge className="ml-2 bg-orange-500/20 text-orange-400">{applicationsData?.total}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="withdrawals" className="data-[state=active]:bg-slate-800">
             <Wallet className="w-4 h-4 mr-2" />
             提现审核
+            {(withdrawalsData?.total || 0) > 0 && (
+              <Badge className="ml-2 bg-yellow-500/20 text-yellow-400">{withdrawalsData?.total}</Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="settings" className="data-[state=active]:bg-slate-800">
             <Settings className="w-4 h-4 mr-2" />
@@ -261,9 +389,9 @@ export function AgentManager() {
                       <TableHead className="text-slate-400">代理</TableHead>
                       <TableHead className="text-slate-400">等级</TableHead>
                       <TableHead className="text-slate-400">邀请码</TableHead>
-                      <TableHead className="text-slate-400">团队人数</TableHead>
                       <TableHead className="text-slate-400">累计收益</TableHead>
                       <TableHead className="text-slate-400">可提现</TableHead>
+                      <TableHead className="text-slate-400">冻结中</TableHead>
                       <TableHead className="text-slate-400">操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -274,41 +402,42 @@ export function AgentManager() {
                         <TableRow key={agent.id} className="border-slate-800">
                           <TableCell>
                             <div>
-                              <p className="text-white font-medium">{agent.name || agent.email?.split('@')[0]}</p>
-                              <p className="text-slate-500 text-sm">{agent.email}</p>
+                              <p className="text-white font-medium">{agent.name || '-'}</p>
+                              <p className="text-slate-400 text-sm">{agent.email}</p>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={`${levelConfig.bgColor} ${levelConfig.color} border-0`}>
+                            <Badge className={`${levelConfig.bgColor} ${levelConfig.color}`}>
                               {levelConfig.badge} {levelConfig.label}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             <code className="text-cyan-400 bg-slate-800 px-2 py-1 rounded text-sm">
-                              {agent.inviteCode}
+                              {agent.inviteCode || '-'}
                             </code>
                           </TableCell>
-                          <TableCell className="text-white">
-                            {agent.teamCount || 0} 人
-                          </TableCell>
                           <TableCell className="text-green-400 font-medium">
-                            ${parseFloat(agent.agentTotalEarned || 0).toFixed(2)}
+                            ${parseFloat(agent.agentTotalEarned || '0').toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-cyan-400 font-medium">
-                            ${parseFloat(agent.agentBalance || 0).toFixed(2)}
+                          <TableCell className="text-white font-medium">
+                            ${parseFloat(agent.agentBalance || '0').toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-yellow-400 font-medium">
+                            ${parseFloat(agent.agentFrozenBalance || '0').toFixed(2)}
                           </TableCell>
                           <TableCell>
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
                               onClick={() => {
                                 setSelectedAgent(agent);
-                                setNewLevel(agent.agentLevel);
+                                setNewLevel(agent.agentLevel || 'normal');
                                 setLevelDialogOpen(true);
                               }}
-                              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                              className="text-slate-400 hover:text-white"
                             >
-                              修改等级
+                              <Award className="w-4 h-4 mr-1" />
+                              调整等级
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -321,76 +450,149 @@ export function AgentManager() {
           </Card>
         </TabsContent>
 
+        {/* 申请审核 */}
+        <TabsContent value="applications" className="mt-4">
+          <Card className="bg-slate-900/80 border-slate-800">
+            <CardHeader>
+              <CardTitle className="text-white">代理申请审核</CardTitle>
+              <CardDescription className="text-slate-400">
+                待审核申请 {applicationsData?.total || 0} 条
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {applicationsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+              ) : (applicationsData?.applications?.length || 0) === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>暂无待审核的申请</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {applicationsData?.applications?.map((app: any) => (
+                    <div key={app.id} className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-white font-medium text-lg">{app.name}</span>
+                            <Badge className="bg-orange-500/20 text-orange-400">待审核</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
+                            <p className="text-slate-400">邮箱: <span className="text-white">{app.email}</span></p>
+                            <p className="text-slate-400">手机: <span className="text-white">{app.phone}</span></p>
+                            {app.wechat && <p className="text-slate-400">微信: <span className="text-white">{app.wechat}</span></p>}
+                            {app.company && <p className="text-slate-400">公司: <span className="text-white">{app.company}</span></p>}
+                            {app.expectedUsers && <p className="text-slate-400">预期用户: <span className="text-white">{app.expectedUsers}</span></p>}
+                          </div>
+                          {app.experience && (
+                            <p className="text-slate-400 text-sm">
+                              推广经验: <span className="text-slate-300">{app.experience}</span>
+                            </p>
+                          )}
+                          {app.channels && (
+                            <p className="text-slate-400 text-sm">
+                              推广渠道: <span className="text-slate-300">{app.channels}</span>
+                            </p>
+                          )}
+                          <p className="text-slate-500 text-xs">
+                            申请时间: {new Date(app.createdAt).toLocaleString('zh-CN')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setSelectedApplication(app);
+                              setApproveLevel('normal');
+                              setApplicationNote('');
+                              setApplicationDialogOpen(true);
+                            }}
+                            className="bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            审核
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* 提现审核 */}
         <TabsContent value="withdrawals" className="mt-4">
           <Card className="bg-slate-900/80 border-slate-800">
             <CardHeader>
-              <CardTitle className="text-white">待审核提现申请</CardTitle>
+              <CardTitle className="text-white">提现申请审核</CardTitle>
               <CardDescription className="text-slate-400">
-                共 {withdrawalsData?.total || 0} 条待处理
+                待处理提现 {withdrawalsData?.total || 0} 笔
               </CardDescription>
             </CardHeader>
             <CardContent>
               {withdrawalsLoading ? (
                 <div className="space-y-3">
-                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
                 </div>
-              ) : withdrawalsData?.withdrawals && withdrawalsData.withdrawals.length > 0 ? (
+              ) : (withdrawalsData?.withdrawals?.length || 0) === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Wallet className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>暂无待处理的提现申请</p>
+                </div>
+              ) : (
                 <Table>
                   <TableHeader>
                     <TableRow className="border-slate-800">
                       <TableHead className="text-slate-400">代理</TableHead>
-                      <TableHead className="text-slate-400">提现金额</TableHead>
+                      <TableHead className="text-slate-400">金额</TableHead>
                       <TableHead className="text-slate-400">钱包地址</TableHead>
                       <TableHead className="text-slate-400">申请时间</TableHead>
                       <TableHead className="text-slate-400">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {withdrawalsData.withdrawals.map((withdrawal: any) => (
-                      <TableRow key={withdrawal.id} className="border-slate-800">
+                    {withdrawalsData?.withdrawals?.map((item: any) => (
+                      <TableRow key={item.withdrawal?.id || item.id} className="border-slate-800">
                         <TableCell>
                           <div>
-                            <p className="text-white font-medium">{withdrawal.agentName || '未知'}</p>
-                            <p className="text-slate-500 text-sm">{withdrawal.agentEmail}</p>
+                            <p className="text-white">{item.agentName || '-'}</p>
+                            <p className="text-slate-400 text-sm">{item.agentEmail}</p>
                           </div>
                         </TableCell>
                         <TableCell className="text-green-400 font-bold">
-                          ${parseFloat(withdrawal.amount).toFixed(2)}
+                          ${parseFloat(item.withdrawal?.amount || item.amount || '0').toFixed(2)}
                         </TableCell>
                         <TableCell>
-                          <code className="text-cyan-400 bg-slate-800 px-2 py-1 rounded text-xs truncate max-w-[200px] block">
-                            {withdrawal.walletAddress}
+                          <code className="text-cyan-400 bg-slate-800 px-2 py-1 rounded text-xs break-all">
+                            {item.withdrawal?.walletAddress || item.walletAddress}
                           </code>
                         </TableCell>
                         <TableCell className="text-slate-400">
-                          {new Date(withdrawal.createdAt).toLocaleString()}
+                          {new Date(item.withdrawal?.createdAt || item.createdAt).toLocaleString('zh-CN')}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedWithdrawal(withdrawal);
-                                setWithdrawalDialogOpen(true);
-                              }}
-                              className="border-green-500/50 text-green-400 hover:bg-green-500/10"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              审核
-                            </Button>
-                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setSelectedWithdrawal(item);
+                              setTxId('');
+                              setRejectReason('');
+                              setWithdrawalDialogOpen(true);
+                            }}
+                            className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            处理
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              ) : (
-                <div className="text-center py-12">
-                  <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400">暂无待审核的提现申请</p>
-                </div>
               )}
             </CardContent>
           </Card>
@@ -398,88 +600,43 @@ export function AgentManager() {
 
         {/* 佣金配置 */}
         <TabsContent value="settings" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="bg-slate-900/80 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-400" />
-                  佣金比例配置
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {settingsLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12" />)}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {[
-                      { key: 'founder', label: '创始代理', badge: '👑' },
-                      { key: 'gold', label: '金牌代理', badge: '🥇' },
-                      { key: 'silver', label: '银牌代理', badge: '🥈' },
-                      { key: 'normal', label: '普通代理', badge: '⭐' },
-                    ].map((level) => (
-                      <div key={level.key} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{level.badge}</span>
-                          <span className="text-white">{level.label}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm">
-                            <span className="text-slate-400">一级:</span>
-                            <span className="text-green-400 ml-1 font-medium">
-                              {settingsData?.[`${level.key}_level1_rate`] || '0'}%
-                            </span>
-                          </div>
-                          <div className="text-sm">
-                            <span className="text-slate-400">二级:</span>
-                            <span className="text-cyan-400 ml-1 font-medium">
-                              {settingsData?.[`${level.key}_level2_rate`] || '0'}%
-                            </span>
-                          </div>
-                        </div>
+          <Card className="bg-slate-900/80 border-slate-800">
+            <CardHeader>
+              <CardTitle className="text-white">佣金配置</CardTitle>
+              <CardDescription className="text-slate-400">
+                配置各等级代理的佣金比例和规则
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {settingsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12" />)}
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {Object.entries(settingsData || {}).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                      <div>
+                        <p className="text-white font-medium">{key}</p>
+                        <p className="text-slate-400 text-sm">{getSettingDescription(key)}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/80 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-cyan-400" />
-                  其他配置
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {settingsLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                      <span className="text-slate-400">创始代理名额</span>
-                      <span className="text-white font-medium">{settingsData?.founder_limit || 100} 名</span>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          defaultValue={value as string}
+                          className="w-32 bg-slate-900 border-slate-700 text-white text-right"
+                          onBlur={(e) => {
+                            if (e.target.value !== value) {
+                              updateSettingMutation.mutate({ key, value: e.target.value });
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                      <span className="text-slate-400">首充额外奖励</span>
-                      <span className="text-green-400 font-medium">+{settingsData?.first_charge_bonus || 3}%</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                      <span className="text-slate-400">最低提现金额</span>
-                      <span className="text-white font-medium">{settingsData?.min_withdrawal || 50} USDT</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                      <span className="text-slate-400">佣金冻结天数</span>
-                      <span className="text-white font-medium">{settingsData?.settlement_days || 7} 天</span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
@@ -489,96 +646,234 @@ export function AgentManager() {
           <DialogHeader>
             <DialogTitle className="text-white">修改代理等级</DialogTitle>
             <DialogDescription className="text-slate-400">
-              为 {selectedAgent?.email} 设置新的代理等级
+              修改 {selectedAgent?.email} 的代理等级
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Select value={newLevel} onValueChange={setNewLevel}>
-              <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                <SelectValue placeholder="选择等级" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
-                <SelectItem value="founder">👑 创始代理</SelectItem>
-                <SelectItem value="gold">🥇 金牌代理</SelectItem>
-                <SelectItem value="silver">🥈 银牌代理</SelectItem>
-                <SelectItem value="normal">⭐ 普通代理</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-white">选择等级</Label>
+              <Select value={newLevel} onValueChange={setNewLevel}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {Object.entries(AGENT_LEVELS).map(([key, config]) => (
+                    <SelectItem key={key} value={key} className="text-white">
+                      {config.badge} {config.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLevelDialogOpen(false)}>取消</Button>
-            <Button 
+            <Button variant="ghost" onClick={() => setLevelDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
               onClick={handleSetLevel}
               disabled={setLevelMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700"
+              className="bg-amber-500 hover:bg-amber-600"
             >
-              {setLevelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : '确认修改'}
+              {setLevelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              确认修改
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 提现审核对话框 */}
-      <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+      {/* 申请审核对话框 */}
+      <Dialog open={applicationDialogOpen} onOpenChange={setApplicationDialogOpen}>
         <DialogContent className="bg-slate-900 border-slate-800">
           <DialogHeader>
-            <DialogTitle className="text-white">审核提现申请</DialogTitle>
+            <DialogTitle className="text-white">审核代理申请</DialogTitle>
             <DialogDescription className="text-slate-400">
-              提现金额: ${selectedWithdrawal ? parseFloat(selectedWithdrawal.amount).toFixed(2) : '0.00'}
+              申请人: {selectedApplication?.name} ({selectedApplication?.email})
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="p-4 bg-slate-800/50 rounded-lg">
-              <p className="text-slate-400 text-sm mb-1">收款地址 (TRC20)</p>
-              <code className="text-cyan-400 text-sm break-all">
-                {selectedWithdrawal?.walletAddress}
-              </code>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-white">审批等级</Label>
+              <Select value={approveLevel} onValueChange={setApproveLevel}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {Object.entries(AGENT_LEVELS).map(([key, config]) => (
+                    <SelectItem key={key} value={key} className="text-white">
+                      {config.badge} {config.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <p className="text-slate-400 text-sm mb-2">拒绝原因（可选）</p>
-              <Input
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="如需拒绝，请填写原因"
+            <div className="space-y-2">
+              <Label className="text-white">备注 (可选)</Label>
+              <Textarea
+                value={applicationNote}
+                onChange={(e) => setApplicationNote(e.target.value)}
+                placeholder="审批备注..."
                 className="bg-slate-800 border-slate-700 text-white"
               />
             </div>
           </div>
           <DialogFooter className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => handleProcessWithdrawal('reject')}
-              disabled={processWithdrawalMutation.isPending}
-              className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+            <Button
+              variant="destructive"
+              onClick={() => handleProcessApplication('reject')}
+              disabled={processApplicationMutation.isPending}
             >
-              <XCircle className="w-4 h-4 mr-1" />
+              <XCircle className="w-4 h-4 mr-2" />
               拒绝
             </Button>
-            <Button 
+            <Button
+              onClick={() => handleProcessApplication('approve')}
+              disabled={processApplicationMutation.isPending}
+              className="bg-green-500 hover:bg-green-600"
+            >
+              {processApplicationMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              通过
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 直接发放代理对话框 */}
+      <Dialog open={grantAgentDialogOpen} onOpenChange={setGrantAgentDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">直接发放代理</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              将现有用户设置为代理
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-white">用户ID</Label>
+              <Input
+                type="number"
+                value={grantUserId}
+                onChange={(e) => setGrantUserId(e.target.value)}
+                placeholder="输入用户ID"
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">代理等级</Label>
+              <Select value={grantLevel} onValueChange={setGrantLevel}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {Object.entries(AGENT_LEVELS).map(([key, config]) => (
+                    <SelectItem key={key} value={key} className="text-white">
+                      {config.badge} {config.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setGrantAgentDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleGrantAgent}
+              disabled={setUserAsAgentMutation.isPending}
+              className="bg-green-500 hover:bg-green-600"
+            >
+              {setUserAsAgentMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
+              确认发放
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 提现处理对话框 */}
+      <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">处理提现申请</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              金额: ${parseFloat(selectedWithdrawal?.withdrawal?.amount || selectedWithdrawal?.amount || '0').toFixed(2)} USDT
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-800/50 rounded-lg space-y-2">
+              <p className="text-slate-400 text-sm">收款地址:</p>
+              <code className="text-cyan-400 text-sm break-all">
+                {selectedWithdrawal?.withdrawal?.walletAddress || selectedWithdrawal?.walletAddress}
+              </code>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">交易ID (打款后填写)</Label>
+              <Input
+                value={txId}
+                onChange={(e) => setTxId(e.target.value)}
+                placeholder="链上交易哈希..."
+                className="bg-slate-800 border-slate-700 text-white font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">拒绝原因 (拒绝时填写)</Label>
+              <Textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="拒绝原因..."
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => handleProcessWithdrawal('reject')}
+              disabled={processWithdrawalMutation.isPending}
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              拒绝
+            </Button>
+            <Button
               onClick={() => handleProcessWithdrawal('approve')}
               disabled={processWithdrawalMutation.isPending}
-              className="bg-cyan-600 hover:bg-cyan-700"
+              className="bg-yellow-500 hover:bg-yellow-600"
             >
-              <CheckCircle className="w-4 h-4 mr-1" />
-              审核通过
+              <CheckCircle className="w-4 h-4 mr-2" />
+              批准
             </Button>
-            <Button 
+            <Button
               onClick={() => handleProcessWithdrawal('paid')}
-              disabled={processWithdrawalMutation.isPending}
-              className="bg-green-600 hover:bg-green-700"
+              disabled={processWithdrawalMutation.isPending || !txId}
+              className="bg-green-500 hover:bg-green-600"
             >
-              {processWithdrawalMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <DollarSign className="w-4 h-4 mr-1" />
-                  已打款
-                </>
-              )}
+              {processWithdrawalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
+              已打款
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
+}
+
+// 获取配置项描述
+function getSettingDescription(key: string): string {
+  const descriptions: Record<string, string> = {
+    founder_limit: '创始代理名额限制',
+    founder_level1_rate: '创始代理一级佣金比例 (%)',
+    founder_level2_rate: '创始代理二级佣金比例 (%)',
+    gold_level1_rate: '金牌代理一级佣金比例 (%)',
+    gold_level2_rate: '金牌代理二级佣金比例 (%)',
+    silver_level1_rate: '银牌代理一级佣金比例 (%)',
+    silver_level2_rate: '银牌代理二级佣金比例 (%)',
+    normal_level1_rate: '普通代理一级佣金比例 (%)',
+    normal_level2_rate: '普通代理二级佣金比例 (%)',
+    first_charge_bonus: '首充额外奖励比例 (%)',
+    min_withdrawal: '最低提现金额 (USDT)',
+    settlement_days: '佣金结算冻结天数',
+    activity_bonus: '开业活动额外奖励 (%)',
+    activity_end_date: '开业活动结束日期',
+  };
+  return descriptions[key] || key;
 }
