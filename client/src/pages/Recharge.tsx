@@ -12,7 +12,8 @@ import { Coins, Copy, Clock, CheckCircle, XCircle, Loader2, QrCode, Wallet, Zap,
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParticleNetwork } from "@/components/ParticleNetwork";
 
-const PRESET_AMOUNTS = [100, 500, 1000, 5000];
+// 预设积分选项：5000/10000/20000/50000 积分（对应 50/100/200/500 USDT）
+const PRESET_AMOUNTS = [5000, 10000, 20000, 50000];
 
 export default function Recharge() {
   const { user } = useAuth();
@@ -21,7 +22,7 @@ export default function Recharge() {
   const params = new URLSearchParams(search);
   const initialAmount = params.get("amount");
   
-  const [credits, setCredits] = useState(initialAmount ? Number(initialAmount) : 100);
+  const [credits, setCredits] = useState(initialAmount ? Number(initialAmount) : 5000);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   

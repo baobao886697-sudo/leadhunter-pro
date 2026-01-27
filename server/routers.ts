@@ -667,7 +667,7 @@ export const appRouter = router({
     create: protectedProcedure
       .input(
         z.object({
-          credits: z.number().min(100, "最少充值100积分"),
+          credits: z.number().min(5000, "最少充值5000积分"),
           network: z.enum(["TRC20", "ERC20", "BEP20"]).optional(),
         })
       )
@@ -743,8 +743,8 @@ export const appRouter = router({
       return {
         // 1 USDT 兑换的积分数（默认 100）
         creditsPerUsdt: creditsPerUsdtStr ? parseInt(creditsPerUsdtStr, 10) : 100,
-        // 最低充值积分数（默认 100）
-        minRechargeCredits: minRechargeCreditsStr ? parseInt(minRechargeCreditsStr, 10) : 100,
+        // 最低充值积分数（默认 5000，对应 50 USDT）
+        minRechargeCredits: minRechargeCreditsStr ? parseInt(minRechargeCreditsStr, 10) : 5000,
       };
     }),
 
