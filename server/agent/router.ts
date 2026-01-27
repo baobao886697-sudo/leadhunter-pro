@@ -545,14 +545,36 @@ export const agentRouter = router({
       };
     }));
     
-    const enrichedLevel2 = level2Users.map(user => ({
-      id: user.id,
-      displayName: getUserDisplayName(user.name, user.email),
-      email: maskEmail(user.email), // 脱敏邮箱
-      inviterEmail: maskEmail(user.inviterEmail), // 脱敏上级邮箱
-      createdAt: new Date(user.createdAt).toLocaleDateString('zh-CN'),
-      totalRecharge: '0.00',
-      commission: '0.00',
+    const enrichedLevel2 = await Promise.all(level2Users.map(async (user) => {
+      let totalRecharge = '0.00';
+      let commission = '0.00';
+      
+      try {
+        const rechargeResult = await db.execute(sql`
+          SELECT COALESCE(SUM(orderAmount), 0) as total FROM agent_commissions 
+          WHERE fromUserId = ${user.id} AND agentId = ${agentId}
+        `);
+        totalRecharge = parseFloat((rechargeResult[0] as any[])[0]?.total || '0').toFixed(2);
+      } catch (e) {}
+      
+      try {
+        const commissionResult = await db.execute(sql`
+          SELECT COALESCE(SUM(COALESCE(commissionAmount, 0) + COALESCE(bonusAmount, 0)), 0) as total 
+          FROM agent_commissions 
+          WHERE fromUserId = ${user.id} AND agentId = ${agentId}
+        `);
+        commission = parseFloat((commissionResult[0] as any[])[0]?.total || '0').toFixed(2);
+      } catch (e) {}
+      
+      return {
+        id: user.id,
+        displayName: getUserDisplayName(user.name, user.email),
+        email: maskEmail(user.email), // 脱敏邮箱
+        inviterEmail: maskEmail(user.inviterEmail), // 脱敏上级邮箱
+        createdAt: new Date(user.createdAt).toLocaleDateString('zh-CN'),
+        totalRecharge,
+        commission,
+      };
     }));
     
     return {
@@ -812,6 +834,7 @@ async function getAgentDashboardData(agentId: number) {
     balance: parseFloat(user.agentBalance || '0').toFixed(2),
     frozenBalance: parseFloat(user.agentFrozenBalance || '0').toFixed(2),
     totalEarned: parseFloat(user.agentTotalEarned || '0').toFixed(2),
+    walletAddress: user.agentWalletAddress || '',
     teamCount,
     todayNewUsers,
     monthNewUsers,
@@ -852,9 +875,10 @@ export const adminAgentRouter = router({
     .input(z.object({
       page: z.number().optional(),
       limit: z.number().optional(),
+      search: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
-      return getAllAgents(input?.page || 1, input?.limit || 20);
+      return getAllAgents(input?.page || 1, input?.limit || 20, input?.search);
     }),
 
   // 获取代理详情

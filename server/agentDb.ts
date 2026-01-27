@@ -481,6 +481,9 @@ export async function getAgentStats(agentId: number) {
     teamAgents: teamAgents[0].count,
     todayCommission: todayCommissions[0].total,
     monthCommission: monthCommissions[0].total,
+    walletAddress: agent[0].agentWalletAddress,
+    email: agent[0].email,
+    name: agent[0].name,
   };
 }
 
@@ -501,13 +504,14 @@ export async function getAgentTeamUsers(agentId: number, page: number = 1, limit
     .limit(limit)
     .offset(offset);
   
-  const total = await getDb().select({ count: sql<number>`count(*)` })
+  const totalResult = await getDb().select({ count: sql<number>`count(*)` })
     .from(users)
     .where(eq(users.inviterId, agentId));
+  const total = totalResult[0]?.count || 0;
   
   return {
     users: teamUsers,
-    total: total[0].count,
+    total,
     page,
     limit,
   };
@@ -534,13 +538,14 @@ export async function getAgentCommissions(
     .limit(limit)
     .offset(offset);
   
-  const total = await db.select({ count: sql<number>`count(*)` })
+  const totalResult = await db.select({ count: sql<number>`count(*)` })
     .from(agentCommissions)
     .where(eq(agentCommissions.agentId, agentId));
+  const total = totalResult[0]?.count || 0;
   
   return {
     commissions,
-    total: total[0].count,
+    total,
     page,
     limit,
   };
@@ -557,13 +562,14 @@ export async function getAgentWithdrawals(agentId: number, page: number = 1, lim
     .limit(limit)
     .offset(offset);
   
-  const total = await getDb().select({ count: sql<number>`count(*)` })
+  const totalResult = await getDb().select({ count: sql<number>`count(*)` })
     .from(agentWithdrawals)
     .where(eq(agentWithdrawals.agentId, agentId));
+  const total = totalResult[0]?.count || 0;
   
   return {
     withdrawals,
-    total: total[0].count,
+    total,
     page,
     limit,
   };
@@ -572,8 +578,20 @@ export async function getAgentWithdrawals(agentId: number, page: number = 1, lim
 // ============ 管理员功能 ============
 
 // 获取所有代理列表
-export async function getAllAgents(page: number = 1, limit: number = 20) {
+export async function getAllAgents(page: number = 1, limit: number = 20, search?: string) {
   const offset = (page - 1) * limit;
+  
+  let whereClause = eq(users.isAgent, true);
+  if (search) {
+    whereClause = and(
+      eq(users.isAgent, true),
+      or(
+        like(users.email, `%${search}%`),
+        like(users.name, `%${search}%`),
+        like(users.inviteCode, `%${search}%`)
+      )
+    ) as any;
+  }
   
   const agents = await getDb().select({
     id: users.id,
@@ -588,18 +606,19 @@ export async function getAllAgents(page: number = 1, limit: number = 20) {
     createdAt: users.createdAt,
   })
     .from(users)
-    .where(eq(users.isAgent, true))
+    .where(whereClause)
     .orderBy(desc(users.agentApprovedAt))
     .limit(limit)
     .offset(offset);
   
-  const total = await getDb().select({ count: sql<number>`count(*)` })
+  const totalResult = await getDb().select({ count: sql<number>`count(*)` })
     .from(users)
-    .where(eq(users.isAgent, true));
+    .where(whereClause);
+  const total = totalResult[0]?.count || 0;
   
   return {
     agents,
-    total: total[0].count,
+    total,
     page,
     limit,
   };
@@ -609,7 +628,7 @@ export async function getAllAgents(page: number = 1, limit: number = 20) {
 export async function getAllWithdrawals(status?: string, page: number = 1, limit: number = 20) {
   const offset = (page - 1) * limit;
   
-  let whereClause = status ? eq(agentWithdrawals.status, status as any) : undefined;
+  let whereClause = (status && status !== 'all') ? eq(agentWithdrawals.status, status as any) : undefined;
   
   const withdrawals = await getDb().select({
     withdrawal: agentWithdrawals,
@@ -623,13 +642,14 @@ export async function getAllWithdrawals(status?: string, page: number = 1, limit
     .limit(limit)
     .offset(offset);
   
-  const total = await getDb().select({ count: sql<number>`count(*)` })
+  const totalResult = await getDb().select({ count: sql<number>`count(*)` })
     .from(agentWithdrawals)
     .where(whereClause);
+  const total = totalResult[0]?.count || 0;
   
   return {
     withdrawals,
-    total: total[0].count,
+    total,
     page,
     limit,
   };

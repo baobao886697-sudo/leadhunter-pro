@@ -428,7 +428,13 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
       }
     }
   }
+  // 优化：只取第一个电话号码（TPS页面上第一个号码 = Primary主号 = 最新号码）
+  // 这样确保每个人只导出一个号码，避免重复数据
+  let foundFirstPhone = false;
   $('.col-12.col-md-6.mb-3').each((_, container) => {
+    // 如果已经找到第一个有效电话，跳过后续所有电话
+    if (foundFirstPhone) return;
+    
     const $container = $(container);
     const phoneLink = $container.find('a[data-link-to-more="phone"]');
     if (!phoneLink.length) return;
@@ -484,20 +490,20 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
       yearBuilt,
       detailLink: searchResult.detailLink,
     });
+    
+    // 标记已找到第一个有效电话，后续不再提取
+    foundFirstPhone = true;
   });
+  // 备用方法：如果主方法未找到电话，使用正则匹配（也只取第一个）
   if (results.length === 0) {
     const phonePattern = /\((\d{3})\)\s*(\d{3})-(\d{4})/g;
-    const phones = new Set<string>();
-    let match;
-    while ((match = phonePattern.exec(html)) !== null) {
+    const match = phonePattern.exec(html); // 只取第一个匹配
+    if (match) {
       const phone = match[1] + match[2] + match[3];
-      phones.add(phone);
-    }
-    let phoneType = '';
-    if (html.includes('Wireless')) phoneType = 'Wireless';
-    else if (html.includes('Landline')) phoneType = 'Landline';
-    else if (html.includes('VoIP')) phoneType = 'VoIP';
-    phones.forEach(phone => {
+      let phoneType = '';
+      if (html.includes('Wireless')) phoneType = 'Wireless';
+      else if (html.includes('Landline')) phoneType = 'Landline';
+      else if (html.includes('VoIP')) phoneType = 'VoIP';
       results.push({
         name,
         age,
@@ -510,7 +516,7 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
         yearBuilt,
         detailLink: searchResult.detailLink,
       });
-    });
+    }
   }
   if (results.length === 0) {
     results.push({
