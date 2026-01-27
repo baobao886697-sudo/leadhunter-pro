@@ -61,6 +61,9 @@ export function AgentManager() {
   // 查看代理下属用户
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
 
+  // 提现状态筛选
+  const [withdrawalStatusFilter, setWithdrawalStatusFilter] = useState<string | undefined>('pending');
+
   // 获取代理列表
   const { data: agentsData, isLoading: agentsLoading, refetch: refetchAgents } = trpc.admin.agent.list.useQuery({
     page: 1,
@@ -76,7 +79,7 @@ export function AgentManager() {
 
   // 获取提现申请列表
   const { data: withdrawalsData, isLoading: withdrawalsLoading, refetch: refetchWithdrawals } = trpc.admin.agent.withdrawals.useQuery({
-    status: 'pending',
+    status: withdrawalStatusFilter,
     page: 1,
     limit: 50,
   });
@@ -624,10 +627,31 @@ export function AgentManager() {
         <TabsContent value="withdrawals" className="mt-4">
           <Card className="bg-slate-900/80 border-slate-800">
             <CardHeader>
-              <CardTitle className="text-white">提现申请审核</CardTitle>
-              <CardDescription className="text-slate-400">
-                待处理提现 {withdrawalsData?.total || 0} 笔
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-white">提现申请审核</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    {withdrawalStatusFilter === 'pending' ? '待处理' : 
+                     withdrawalStatusFilter === 'approved' ? '已批准' :
+                     withdrawalStatusFilter === 'rejected' ? '已拒绝' :
+                     withdrawalStatusFilter === 'paid' ? '已打款' : '全部'}提现 {withdrawalsData?.total || 0} 笔
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={withdrawalStatusFilter || 'all'} onValueChange={(v) => setWithdrawalStatusFilter(v === 'all' ? undefined : v)}>
+                    <SelectTrigger className="w-32 bg-slate-800 border-slate-700 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="all" className="text-white">全部</SelectItem>
+                      <SelectItem value="pending" className="text-yellow-400">待审核</SelectItem>
+                      <SelectItem value="approved" className="text-blue-400">已批准</SelectItem>
+                      <SelectItem value="rejected" className="text-red-400">已拒绝</SelectItem>
+                      <SelectItem value="paid" className="text-green-400">已打款</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {withdrawalsLoading ? (
@@ -637,7 +661,7 @@ export function AgentManager() {
               ) : (withdrawalsData?.withdrawals?.length || 0) === 0 ? (
                 <div className="text-center py-12 text-slate-400">
                   <Wallet className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>暂无待处理的提现申请</p>
+                  <p>{withdrawalStatusFilter === 'pending' ? '暂无待处理的提现申请' : '暂无提现记录'}</p>
                 </div>
               ) : (
                 <Table>
@@ -647,46 +671,103 @@ export function AgentManager() {
                       <TableHead className="text-slate-400">金额</TableHead>
                       <TableHead className="text-slate-400">钱包地址</TableHead>
                       <TableHead className="text-slate-400">申请时间</TableHead>
+                      <TableHead className="text-slate-400">状态</TableHead>
+                      <TableHead className="text-slate-400">处理信息</TableHead>
                       <TableHead className="text-slate-400">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {withdrawalsData?.withdrawals?.map((item: any) => (
-                      <TableRow key={item.withdrawal?.id || item.id} className="border-slate-800">
-                        <TableCell>
-                          <div>
-                            <p className="text-white">{item.agentName || '-'}</p>
-                            <p className="text-slate-400 text-sm">{item.agentEmail}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-green-400 font-bold">
-                          ${parseFloat(item.withdrawal?.amount || item.amount || '0').toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <code className="text-cyan-400 bg-slate-800 px-2 py-1 rounded text-xs break-all">
-                            {item.withdrawal?.walletAddress || item.walletAddress}
-                          </code>
-                        </TableCell>
-                        <TableCell className="text-slate-400">
-                          {new Date(item.withdrawal?.createdAt || item.createdAt).toLocaleString('zh-CN')}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setSelectedWithdrawal(item);
-                              setTxId('');
-                              setRejectReason('');
-                              setWithdrawalDialogOpen(true);
-                            }}
-                            className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            处理
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {withdrawalsData?.withdrawals?.map((item: any) => {
+                      const withdrawal = item.withdrawal || item;
+                      const status = withdrawal.status;
+                      return (
+                        <TableRow key={withdrawal.id} className="border-slate-800">
+                          <TableCell>
+                            <div>
+                              <p className="text-white">{item.agentName || '-'}</p>
+                              <p className="text-slate-400 text-sm">{item.agentEmail}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-green-400 font-bold">
+                            ${parseFloat(withdrawal.amount || '0').toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-cyan-400 bg-slate-800 px-2 py-1 rounded text-xs break-all">
+                              {withdrawal.walletAddress}
+                            </code>
+                          </TableCell>
+                          <TableCell className="text-slate-400 text-sm">
+                            {new Date(withdrawal.createdAt).toLocaleString('zh-CN')}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={
+                              status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                              status === 'approved' ? 'bg-blue-500/20 text-blue-400' :
+                              status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                              status === 'paid' ? 'bg-green-500/20 text-green-400' :
+                              'bg-slate-500/20 text-slate-400'
+                            }>
+                              {status === 'pending' ? '待审核' :
+                               status === 'approved' ? '已批准' :
+                               status === 'rejected' ? '已拒绝' :
+                               status === 'paid' ? '已打款' : status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {status !== 'pending' && (
+                              <div className="space-y-1">
+                                {withdrawal.processedBy && (
+                                  <p className="text-slate-400">处理人: <span className="text-white">{withdrawal.processedBy}</span></p>
+                                )}
+                                {withdrawal.processedAt && (
+                                  <p className="text-slate-400">时间: <span className="text-white">{new Date(withdrawal.processedAt).toLocaleString('zh-CN')}</span></p>
+                                )}
+                                {withdrawal.txId && (
+                                  <p className="text-slate-400">TxID: <code className="text-cyan-400">{withdrawal.txId.slice(0, 20)}...</code></p>
+                                )}
+                                {withdrawal.adminNote && (
+                                  <p className="text-slate-400">备注: <span className="text-orange-400">{withdrawal.adminNote}</span></p>
+                                )}
+                              </div>
+                            )}
+                            {status === 'pending' && <span className="text-slate-500">-</span>}
+                          </TableCell>
+                          <TableCell>
+                            {status === 'pending' ? (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedWithdrawal(item);
+                                  setTxId('');
+                                  setRejectReason('');
+                                  setWithdrawalDialogOpen(true);
+                                }}
+                                className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                处理
+                              </Button>
+                            ) : status === 'approved' ? (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedWithdrawal(item);
+                                  setTxId('');
+                                  setRejectReason('');
+                                  setWithdrawalDialogOpen(true);
+                                }}
+                                className="bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                              >
+                                <DollarSign className="w-4 h-4 mr-1" />
+                                打款
+                              </Button>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
