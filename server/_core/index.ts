@@ -754,10 +754,12 @@ async function ensureTables() {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS agent_withdrawals (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        withdrawalId VARCHAR(32) NOT NULL UNIQUE,
         agentId INT NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
         walletAddress VARCHAR(100) NOT NULL,
-        status ENUM('pending', 'approved', 'rejected', 'completed') NOT NULL DEFAULT 'pending',
+        network VARCHAR(20) DEFAULT 'TRC20' NOT NULL,
+        status ENUM('pending', 'approved', 'rejected', 'paid') NOT NULL DEFAULT 'pending',
         txId VARCHAR(100),
         adminNote TEXT,
         processedBy VARCHAR(50),
@@ -768,6 +770,24 @@ async function ensureTables() {
       )
     `);
     console.log("[Database] Agent withdrawals table ready");
+    
+    // 迁移: 添加缺少的列
+    try {
+      await db.execute(sql`ALTER TABLE agent_withdrawals ADD COLUMN withdrawalId VARCHAR(32) NOT NULL UNIQUE AFTER id`);
+      console.log("[Database] Added withdrawalId column to agent_withdrawals");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.log("[Database] withdrawalId column already exists or error:", e.message);
+      }
+    }
+    try {
+      await db.execute(sql`ALTER TABLE agent_withdrawals ADD COLUMN network VARCHAR(20) DEFAULT 'TRC20' NOT NULL AFTER walletAddress`);
+      console.log("[Database] Added network column to agent_withdrawals");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.log("[Database] network column already exists or error:", e.message);
+      }
+    }
     
     // 代理月度统计表
     await db.execute(sql`
