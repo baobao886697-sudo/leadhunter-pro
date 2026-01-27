@@ -678,6 +678,21 @@ export const appRouter = router({
         
         // 计算需要支付的 USDT 金额
         const baseAmount = input.credits / creditsPerUsdt;
+        
+        // 阶梯优惠规则：根据USDT金额计算赠送比例
+        const bonusTiers = [
+          { minUsdt: 1000, bonusPercent: 20 },
+          { minUsdt: 500, bonusPercent: 15 },
+          { minUsdt: 200, bonusPercent: 8 },
+          { minUsdt: 100, bonusPercent: 3 },
+          { minUsdt: 0, bonusPercent: 0 },
+        ];
+        
+        // 查找适用的优惠档位
+        const applicableTier = bonusTiers.find(tier => baseAmount >= tier.minUsdt) || { bonusPercent: 0 };
+        const bonusPercent = applicableTier.bonusPercent;
+        const bonusCredits = Math.floor(input.credits * bonusPercent / 100);
+        const totalCredits = input.credits + bonusCredits;
 
         // 获取收款地址
         const walletAddress = await getConfig(`USDT_WALLET_${input.network || "TRC20"}`);
@@ -688,10 +703,10 @@ export const appRouter = router({
           });
         }
 
-        // 使用唯一尾数创建订单
+        // 使用唯一尾数创建订单（使用总积分数 = 基础积分 + 赠送积分）
         const order = await createRechargeOrderWithUniqueAmount(
           ctx.user.id,
-          input.credits,
+          totalCredits,  // 使用包含赠送的总积分
           baseAmount,
           walletAddress,
           input.network || "TRC20"
@@ -705,10 +720,11 @@ export const appRouter = router({
         }
 
         // 记录用户活动日志
+        const bonusInfo = bonusCredits > 0 ? `, 赠送${bonusCredits}积分(${bonusPercent}%)` : '';
         await logUserActivity({
           userId: ctx.user.id,
           action: '创建充值订单',
-          details: `订单号: ${order.orderId}, 充值${order.credits}积分, 金额${order.amount}USDT`,
+          details: `订单号: ${order.orderId}, 充值${input.credits}积分${bonusInfo}, 实际获得${totalCredits}积分, 金额${order.amount}USDT`,
           ipAddress: ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket?.remoteAddress || null,
           userAgent: ctx.req.headers["user-agent"] || null
         });
@@ -716,6 +732,9 @@ export const appRouter = router({
         return {
           orderId: order.orderId,
           credits: order.credits,
+          baseCredits: input.credits,      // 基础积分
+          bonusCredits: bonusCredits,      // 赠送积分
+          bonusPercent: bonusPercent,      // 赠送比例
           usdtAmount: order.amount,
           walletAddress: order.walletAddress,
           network: order.network,
@@ -740,11 +759,22 @@ export const appRouter = router({
       const creditsPerUsdtStr = await getConfig('CREDITS_PER_USDT');
       const minRechargeCreditsStr = await getConfig('MIN_RECHARGE_CREDITS');
       
+      // 阶梯优惠规则：根据USDT金额给予不同比例的赠送
+      const bonusTiers = [
+        { minUsdt: 1000, bonusPercent: 20 },  // 1000+ USDT: 20% 赠送
+        { minUsdt: 500, bonusPercent: 15 },   // 500-999 USDT: 15% 赠送
+        { minUsdt: 200, bonusPercent: 8 },    // 200-499 USDT: 8% 赠送
+        { minUsdt: 100, bonusPercent: 3 },    // 100-199 USDT: 3% 赠送
+        { minUsdt: 0, bonusPercent: 0 },      // 50-99 USDT: 无赠送
+      ];
+      
       return {
         // 1 USDT 兑换的积分数（默认 100）
         creditsPerUsdt: creditsPerUsdtStr ? parseInt(creditsPerUsdtStr, 10) : 100,
         // 最低充值积分数（默认 5000，对应 50 USDT）
         minRechargeCredits: minRechargeCreditsStr ? parseInt(minRechargeCreditsStr, 10) : 5000,
+        // 阶梯优惠规则
+        bonusTiers,
       };
     }),
 

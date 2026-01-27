@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearch, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Coins, Copy, Clock, CheckCircle, XCircle, Loader2, QrCode, Wallet, Zap, AlertTriangle, RefreshCw } from "lucide-react";
+import { Coins, Clock, CheckCircle, XCircle, Loader2, QrCode, Wallet, Zap, RefreshCw, Gift } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParticleNetwork } from "@/components/ParticleNetwork";
 
@@ -26,9 +26,7 @@ export default function Recharge() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   
-  // 使用ref来追踪组件是否已挂载
   const isMountedRef = useRef(true);
-  // 使用ref存储创建成功后需要跳转的订单ID
   const pendingRedirectRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -38,12 +36,10 @@ export default function Recharge() {
     };
   }, []);
 
-  // 处理待跳转的订单 - 使用单独的effect来处理跳转
   useEffect(() => {
     if (pendingRedirectRef.current) {
       const orderId = pendingRedirectRef.current;
       pendingRedirectRef.current = null;
-      // 使用window.location.href进行跳转，完全避免React状态更新问题
       window.location.href = `/payment/${orderId}`;
     }
   }, []);
@@ -53,15 +49,19 @@ export default function Recharge() {
     refetchOnWindowFocus: false,
   });
 
-  // 获取充值配置（积分价格等）
   const { data: rechargeConfig } = trpc.recharge.config.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
   
-  // 积分兑换比例（默认 1 USDT = 100 积分）
   const creditsPerUsdt = rechargeConfig?.creditsPerUsdt || 100;
-  // 最低充值积分数
-  const minRechargeCredits = rechargeConfig?.minRechargeCredits || 100;
+  const minRechargeCredits = rechargeConfig?.minRechargeCredits || 5000;
+  const bonusTiers = rechargeConfig?.bonusTiers || [
+    { minUsdt: 1000, bonusPercent: 20 },
+    { minUsdt: 500, bonusPercent: 15 },
+    { minUsdt: 200, bonusPercent: 8 },
+    { minUsdt: 100, bonusPercent: 3 },
+    { minUsdt: 0, bonusPercent: 0 },
+  ];
   
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.recharge.history.useQuery(
     { limit: 10 },
@@ -72,20 +72,23 @@ export default function Recharge() {
   );
 
   const orders = ordersData?.orders || [];
-
-  // 创建订单mutation
   const createOrderMutation = trpc.recharge.create.useMutation();
-
-  // 根据配置计算 USDT 金额
   const usdtAmount = credits / creditsPerUsdt;
 
+  // 计算当前选择的赠送积分
+  const bonusInfo = useMemo(() => {
+    const applicableTier = bonusTiers.find((tier: any) => usdtAmount >= tier.minUsdt) || { bonusPercent: 0 };
+    const bonusPercent = applicableTier.bonusPercent;
+    const bonusCredits = Math.floor(credits * bonusPercent / 100);
+    const totalCredits = credits + bonusCredits;
+    return { bonusPercent, bonusCredits, totalCredits };
+  }, [credits, usdtAmount, bonusTiers]);
+
   const handleCreateOrder = useCallback(async () => {
-    // 防止重复提交
     if (isCreating || createOrderMutation.isPending) {
       return;
     }
     
-    // 使用动态配置的最低充值积分数
     if (credits < minRechargeCredits) {
       toast.error(`最低充值${minRechargeCredits}积分`);
       return;
@@ -101,7 +104,6 @@ export default function Recharge() {
         return;
       }
       
-      // 成功后直接使用window.location跳转，完全避免React状态更新
       window.location.href = `/payment/${result.orderId}`;
       
     } catch (error: any) {
@@ -112,7 +114,6 @@ export default function Recharge() {
       const errorMessage = error?.message || "创建订单失败";
       setCreateError(errorMessage);
       
-      // 检查是否是认证错误
       if (errorMessage.includes("login") || errorMessage.includes("10001") || errorMessage.includes("unauthorized")) {
         toast.error("登录已过期，请重新登录");
         setTimeout(() => {
@@ -146,7 +147,6 @@ export default function Recharge() {
   }, [refetchOrders]);
 
   const handleViewOrder = useCallback((orderId: string) => {
-    // 使用window.location跳转，避免React状态更新问题
     window.location.href = `/payment/${orderId}`;
   }, []);
 
@@ -187,6 +187,37 @@ export default function Recharge() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative">
           {/* 左侧：充值表单 */}
           <div className="space-y-6">
+            {/* 优惠活动横幅 */}
+            <div className="bg-gradient-to-r from-orange-500/20 via-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-2xl p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-yellow-500/20 rounded-lg">
+                  <Gift className="w-5 h-5 text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-yellow-400">充值优惠活动</h3>
+                  <p className="text-sm text-slate-300">充得越多，送得越多！</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                <div className="bg-slate-900/50 rounded-lg p-2">
+                  <p className="text-xs text-slate-400">100+ USDT</p>
+                  <p className="text-lg font-bold text-green-400">+3%</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-lg p-2">
+                  <p className="text-xs text-slate-400">200+ USDT</p>
+                  <p className="text-lg font-bold text-green-400">+8%</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-lg p-2">
+                  <p className="text-xs text-slate-400">500+ USDT</p>
+                  <p className="text-lg font-bold text-green-400">+15%</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-lg p-2">
+                  <p className="text-xs text-slate-400">1000+ USDT</p>
+                  <p className="text-lg font-bold text-green-400">+20%</p>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-2xl p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-yellow-500/10 rounded-lg">
@@ -194,38 +225,49 @@ export default function Recharge() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-white">充值积分</h2>
-                  <p className="text-sm text-slate-400">当前余额：{profile?.credits || 0} 积分</p>
+                  <p className="text-sm text-slate-400">当前余额：{profile?.credits?.toLocaleString() || 0} 积分</p>
                 </div>
               </div>
 
-              {/* 预设金额 */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
-                {PRESET_AMOUNTS.map((amount) => (
-                  <Button
-                    key={amount}
-                    variant={credits === amount ? "default" : "outline"}
-                    className={`h-12 ${
-                      credits === amount
-                        ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-black border-0"
-                        : "border-slate-700 text-slate-300 hover:border-yellow-500/50"
-                    }`}
-                    onClick={() => setCredits(amount)}
-                    disabled={isCreating}
-                  >
-                    {amount}
-                  </Button>
-                ))}
+              {/* 预设金额 - 显示对应USDT和赠送 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {PRESET_AMOUNTS.map((amount) => {
+                  const usdt = amount / creditsPerUsdt;
+                  const tier = bonusTiers.find((t: any) => usdt >= t.minUsdt) || { bonusPercent: 0 };
+                  const bonus = Math.floor(amount * tier.bonusPercent / 100);
+                  return (
+                    <Button
+                      key={amount}
+                      variant={credits === amount ? "default" : "outline"}
+                      className={`h-auto py-3 flex flex-col ${
+                        credits === amount
+                          ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-black border-0"
+                          : "border-slate-700 text-slate-300 hover:border-yellow-500/50"
+                      }`}
+                      onClick={() => setCredits(amount)}
+                      disabled={isCreating}
+                    >
+                      <span className="font-bold">{usdt} USDT</span>
+                      <span className="text-xs opacity-80">{amount.toLocaleString()} 积分</span>
+                      {bonus > 0 && (
+                        <span className={`text-xs mt-1 ${credits === amount ? 'text-black/70' : 'text-green-400'}`}>
+                          +{bonus.toLocaleString()} 赠送
+                        </span>
+                      )}
+                    </Button>
+                  );
+                })}
               </div>
 
               {/* 自定义金额 */}
               <div className="space-y-2 mb-6">
-                <Label className="text-slate-400">自定义积分数量</Label>
+                <Label className="text-slate-400">自定义积分数量（最低 {minRechargeCredits.toLocaleString()} 积分）</Label>
                 <Input
                   type="number"
                   value={credits}
                   onChange={(e) => setCredits(Math.max(minRechargeCredits, parseInt(e.target.value) || minRechargeCredits))}
                   min={minRechargeCredits}
-                  step={100}
+                  step={1000}
                   className="bg-slate-800/50 border-slate-700 text-white h-12"
                   disabled={isCreating}
                 />
@@ -234,8 +276,18 @@ export default function Recharge() {
               {/* 费用明细 */}
               <div className="bg-slate-800/30 rounded-xl p-4 space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">积分数量</span>
-                  <span className="text-white font-medium">{credits}</span>
+                  <span className="text-slate-400">基础积分</span>
+                  <span className="text-white font-medium">{credits.toLocaleString()}</span>
+                </div>
+                {bonusInfo.bonusCredits > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">赠送积分 <span className="text-green-400">({bonusInfo.bonusPercent}%)</span></span>
+                    <span className="text-green-400 font-medium">+{bonusInfo.bonusCredits.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm border-t border-slate-700 pt-3">
+                  <span className="text-slate-400">实际获得</span>
+                  <span className="text-yellow-400 font-bold text-lg">{bonusInfo.totalCredits.toLocaleString()} 积分</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">兑换比例</span>
@@ -344,7 +396,7 @@ export default function Recharge() {
                       <Coins className="w-5 h-5 text-yellow-400" />
                     </div>
                     <div>
-                      <p className="text-white font-medium">{order.credits} 积分</p>
+                      <p className="text-white font-medium">{order.credits?.toLocaleString()} 积分</p>
                       <p className="text-sm text-slate-400">{order.amount} USDT</p>
                     </div>
                   </div>
