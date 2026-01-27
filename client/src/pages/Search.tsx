@@ -771,61 +771,6 @@ export default function Search() {
                       </div>
                     </button>
                   </div>
-                  
-                  {/* 当前模式详细说明 */}
-                  <div className={`p-4 rounded-xl border transition-all ${
-                    searchMode === 'fuzzy' 
-                      ? 'bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-cyan-500/30' 
-                      : 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Coins className={`h-5 w-5 ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`} />
-                      <span className={`text-sm font-bold ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`}>
-                        {searchMode === 'fuzzy' ? '模糊搜索' : '精准搜索'} - 积分预估
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div className="p-2 rounded-lg bg-slate-800/50">
-                        <p className="text-xs text-slate-500">搜索费</p>
-                        <p className={`text-lg font-bold ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`}>
-                          {searchMode === 'fuzzy' ? FUZZY_SEARCH_COST : EXACT_SEARCH_COST}
-                        </p>
-                      </div>
-                      <div className="p-2 rounded-lg bg-slate-800/50">
-                        <p className="text-xs text-slate-500">每条数据</p>
-                        <p className={`text-lg font-bold ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`}>
-                          {searchMode === 'fuzzy' ? FUZZY_PHONE_COST_PER_PERSON : EXACT_PHONE_COST_PER_PERSON}
-                        </p>
-                      </div>
-                      <div className="p-2 rounded-lg bg-slate-800/50">
-                        <p className="text-xs text-slate-500">预估总计</p>
-                        <p className={`text-lg font-bold ${searchMode === 'fuzzy' ? 'text-cyan-400' : 'text-purple-400'}`}>
-                          {creditEstimate.totalCost}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-3 text-center">
-                      {searchMode === 'fuzzy' 
-                        ? '💡 模糊搜索适合大批量数据采集，性价比高，推荐新用户使用'
-                        : '💡 精准搜索使用实时数据，电话号码更准确，无结果时退还搜索费'
-                      }
-                    </p>
-                  </div>
-                </div>
-
-                {/* 电话验证 */}
-                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30">
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-green-400" />
-                    <div>
-                      <p className="text-slate-300">二次电话验证</p>
-                      <p className="text-xs text-slate-500">通过多个数据源验证电话号码</p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={enableVerification}
-                    onCheckedChange={setEnableVerification}
-                  />
                 </div>
               </div>
             </div>
