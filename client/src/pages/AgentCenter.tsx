@@ -266,19 +266,19 @@ export default function AgentCenter() {
                     </thead>
                     <tbody>
                       <tr className="border-b border-slate-800/50">
-                        <td className="py-3 text-white">创始代理（首充）</td>
+                        <td className="py-3 text-white">创始代理（首充+活动）</td>
                         <td className="py-3 text-right text-slate-300">1,000 USDT</td>
-                        <td className="py-3 text-right text-green-400 font-medium">180 USDT</td>
+                        <td className="py-3 text-right text-green-400 font-medium">210 USDT</td>
                         <td className="py-3 text-right text-cyan-400 font-medium">50 USDT</td>
                       </tr>
                       <tr className="border-b border-slate-800/50">
-                        <td className="py-3 text-white">金牌代理</td>
+                        <td className="py-3 text-white">金牌代理（活动期间）</td>
                         <td className="py-3 text-right text-slate-300">1,000 USDT</td>
-                        <td className="py-3 text-right text-green-400 font-medium">120 USDT</td>
+                        <td className="py-3 text-right text-green-400 font-medium">150 USDT</td>
                         <td className="py-3 text-right text-cyan-400 font-medium">40 USDT</td>
                       </tr>
                       <tr>
-                        <td className="py-3 text-white">普通代理</td>
+                        <td className="py-3 text-white">普通代理（基础）</td>
                         <td className="py-3 text-right text-slate-300">1,000 USDT</td>
                         <td className="py-3 text-right text-green-400 font-medium">80 USDT</td>
                         <td className="py-3 text-right text-cyan-400 font-medium">20 USDT</td>

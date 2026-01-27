@@ -138,6 +138,15 @@ export default function Home() {
     }
   }, [loading, isAuthenticated, setLocation]);
 
+  // 从 URL 获取邀请码
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('ref') || params.get('invite');
+    if (code) {
+      setInviteCode(code);
+    }
+  }, []);
+
   // 数据源轮播
   useEffect(() => {
     const timer = setInterval(() => {
