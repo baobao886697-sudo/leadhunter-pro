@@ -701,6 +701,122 @@ async function ensureTables() {
     `);
     console.log("[Database] Default TPS config inserted");
     
+    // ========== 代理系统相关表 ==========
+    
+    // 添加用户表的代理相关字段
+    const agentColumnsToAdd = [
+      { name: 'inviterId', definition: 'INT DEFAULT NULL' },
+      { name: 'inviteCode', definition: 'VARCHAR(20) DEFAULT NULL' },
+      { name: 'isAgent', definition: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'agentLevel', definition: "ENUM('normal', 'silver', 'gold', 'founder') DEFAULT 'normal'" },
+      { name: 'agentBalance', definition: 'DECIMAL(10,2) DEFAULT 0' },
+      { name: 'agentFrozenBalance', definition: 'DECIMAL(10,2) DEFAULT 0' },
+      { name: 'agentTotalEarned', definition: 'DECIMAL(10,2) DEFAULT 0' },
+      { name: 'agentWalletAddress', definition: 'VARCHAR(100) DEFAULT NULL' },
+      { name: 'agentAppliedAt', definition: 'TIMESTAMP NULL' },
+    ];
+    
+    for (const col of agentColumnsToAdd) {
+      try {
+        await db.execute(sql.raw(`ALTER TABLE users ADD COLUMN ${col.name} ${col.definition}`));
+        console.log(`[Database] Added column ${col.name} to users`);
+      } catch (e: any) {
+        if (!e.message?.includes('Duplicate column')) {
+          console.warn(`[Database] Failed to add column ${col.name}:`, e.message);
+        }
+      }
+    }
+    console.log("[Database] Users agent columns sync completed");
+    
+    // 代理佣金记录表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agent_commissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        agentId INT NOT NULL,
+        fromUserId INT NOT NULL,
+        orderId INT NOT NULL,
+        orderAmount DECIMAL(10,2) NOT NULL,
+        commissionRate DECIMAL(5,2) NOT NULL,
+        commissionAmount DECIMAL(10,2) NOT NULL,
+        level INT NOT NULL DEFAULT 1,
+        status ENUM('frozen', 'available', 'withdrawn') NOT NULL DEFAULT 'frozen',
+        availableAt TIMESTAMP NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        INDEX idx_agentId (agentId),
+        INDEX idx_status (status)
+      )
+    `);
+    console.log("[Database] Agent commissions table ready");
+    
+    // 代理提现申请表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agent_withdrawals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        agentId INT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        walletAddress VARCHAR(100) NOT NULL,
+        status ENUM('pending', 'approved', 'rejected', 'completed') NOT NULL DEFAULT 'pending',
+        txId VARCHAR(100),
+        adminNote TEXT,
+        processedBy VARCHAR(50),
+        processedAt TIMESTAMP NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        INDEX idx_agentId (agentId),
+        INDEX idx_status (status)
+      )
+    `);
+    console.log("[Database] Agent withdrawals table ready");
+    
+    // 代理月度统计表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agent_stats (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        agentId INT NOT NULL,
+        month VARCHAR(7) NOT NULL,
+        totalRecharge DECIMAL(10,2) DEFAULT 0,
+        totalCommission DECIMAL(10,2) DEFAULT 0,
+        newUsers INT DEFAULT 0,
+        activeUsers INT DEFAULT 0,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+        UNIQUE KEY unique_agent_month (agentId, month)
+      )
+    `);
+    console.log("[Database] Agent stats table ready");
+    
+    // 代理配置表
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agent_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        settingKey VARCHAR(50) NOT NULL,
+        settingValue VARCHAR(200) NOT NULL,
+        description TEXT,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+        UNIQUE KEY unique_setting_key (settingKey)
+      )
+    `);
+    console.log("[Database] Agent settings table ready");
+    
+    // 插入默认代理配置
+    await db.execute(sql`
+      INSERT IGNORE INTO agent_settings (settingKey, settingValue, description) VALUES
+      ('founder_limit', '100', '创始代理名额限制'),
+      ('founder_level1_rate', '15', '创始代理一级佣金比例'),
+      ('founder_level2_rate', '5', '创始代理二级佣金比例'),
+      ('gold_level1_rate', '12', '金牌代理一级佣金比例'),
+      ('gold_level2_rate', '4', '金牌代理二级佣金比例'),
+      ('silver_level1_rate', '10', '银牌代理一级佣金比例'),
+      ('silver_level2_rate', '3', '银牌代理二级佣金比例'),
+      ('normal_level1_rate', '8', '普通代理一级佣金比例'),
+      ('normal_level2_rate', '2', '普通代理二级佣金比例'),
+      ('first_charge_bonus', '3', '首充额外奖励比例'),
+      ('min_withdrawal', '50', '最低提现金额(USDT)'),
+      ('settlement_days', '7', '佣金结算冻结天数'),
+      ('activity_bonus', '3', '开业活动额外奖励'),
+      ('activity_end_date', '2026-02-28', '开业活动结束日期')
+    `);
+    console.log("[Database] Default agent settings inserted");
+    
     // ========== 数据迁移 ==========
     await migrateOldData(db);
     
