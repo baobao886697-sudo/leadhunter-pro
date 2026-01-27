@@ -30,7 +30,7 @@ import { NotificationCenter } from "./NotificationCenter";
 
 const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean; isTopRecommend?: boolean }> = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/dashboard" },
-  { icon: Linkedin, label: "LinkedIn", path: "/search" },
+  { icon: Linkedin, label: "LinkedIn", path: "/search", isRainbow: true },
   { icon: Users, label: "TruePeopleSearch", path: "/tps", isRainbow: true, isTopRecommend: true },
   { icon: UserSearch, label: "PeopleSearchNow", path: "/people-search-now", isNew: true },
   { icon: SearchCheck, label: "SearchPeopleFree", path: "/search-people-free", isNew: true },

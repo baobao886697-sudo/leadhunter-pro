@@ -15,7 +15,7 @@ import {
   Search as SearchIcon, Loader2, AlertCircle, Info, Zap, Target, MapPin, 
   Briefcase, User, Sparkles, Users, Calendar, ChevronRight, Coins,
   CheckCircle2, AlertTriangle, Eye, Database, Shield, TrendingUp,
-  ArrowRight, RefreshCw, Rocket, ArrowLeft, Clock, History
+  ArrowRight, RefreshCw, Rocket, ArrowLeft, Clock, History, Star, Home
 } from "lucide-react";
 
 const US_STATES = [
@@ -31,8 +31,7 @@ const US_STATES = [
 
 // 搜索数量选项
 const SEARCH_LIMITS = [
-  { value: 10, label: "10 条", description: "测试用", recommended: true },
-  { value: 100, label: "100 条", description: "快速测试" },
+  { value: 100, label: "100 条", description: "快速测试", recommended: true },
   { value: 500, label: "500 条", description: "小批量" },
   { value: 1000, label: "1000 条", description: "标准搜索" },
   { value: 5000, label: "5000 条", description: "大批量" },
@@ -60,7 +59,7 @@ export default function Search() {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [state, setState] = useState("");
-  const [searchLimit, setSearchLimit] = useState(10);
+  const [searchLimit, setSearchLimit] = useState(100);
   const [customLimit, setCustomLimit] = useState("");
   
   // 年龄筛选（默认启用，范围 50-79）
@@ -395,16 +394,67 @@ export default function Search() {
 
         {/* 标题区域 */}
         <div className="relative mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            <Target className="w-5 h-5 text-cyan-400" />
-            <span className="text-sm text-cyan-400">精准搜索</span>
+          <div className="flex items-center gap-2 mb-3">
+            <Star className="w-5 h-5 text-yellow-400 animate-pulse" />
+            <span 
+              className="text-sm font-semibold"
+              style={{
+                background: 'linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #c678dd, #61afef, #98c379, #ffd700)',
+                backgroundSize: '200% auto',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                animation: 'rainbow 3s linear infinite'
+              }}
+            >
+              推荐
+            </span>
           </div>
-          <h1 className="text-3xl font-bold text-white" style={{ fontFamily: 'Orbitron, sans-serif' }}>
-            搜索专业人士
-          </h1>
-          <p className="text-slate-400 mt-2">
-            输入搜索条件，获取全球商业人士的验证联系方式
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 
+              className="text-3xl font-bold" 
+              style={{ 
+                fontFamily: 'Orbitron, sans-serif',
+                background: 'linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #c678dd, #61afef, #98c379, #ffd700)',
+                backgroundSize: '200% auto',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                animation: 'rainbow 3s linear infinite'
+              }}
+            >
+              LinkedIn 搜索
+            </h1>
+            <span 
+              className="px-3 py-1 rounded-full text-xs font-bold"
+              style={{
+                background: 'linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #c678dd, #61afef, #98c379, #ffd700)',
+                backgroundSize: '200% auto',
+                animation: 'rainbow 3s linear infinite',
+                color: '#1a1a2e'
+              }}
+            >
+              ⭐ 推荐
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            <span className="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              双验证电话号码
+            </span>
+            <span className="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              用户年龄数据
+            </span>
+            <span className="px-2 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">
+              专业人士数据库
+            </span>
+          </div>
+          <p className="text-slate-400 mt-3">
+            输入搜索条件，获取全球商业人士的双验证联系方式和年龄信息
           </p>
+          <style>{`
+            @keyframes rainbow {
+              0% { background-position: 0% center; }
+              100% { background-position: 200% center; }
+            }
+          `}</style>
         </div>
 
         {/* 当前积分余额 */}
