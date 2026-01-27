@@ -28,10 +28,10 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { NotificationCenter } from "./NotificationCenter";
 
-const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean }> = [
+const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean; isTopRecommend?: boolean }> = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/dashboard" },
   { icon: Linkedin, label: "LinkedIn", path: "/search" },
-  { icon: Users, label: "TruePeopleSearch", path: "/tps" },
+  { icon: Users, label: "TruePeopleSearch", path: "/tps", isRainbow: true, isTopRecommend: true },
   { icon: UserSearch, label: "PeopleSearchNow", path: "/people-search-now", isNew: true },
   { icon: SearchCheck, label: "SearchPeopleFree", path: "/search-people-free", isNew: true },
   { icon: Sparkles, label: "Anywho", path: "/anywho", isRainbow: true },
@@ -244,6 +244,7 @@ function DashboardLayoutContent({
                 const isActive = location === item.path;
                 const isNewItem = item.isNew;
                 const isRainbowItem = item.isRainbow;
+                const isTopRecommend = item.isTopRecommend;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -261,7 +262,16 @@ function DashboardLayoutContent({
                           NEW
                         </span>
                       )}
-                      {isRainbowItem && (
+                      {isRainbowItem && isTopRecommend && (
+                        <span className="ml-auto flex items-center gap-1">
+                          <Star className="h-3 w-3 text-yellow-400 fill-yellow-400 star-sparkle" />
+                          <Star className="h-3 w-3 text-yellow-400 fill-yellow-400 star-sparkle" style={{ animationDelay: '0.3s' }} />
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-yellow-500/20 via-pink-500/20 to-purple-500/20 text-yellow-300 border border-yellow-500/30">
+                            推荐
+                          </span>
+                        </span>
+                      )}
+                      {isRainbowItem && !isTopRecommend && (
                         <span className="ml-auto flex items-center gap-1">
                           <Star className="h-3 w-3 text-yellow-400 fill-yellow-400 star-sparkle" />
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-yellow-500/20 via-pink-500/20 to-purple-500/20 text-yellow-300 border border-yellow-500/30">
