@@ -39,10 +39,10 @@ export default function TpsSearch() {
   const [locationsInput, setLocationsInput] = useState("");
   
   // 过滤条件 - 默认值会从后端配置获取
+  // 注：已移除minYear，因为现在只提取每个人的第一个号码（Primary主号），它本身就是最新的
   const [filters, setFilters] = useState({
     minAge: 50,
     maxAge: 79,
-    minYear: 2025,
     minPropertyValue: 0,
     excludeTMobile: false,
     excludeComcast: false,
@@ -284,22 +284,7 @@ export default function TpsSearch() {
                       过滤掉不在此年龄范围内的记录
                     </p>
                   </div>
-                  
-                  {/* 电话年份 */}
-                  <div>
-                    <Label>电话最早年份: {filters.minYear}</Label>
-                    <Slider
-                      value={[filters.minYear]}
-                      onValueChange={([v]) => setFilters(f => ({ ...f, minYear: v }))}
-                      min={2000}
-                      max={2030}
-                      step={1}
-                      className="mt-2"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      过滤掉早于此年份的电话号码
-                    </p>
-                  </div>
+
                   
                   {/* 房产价值 */}
                   <div>

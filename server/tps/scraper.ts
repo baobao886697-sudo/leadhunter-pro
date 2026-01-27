@@ -563,9 +563,8 @@ export function shouldIncludeResult(result: TpsDetailResult, filters: TpsFilters
   // 年龄范围验证
   if (result.age < minAge) return false;
   if (result.age > maxAge) return false;
-  if (filters.minYear !== undefined && result.reportYear !== undefined) {
-    if (result.reportYear < filters.minYear) return false;
-  }
+  
+  // 注：已移除minYear过滤，因为现在只提取每个人的第一个号码（Primary主号），它本身就是最新的
   if (filters.minPropertyValue !== undefined && filters.minPropertyValue > 0) {
     if (!result.propertyValue || result.propertyValue < filters.minPropertyValue) return false;
   }
