@@ -1045,14 +1045,11 @@ export function AgentManager() {
                 </Button>
               </>
             )}
-            {selectedWithdrawal?.withdrawal?.status !== 'paid' && selectedWithdrawal?.withdrawal?.status !== 'rejected' && (
-              <Button
+            {selectedWithdrawal?.withdrawal?.status === 'approved' && (
+              <button
                 type="button"
                 onClick={() => {
-                  alert('按钮被点击!');
-                  console.log('selectedWithdrawal:', selectedWithdrawal);
                   const withdrawalId = selectedWithdrawal?.withdrawal?.withdrawalId;
-                  console.log('withdrawalId:', withdrawalId);
                   if (!withdrawalId) {
                     toast.error('提现ID不存在');
                     return;
@@ -1063,11 +1060,11 @@ export function AgentManager() {
                   });
                 }}
                 disabled={processWithdrawalMutation.isPending}
-                className="bg-green-500 hover:bg-green-600"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 bg-green-500 hover:bg-green-600 text-white"
               >
                 {processWithdrawalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
                 已打款
-              </Button>
+              </button>
             )}
             {(selectedWithdrawal?.withdrawal?.status === 'paid' || selectedWithdrawal?.withdrawal?.status === 'rejected') && (
               <Button variant="outline" onClick={() => setWithdrawalDialogOpen(false)} className="border-slate-700 text-white">
