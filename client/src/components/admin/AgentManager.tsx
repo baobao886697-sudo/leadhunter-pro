@@ -1054,7 +1054,7 @@ export function AgentManager() {
             {(selectedWithdrawal?.withdrawal?.status === 'pending' || selectedWithdrawal?.withdrawal?.status === 'approved') && (
               <Button
                 onClick={() => handleProcessWithdrawal('paid')}
-                disabled={processWithdrawalMutation.isPending || !txId}
+                disabled={processWithdrawalMutation.isPending}
                 className="bg-green-500 hover:bg-green-600"
               >
                 {processWithdrawalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
