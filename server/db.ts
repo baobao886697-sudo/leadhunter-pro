@@ -186,6 +186,105 @@ export async function addCredits(userId: number, amount: number, type: "recharge
   return { success: true, newBalance };
 }
 
+// ==================== LinkedIn搜索预扣费机制 ====================
+
+/**
+ * 预扣积分（冻结）- LinkedIn搜索
+ * 
+ * 任务开始前预扣最大预估费用，确保任务能够完整执行
+ * 预扣成功后，任务必定完整执行并返回结果
+ */
+export async function freezeCreditsLinkedIn(
+  userId: number, 
+  amount: number, 
+  taskId: string
+): Promise<{ success: boolean; frozenAmount: number; currentBalance: number; message: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, frozenAmount: 0, currentBalance: 0, message: '数据库连接失败' };
+  
+  const user = await getUserById(userId);
+  if (!user) return { success: false, frozenAmount: 0, currentBalance: 0, message: '用户不存在' };
+  
+  const roundedAmount = Math.ceil(amount * 10) / 10;
+  
+  // 检查余额是否足够
+  if (user.credits < roundedAmount) {
+    return {
+      success: false,
+      frozenAmount: 0,
+      currentBalance: user.credits,
+      message: `积分不足，需要 ${roundedAmount} 积分，当前余额 ${user.credits} 积分`,
+    };
+  }
+  
+  // 预扣积分
+  const newBalance = user.credits - roundedAmount;
+  await db.update(users).set({ credits: newBalance }).where(eq(users.id, userId));
+  
+  // 记录预扣日志
+  await db.insert(creditLogs).values({
+    userId,
+    amount: -roundedAmount,
+    balanceAfter: newBalance,
+    type: "search",
+    description: `LinkedIn搜索预扣 [${taskId.slice(0, 8)}] - 预估最大消耗`,
+    relatedTaskId: taskId,
+  });
+  
+  return {
+    success: true,
+    frozenAmount: roundedAmount,
+    currentBalance: newBalance,
+    message: `已预扣 ${roundedAmount} 积分`,
+  };
+}
+
+/**
+ * 结算积分（退还多扣的部分）- LinkedIn搜索
+ * 
+ * 任务完成后，计算实际消耗，退还多扣的积分
+ */
+export async function settleCreditsLinkedIn(
+  userId: number,
+  frozenAmount: number,
+  actualCost: number,
+  taskId: string
+): Promise<{ refundAmount: number; actualCost: number; newBalance: number }> {
+  const db = await getDb();
+  if (!db) return { refundAmount: 0, actualCost, newBalance: 0 };
+  
+  const roundedActualCost = Math.ceil(actualCost * 10) / 10;
+  const roundedFrozenAmount = Math.ceil(frozenAmount * 10) / 10;
+  const refundAmount = Math.max(0, roundedFrozenAmount - roundedActualCost);
+  
+  const user = await getUserById(userId);
+  if (!user) return { refundAmount: 0, actualCost: roundedActualCost, newBalance: 0 };
+  
+  let currentBalance = user.credits;
+  
+  if (refundAmount > 0) {
+    // 退还多扣的积分
+    currentBalance += refundAmount;
+    await db.update(users).set({ credits: currentBalance }).where(eq(users.id, userId));
+    
+    // 记录退还日志
+    await db.insert(creditLogs).values({
+      userId,
+      amount: refundAmount,
+      balanceAfter: currentBalance,
+      type: "refund",
+      description: `LinkedIn搜索结算退还 [${taskId.slice(0, 8)}] - 预扣 ${roundedFrozenAmount} 实际 ${roundedActualCost}`,
+      relatedTaskId: taskId,
+    });
+  }
+  
+  return {
+    refundAmount,
+    actualCost: roundedActualCost,
+    newBalance: currentBalance,
+  };
+}
+
 export async function getCreditLogs(userId: number, page: number = 1, limit: number = 20): Promise<{ logs: CreditLog[]; total: number }> {
   const db = await getDb();
   if (!db) return { logs: [], total: 0 };
