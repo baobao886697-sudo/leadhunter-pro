@@ -1051,7 +1051,9 @@ export async function searchAndGetDetails(
     }
     
     // 4. 分页获取所有搜索结果
-    const maxPages = 3;  // 最大获取 3 页，避免过多 API 调用
+    // 使用配置中的 MAX_SAFE_PAGES，默认 25 页（约 250 条结果）
+    // 这样可以获取所有可用分页，同时防止无限循环
+    const maxPages = SPF_CONFIG.MAX_SAFE_PAGES;
     let currentPageHtml = searchHtml;
     let currentPageNum = 1;
     const allSearchResults: SpfDetailResult[] = [];
@@ -1059,9 +1061,10 @@ export async function searchAndGetDetails(
     while (currentPageNum <= maxPages) {
       // 解析当前页的搜索结果
       const pageResults = parseSearchPageFull(currentPageHtml);
-      console.log(`[SPF] 第 ${currentPageNum} 页解析到 ${pageResults.length} 个结果`);
+      console.log(`[SPF] 第 ${currentPageNum}/${maxPages} 页解析到 ${pageResults.length} 个结果`);
       
       if (pageResults.length === 0) {
+        console.log(`[SPF] 第 ${currentPageNum} 页无结果，停止分页`);
         break;
       }
       
@@ -1069,13 +1072,19 @@ export async function searchAndGetDetails(
       
       // 检查是否有下一页
       const nextPageUrl = extractNextPageUrl(currentPageHtml);
-      if (!nextPageUrl || allSearchResults.length >= maxResults * 2) {
-        // 没有下一页，或已获取足够多结果
+      if (!nextPageUrl) {
+        console.log(`[SPF] 已到达最后一页（无下一页链接），共 ${currentPageNum} 页`);
+        break;
+      }
+      
+      // 检查是否已获取足够多结果
+      if (allSearchResults.length >= maxResults * 3) {
+        console.log(`[SPF] 已获取 ${allSearchResults.length} 条结果，超过最大需求量，停止分页`);
         break;
       }
       
       // 获取下一页
-      console.log(`[SPF] 获取下一页: ${nextPageUrl}`);
+      console.log(`[SPF] 正在获取第 ${currentPageNum + 1} 页: ${nextPageUrl}`);
       try {
         currentPageHtml = await fetchWithScrapedo(nextPageUrl, token);
         searchPageCalls++;
@@ -1083,19 +1092,24 @@ export async function searchAndGetDetails(
         
         // 检查是否是错误响应
         if (currentPageHtml.includes('"ErrorCode"') || currentPageHtml.includes('"StatusCode":4')) {
-          console.log(`[SPF] 下一页获取失败，停止分页`);
+          console.log(`[SPF] 第 ${currentPageNum} 页获取失败（API错误），停止分页`);
           break;
         }
         
-        // 请求间延迟
+        // 请求间延迟，避免过快请求
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (pageError) {
-        console.error(`[SPF] 获取下一页失败:`, pageError);
+        console.error(`[SPF] 获取第 ${currentPageNum + 1} 页失败:`, pageError);
         break;
       }
     }
     
-    console.log(`[SPF] 共获取 ${currentPageNum} 页，总计 ${allSearchResults.length} 个搜索结果`);
+    // 检查是否达到最大页数限制
+    if (currentPageNum >= maxPages) {
+      console.log(`[SPF] ℹ️ 已达到最大分页限制 (${maxPages} 页)，可能还有更多结果未获取`);
+    }
+    
+    console.log(`[SPF] 分页完成: 共获取 ${currentPageNum} 页，总计 ${allSearchResults.length} 个搜索结果`);
     
     if (allSearchResults.length === 0) {
       console.log(`[SPF] 未找到匹配结果: ${name} ${location}`);
