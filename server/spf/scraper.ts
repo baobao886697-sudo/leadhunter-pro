@@ -313,6 +313,16 @@ function applyFilters(detail: SpfDetailResult, filters: SpfFilters): boolean {
 
 /**
  * 从搜索页面提取完整的详细信息
+ * 
+ * 基于实际 HTML 结构重写：
+ * - 姓名：h2 > a（第一个文本节点）
+ * - 位置：h2 > a > span（第一个 span，如 "in Brook Park, OH"）
+ * - 年龄：h3 > span（数字）
+ * - 出生年份：h3 > span > i.text-muted（如 "(1976 or 1975)"）
+ * - 地址：ul.inline.current.row > li > address > a 或 ul.inline.current.row > li > a
+ * - 电话：ul.inline.current.row > li > h4 > a 或 ul.inline.current.row > li > a
+ * - 电话类型：i.text-highlight（如 "- Wireless"）
+ * - 详情链接：h2 > a[href]
  */
 export function parseSearchPageFull(html: string): SpfDetailResult[] {
   const $ = cheerio.load(html);
@@ -336,137 +346,171 @@ export function parseSearchPageFull(html: string): SpfDetailResult[] {
       alsoKnownAs: [],
     };
     
-    // 1. 提取姓名
-    const nameEl = article.find('h2.name a').first();
-    if (nameEl.length) {
-      result.name = nameEl.text().trim();
-      result.detailLink = nameEl.attr('href') || '';
+    // 1. 提取姓名和详情链接
+    // 结构: <h2 class="h2"><a href="...">John Smith<span>in Brook Park, OH</span></a></h2>
+    const nameLink = article.find('h2 > a').first();
+    if (nameLink.length) {
+      // 获取详情链接
+      result.detailLink = nameLink.attr('href') || '';
+      
+      // 获取姓名（排除 span 内的文本）
+      const nameClone = nameLink.clone();
+      nameClone.find('span').remove();
+      result.name = nameClone.text().trim();
+      
+      // 分离名和姓
+      const nameParts = result.name.split(' ').filter(p => p);
+      if (nameParts.length >= 2) {
+        result.firstName = nameParts[0];
+        result.lastName = nameParts[nameParts.length - 1];
+      }
+      
+      // 获取位置（从 span 中提取）
+      const locationSpan = nameLink.find('span').first();
+      if (locationSpan.length) {
+        const locationText = locationSpan.text().trim();
+        // 格式: "in Brook Park, OH"
+        const locationMatch = locationText.match(/in\s+(.+)/i);
+        if (locationMatch) {
+          result.location = locationMatch[1].trim();
+          
+          // 解析城市和州
+          const parts = result.location.split(',').map(p => p.trim());
+          if (parts.length >= 2) {
+            result.city = parts[0];
+            result.state = parts[1];
+          }
+        }
+      }
     }
     
     // 2. 提取年龄和出生年份
-    const ageEl = article.find('span.age').first();
-    if (ageEl.length) {
-      const ageText = ageEl.text().trim();
-      const { age, birthYear } = parseAgeAndBirthYear(ageText);
-      result.age = age;
-      result.birthYear = birthYear;
-    }
-    
-    // 3. 提取当前地址
-    const addressEl = article.find('span.address').first();
-    if (addressEl.length) {
-      result.currentAddress = addressEl.text().trim();
-      if (result.addresses) {
-        result.addresses.push(result.currentAddress);
-      }
-      
-      // 解析城市和州
-      const addressParts = result.currentAddress.split(',').map(p => p.trim());
-      if (addressParts.length >= 2) {
-        result.city = addressParts[addressParts.length - 2];
-        const stateZip = addressParts[addressParts.length - 1];
-        const stateMatch = stateZip.match(/^([A-Z]{2})/);
-        if (stateMatch) {
-          result.state = stateMatch[1];
-        }
-      }
-      result.location = result.city && result.state ? `${result.city}, ${result.state}` : result.currentAddress;
-    }
-    
-    // 4. 提取电话号码和类型
-    const phoneSection = article.find('section.phone').first();
-    if (phoneSection.length) {
-      phoneSection.find('li').each((_, phoneLi) => {
-        const phoneLink = $(phoneLi).find('a').first();
-        const phoneText = phoneLink.text().trim();
-        const phoneNumber = formatPhoneNumber(phoneText);
-        
-        // 获取电话类型
-        const typeSpan = $(phoneLi).find('span.type').first();
-        let phoneType = 'Unknown';
-        if (typeSpan.length) {
-          phoneType = parsePhoneType(typeSpan.text().trim());
+    // 结构: <h3 class="mb-3">Age <span>50<i class="text-muted">(1976 or 1975)</i></span></h3>
+    const ageH3 = article.find('h3').first();
+    if (ageH3.length && ageH3.text().includes('Age')) {
+      const ageSpan = ageH3.find('span').first();
+      if (ageSpan.length) {
+        // 获取年龄数字
+        const ageClone = ageSpan.clone();
+        ageClone.find('i').remove();
+        const ageText = ageClone.text().trim();
+        const ageNum = parseInt(ageText, 10);
+        if (!isNaN(ageNum)) {
+          result.age = ageNum;
         }
         
-        // 获取电话年份/日期
-        const dateSpan = $(phoneLi).find('span.date, span.year').first();
-        let phoneYear: number | undefined;
-        let phoneDate: string | undefined;
-        if (dateSpan.length) {
-          const dateText = dateSpan.text().trim();
-          const yearMatch = dateText.match(/\d{4}/);
+        // 获取出生年份
+        const birthYearEl = ageSpan.find('i.text-muted').first();
+        if (birthYearEl.length) {
+          const birthYearText = birthYearEl.text().trim();
+          // 格式: "(1976 or 1975)"
+          const yearMatch = birthYearText.match(/\((\d{4})/);
           if (yearMatch) {
-            phoneYear = parseInt(yearMatch[0], 10);
+            result.birthYear = yearMatch[1];
           }
-          phoneDate = dateText;
         }
-        
-        if (phoneNumber && result.allPhones) {
-          result.allPhones.push({
-            number: phoneNumber,
-            type: phoneType,
-            year: phoneYear,
-            date: phoneDate,
-          });
-        }
-      });
-      
-      // 设置主电话
-      if (result.allPhones && result.allPhones.length > 0) {
-        const primaryPhone = result.allPhones[0];
-        result.phone = primaryPhone.number;
-        result.phoneType = primaryPhone.type;
-        result.phoneYear = primaryPhone.year;
       }
     }
     
-    // 5. 提取邮箱
-    const emailSection = article.find('section.email').first();
-    if (emailSection.length) {
-      emailSection.find('li a').each((_, emailEl) => {
-        // 检查 Cloudflare 邮箱保护
-        const cfEmail = $(emailEl).attr('data-cfemail');
-        let email = '';
-        if (cfEmail) {
-          email = decodeCloudflareEmail(cfEmail);
-        } else {
-          email = $(emailEl).text().trim();
-        }
-        
-        if (email && email.includes('@') && result.allEmails && !result.allEmails.includes(email)) {
-          result.allEmails.push(email);
-        }
-      });
+    // 3. 提取地址和电话（从 ul.inline.current.row 中）
+    article.find('ul.inline.current.row, ul.inline.row').each((_, ulEl) => {
+      const ul = $(ulEl);
+      const prevText = ul.prev('i.text-muted').text().toLowerCase();
       
-      // 设置主邮箱
-      if (result.allEmails && result.allEmails.length > 0) {
-        result.email = result.allEmails[0];
+      // 判断是地址列表还是电话列表
+      if (prevText.includes('address') || prevText.includes('home address')) {
+        // 这是地址列表
+        ul.find('li').each((_, liEl) => {
+          const liItem = $(liEl);
+          const addressEl = liItem.find('address a, a').first();
+          if (addressEl.length) {
+            const address = addressEl.text().trim();
+            if (address && result.addresses && !result.addresses.includes(address)) {
+              result.addresses.push(address);
+              
+              // 第一个地址作为当前地址
+              if (!result.currentAddress) {
+                result.currentAddress = address;
+                
+                // 解析城市和州（如果还没有）
+                if (!result.city || !result.state) {
+                  const parts = address.split(',').map(p => p.trim());
+                  if (parts.length >= 3) {
+                    result.city = parts[parts.length - 2];
+                    const stateZip = parts[parts.length - 1];
+                    const stateMatch = stateZip.match(/^([A-Z]{2})/);
+                    if (stateMatch) {
+                      result.state = stateMatch[1];
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else if (prevText.includes('phone') || prevText.includes('telephone')) {
+        // 这是电话列表
+        ul.find('li').each((_, liEl) => {
+          const liItem = $(liEl);
+          const phoneLink = liItem.find('h4 a, a').first();
+          if (phoneLink.length) {
+            const phoneText = phoneLink.text().trim();
+            const phoneNumber = formatPhoneNumber(phoneText);
+            
+            if (phoneNumber) {
+              // 获取电话类型
+              const typeEl = liItem.find('i.text-highlight').first();
+              let phoneType = 'Unknown';
+              if (typeEl.length) {
+                const typeText = typeEl.text().toLowerCase();
+                // 格式: "- Wireless" 或 "- LandLine"
+                if (typeText.includes('wireless') || typeText.includes('mobile') || typeText.includes('cell')) {
+                  phoneType = 'Wireless';
+                } else if (typeText.includes('landline') || typeText.includes('land')) {
+                  phoneType = 'Landline';
+                } else if (typeText.includes('voip')) {
+                  phoneType = 'VoIP';
+                }
+              }
+              
+              // 检查是否是当前号码
+              const isCurrent = liItem.find('i.text-highlight').text().toLowerCase().includes('current');
+              
+              if (result.allPhones && !result.allPhones.some(p => p.number === phoneNumber)) {
+                result.allPhones.push({
+                  number: phoneNumber,
+                  type: phoneType,
+                  year: isCurrent ? new Date().getFullYear() : undefined,
+                });
+              }
+            }
+          }
+        });
+      } else if (prevText.includes('spouse') || prevText.includes('family') || prevText.includes('mother') || prevText.includes('father') || prevText.includes('sister') || prevText.includes('brother')) {
+        // 这是家庭成员列表
+        ul.find('li a').each((_, aEl) => {
+          const member = $(aEl).text().trim();
+          if (member && result.familyMembers && !result.familyMembers.includes(member)) {
+            result.familyMembers.push(member);
+          }
+        });
       }
+    });
+    
+    // 设置主电话
+    if (result.allPhones && result.allPhones.length > 0) {
+      const primaryPhone = result.allPhones[0];
+      result.phone = primaryPhone.number;
+      result.phoneType = primaryPhone.type;
+      result.phoneYear = primaryPhone.year;
     }
     
-    // 6. 提取家庭成员
-    const familySection = article.find('section.family, section.relatives').first();
-    if (familySection.length) {
-      familySection.find('li a').each((_, memberEl) => {
-        const member = $(memberEl).text().trim();
-        if (member && result.familyMembers && !result.familyMembers.includes(member)) {
-          result.familyMembers.push(member);
-        }
-      });
+    // 设置位置（如果还没有）
+    if (!result.location && result.city && result.state) {
+      result.location = `${result.city}, ${result.state}`;
     }
     
-    // 7. 提取关联人员
-    const associatesSection = article.find('section.associates').first();
-    if (associatesSection.length) {
-      associatesSection.find('li a').each((_, assocEl) => {
-        const associate = $(assocEl).text().trim();
-        if (associate && result.associates && !result.associates.includes(associate)) {
-          result.associates.push(associate);
-        }
-      });
-    }
-    
-    // 8. 检查是否已故
+    // 检查是否已故
     const isDeceased = li.text().toLowerCase().includes('deceased');
     result.isDeceased = isDeceased;
     
