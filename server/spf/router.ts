@@ -303,7 +303,10 @@ export const spfRouter = router({
       format: z.enum(['standard', 'detailed', 'minimal']).optional().default('standard'),
     }))
     .mutation(async ({ ctx, input }) => {
+      console.log('[SPF CSV Export] Starting export for taskId:', input.taskId);
+      
       const task = await getSpfSearchTask(input.taskId);
+      console.log('[SPF CSV Export] Task found:', task ? `id=${task.id}, status=${task.status}` : 'null');
       
       if (!task || task.userId !== ctx.user!.id) {
         throw new TRPCError({
@@ -313,6 +316,7 @@ export const spfRouter = router({
       }
       
       const results = await getAllSpfSearchResults(task.id);
+      console.log('[SPF CSV Export] Results count:', results.length);
       
       // CSV 表头（包含 SPF 独特字段）
       let headers: string[];
@@ -417,11 +421,19 @@ export const spfRouter = router({
       
       const csvContent = csvRows.join("\n");
       
+      console.log('[SPF CSV Export] CSV rows count:', csvRows.length);
+      console.log('[SPF CSV Export] CSV content length:', csvContent.length);
+      if (results.length > 0) {
+        console.log('[SPF CSV Export] First result sample:', JSON.stringify(results[0]).slice(0, 200));
+      }
+      
       // 生成文件名
       const searchParams = task.names as string[] || [];
       const firstNames = searchParams.slice(0, 3).join("_").replace(/[^a-zA-Z0-9_]/g, "");
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const fileName = `DataReach_SPF_${firstNames}_${date}.csv`;
+      
+      console.log('[SPF CSV Export] Returning fileName:', fileName, 'content length:', csvContent.length);
       
       return {
         fileName,
