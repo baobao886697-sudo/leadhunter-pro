@@ -99,19 +99,19 @@ export const spfRouter = router({
         subTaskCount = input.names.length * locations.length;
       }
       
-      // SPF 特点：每个搜索直接返回详情，不需要额外请求详情页
-      // 预估每个任务返回 1 条结果
-      const avgDetailsPerTask = 1;
+      // SPF 特点：每个搜索需要 1 次搜索页 API + 每个结果需要 1 次详情页 API
+      // 预估每个任务返回 5 条结果（保守估计）
+      const avgDetailsPerTask = 5;
       
-      // 搜索页费用
+      // 搜索页费用：每个子任务 1 次 API 调用
       const maxSearchPages = subTaskCount;
       const maxSearchCost = maxSearchPages * searchCost;
       
-      // 详情页费用（SPF 搜索页即详情页）
+      // 详情页费用：每个结果 1 次 API 调用
       const estimatedDetails = subTaskCount * avgDetailsPerTask;
       const estimatedDetailCost = estimatedDetails * detailCost;
       
-      // 总费用
+      // 总费用 = 搜索页 + 详情页
       const estimatedCost = maxSearchCost + estimatedDetailCost;
       
       return {
@@ -506,7 +506,7 @@ async function executeSpfSearchTask(
       const startTime = Date.now();
       
       try {
-        const results = await searchAndGetDetails(
+        const { results, searchPageCalls, detailPageCalls } = await searchAndGetDetails(
           subTask.name,
           subTask.location,
           token,
@@ -514,7 +514,8 @@ async function executeSpfSearchTask(
         );
         
         const responseTime = Date.now() - startTime;
-        totalSearchPages++;
+        totalSearchPages += searchPageCalls;
+        totalDetailPages += detailPageCalls;
         
         // 记录 API 调用
         await logApi({
@@ -627,8 +628,10 @@ async function executeSpfSearchTask(
       }
     }
     
-    // 计算实际消耗
-    const actualCost = totalSearchPages * searchCost + totalResults * detailCost;
+    // 计算实际消耗：搜索页 API + 详情页 API 分别计费
+    const searchPageCost = totalSearchPages * searchCost;
+    const detailPageCost = totalDetailPages * detailCost;
+    const actualCost = searchPageCost + detailPageCost;
     
     // 结算积分
     const refund = await settleSpfCredits(userId, frozenAmount, actualCost, taskId);
@@ -638,16 +641,19 @@ async function executeSpfSearchTask(
     addLog(`🎉 搜索任务完成`);
     addLog(`═══════════════════════════════════════════════════`);
     addLog(`📊 搜索统计:`);
-    addLog(`   • 搜索请求: ${totalSearchPages} 次`);
+    addLog(`   • 搜索页 API: ${totalSearchPages} 次`);
+    addLog(`   • 详情页 API: ${totalDetailPages} 次`);
     addLog(`   • 有效结果: ${totalResults} 条`);
     addLog(`   • 缓存命中: ${totalCacheHits} 条`);
     addLog(`💰 费用明细:`);
     addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
+    addLog(`   • 搜索页费用: ${searchPageCost.toFixed(1)} 积分 (${totalSearchPages} x ${searchCost})`);
+    addLog(`   • 详情页费用: ${detailPageCost.toFixed(1)} 积分 (${totalDetailPages} x ${detailCost})`);
     addLog(`   • 实际消耗: ${actualCost.toFixed(1)} 积分`);
     if (refund > 0) {
       addLog(`   • ✅ 已退还: ${refund.toFixed(1)} 积分`);
     }
-    addLog(`═══════════════════════════════════════════════════`);
+    addLog(`═══════════════════════════════════════════════════`;
     
     await completeSpfSearchTask(taskDbId, {
       totalResults,
@@ -670,8 +676,8 @@ async function executeSpfSearchTask(
   } catch (error: any) {
     addLog(`❌ 搜索任务失败: ${error.message}`);
     
-    // 失败时的结算退还
-    const partialCost = totalSearchPages * searchCost + totalResults * detailCost;
+    // 失败时的结算退还：搜索页 + 详情页分别计费
+    const partialCost = totalSearchPages * searchCost + totalDetailPages * detailCost;
     const refund = await settleSpfCredits(userId, frozenAmount, partialCost, taskId);
     
     addLog(`💰 失败结算:`);

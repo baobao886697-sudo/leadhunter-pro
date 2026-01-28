@@ -86,8 +86,8 @@ export const SPF_CONFIG = {
   SCRAPEDO_CONCURRENCY: 10,
   TOTAL_CONCURRENCY: 40,
   MAX_SAFE_PAGES: 25,
-  SEARCH_COST: 0.8,  // 搜索页成本
-  DETAIL_COST: 0.8,  // 详情页成本
+  SEARCH_COST: 0.85,  // 搜索页成本 (每次 API 调用)
+  DETAIL_COST: 0.85,  // 详情页成本 (每次 API 调用)
 };
 
 // ==================== 类型定义 ====================
@@ -874,16 +874,25 @@ function applyFilters(detail: SpfDetailResult, filters: SpfFilters): boolean {
 }
 
 /**
+ * 搜索结果和 API 调用统计
+ */
+export interface SearchResultWithStats {
+  results: SpfDetailResult[];
+  searchPageCalls: number;  // 搜索页 API 调用次数
+  detailPageCalls: number;  // 详情页 API 调用次数
+}
+
+/**
  * 执行搜索并获取详情
  * 
  * 流程:
- * 1. 获取搜索页面 (/find/john-smith)
+ * 1. 获取搜索页面 (/find/john-smith) - 计费 0.85 积分
  * 2. 从搜索页面提取基本数据
- * 3. 可选：获取详情页面以获取更多数据（邮箱、婚姻状态等）
+ * 3. 获取详情页面以获取更多数据（邮箱、婚姻状态等）- 每个结果计费 0.85 积分
  * 4. 应用过滤器
- * 5. 返回结果
+ * 5. 返回结果和 API 调用统计
  * 
- * @param fetchDetails - 是否获取详情页面（默认 false，设为 true 可获取邮箱、婚姻状态等）
+ * @param fetchDetails - 是否获取详情页面（默认 true，获取邮箱、婚姻状态等）
  */
 export async function searchAndGetDetails(
   name: string,
@@ -891,9 +900,11 @@ export async function searchAndGetDetails(
   token: string,
   filters: SpfFilters = {},
   maxResults: number = 10,
-  fetchDetails: boolean = false
-): Promise<SpfDetailResult[]> {
+  fetchDetails: boolean = true  // 默认启用详情页获取，获取邮箱、婚姻状态等
+): Promise<SearchResultWithStats> {
   const results: SpfDetailResult[] = [];
+  let searchPageCalls = 0;
+  let detailPageCalls = 0;
   
   // 调试日志：打印接收到的过滤器
   console.log(`[SPF] 接收到的过滤器: ${JSON.stringify(filters)}`);
@@ -905,12 +916,13 @@ export async function searchAndGetDetails(
     
     // 2. 获取搜索页面 HTML
     const searchHtml = await fetchWithScrapedo(searchUrl, token);
+    searchPageCalls++;  // 计数搜索页 API 调用
     console.log(`[SPF] 获取搜索页面成功，大小: ${searchHtml.length} bytes`);
     
     // 检查是否是错误响应
     if (searchHtml.includes('"ErrorCode"') || searchHtml.includes('"StatusCode":4') || searchHtml.includes('"StatusCode":5')) {
       console.error(`[SPF] API 返回错误: ${searchHtml.substring(0, 500)}`);
-      return results;
+      return { results, searchPageCalls, detailPageCalls };
     }
     
     // 3. 从搜索页面提取基本数据
@@ -919,7 +931,7 @@ export async function searchAndGetDetails(
     
     if (searchResults.length === 0) {
       console.log(`[SPF] 未找到匹配结果: ${name} ${location}`);
-      return results;
+      return { results, searchPageCalls, detailPageCalls };
     }
     
     // 4. 处理每个结果
@@ -936,6 +948,7 @@ export async function searchAndGetDetails(
         try {
           console.log(`[SPF] 获取详情页: ${searchResult.detailLink}`);
           const detailHtml = await fetchWithScrapedo(searchResult.detailLink, token);
+          detailPageCalls++;  // 计数详情页 API 调用
           
           // 检查是否是错误响应
           if (!detailHtml.includes('"ErrorCode"') && !detailHtml.includes('"StatusCode":4')) {
@@ -970,19 +983,28 @@ export async function searchAndGetDetails(
       results.push(searchResult);
     }
     
-    console.log(`[SPF] 搜索完成，返回 ${results.length} 个有效结果`);
+    console.log(`[SPF] 搜索完成，返回 ${results.length} 个有效结果, 搜索页API: ${searchPageCalls}, 详情页API: ${detailPageCalls}`);
     
   } catch (error) {
     console.error(`[SPF] 搜索失败: ${name} ${location}`, error);
   }
   
-  return results;
+  return { results, searchPageCalls, detailPageCalls };
+}
+
+/**
+ * 批量搜索结果和 API 调用统计
+ */
+export interface BatchSearchResultWithStats {
+  results: SpfDetailResult[];
+  totalSearchPageCalls: number;
+  totalDetailPageCalls: number;
 }
 
 /**
  * 批量搜索
  * 
- * @param fetchDetails - 是否获取详情页面
+ * @param fetchDetails - 是否获取详情页面（默认 true）
  */
 export async function batchSearch(
   names: string[],
@@ -990,9 +1012,11 @@ export async function batchSearch(
   token: string,
   filters: SpfFilters = {},
   onProgress?: (completed: number, total: number) => void,
-  fetchDetails: boolean = false
-): Promise<SpfDetailResult[]> {
+  fetchDetails: boolean = true
+): Promise<BatchSearchResultWithStats> {
   const allResults: SpfDetailResult[] = [];
+  let totalSearchPageCalls = 0;
+  let totalDetailPageCalls = 0;
   const total = names.length;
   let completed = 0;
   
@@ -1002,8 +1026,10 @@ export async function batchSearch(
     const location = locations[i] || '';
     
     try {
-      const results = await searchAndGetDetails(name, location, token, filters, 10, fetchDetails);
+      const { results, searchPageCalls, detailPageCalls } = await searchAndGetDetails(name, location, token, filters, 10, fetchDetails);
       allResults.push(...results);
+      totalSearchPageCalls += searchPageCalls;
+      totalDetailPageCalls += detailPageCalls;
     } catch (error) {
       console.error(`[SPF batchSearch] 搜索失败: ${name}`, error);
     }
@@ -1019,70 +1045,82 @@ export async function batchSearch(
     }
   }
   
-  return deduplicateByDetailLink(allResults);
+  return {
+    results: deduplicateByDetailLink(allResults),
+    totalSearchPageCalls,
+    totalDetailPageCalls,
+  };
 }
 
 /**
  * 导出搜索结果为 CSV 格式
+ * 
+ * 简洁的 16 字段格式，参考 TPS 设计
+ * 数据质量门槛：必须有年龄或电话才导出
  */
 export function exportToCsv(results: SpfDetailResult[]): string {
+  // 电话号码格式化函数：转换为 +1 格式
+  const formatPhone = (phone: string): string => {
+    if (!phone) return "";
+    // 移除所有非数字字符
+    const digits = phone.replace(/\D/g, "");
+    // 如果是10位数字，添加+1前缀
+    if (digits.length === 10) {
+      return `+1${digits}`;
+    }
+    // 如果是11位且以1开头，添加+前缀
+    if (digits.length === 11 && digits.startsWith("1")) {
+      return `+${digits}`;
+    }
+    // 其他情况返回原始数字
+    return digits;
+  };
+
+  // 数据质量过滤：必须有年龄或电话
+  const filteredResults = results.filter(r => r.age || r.phone);
+
+  // 16 个核心字段
   const headers = [
-    'Name',
-    'First Name',
-    'Last Name',
-    'Age',
-    'Birth Year',
-    'Location',
-    'City',
-    'State',
-    'Phone',
-    'Phone Type',
-    'All Phones',
-    'Email',
-    'All Emails',
-    'Marital Status',
-    'Spouse Name',
-    'Employment',
-    'Education',
-    'Confirmed Date',
-    'Current Address',
-    'All Addresses',
-    'Family Members',
-    'Associates',
-    'Also Known As',
-    'Is Deceased',
-    'Detail Link',
+    '姓名',
+    '年龄',
+    '城市',
+    '州',
+    '电话',
+    '电话类型',
+    '邮箱',
+    '婚姻状态',
+    '配偶姓名',
+    '就业状态',
+    '企业',
+    '当前地址',
+    '搜索姓名',
+    '搜索地点',
+    '缓存命中',
+    '详情链接',
   ];
   
-  const rows = results.map(r => [
+  const rows = filteredResults.map(r => [
     r.name || '',
-    r.firstName || '',
-    r.lastName || '',
     r.age?.toString() || '',
-    r.birthYear || '',
-    r.location || '',
     r.city || '',
     r.state || '',
-    r.phone || '',
+    formatPhone(r.phone || ''),
     r.phoneType || '',
-    r.allPhones?.map(p => `${p.number}(${p.type})`).join('; ') || '',
     r.email || '',
-    r.allEmails?.join('; ') || '',
     r.maritalStatus || '',
     r.spouseName || '',
     r.employment || '',
-    r.education || '',
-    r.confirmedDate || '',
-    r.currentAddress || '',
-    r.addresses?.join('; ') || '',
-    r.familyMembers?.join('; ') || '',
-    r.associates?.join('; ') || '',
-    r.alsoKnownAs?.join('; ') || '',
-    r.isDeceased ? 'Yes' : 'No',
-    r.detailLink || '',
+    r.businesses?.length ? r.businesses[0] : '',  // 第一个企业
+    r.currentAddress || r.location || '',
+    (r as any).searchName || '',
+    (r as any).searchLocation || '',
+    r.fromCache ? '是' : '否',
+    r.detailLink ? `https://www.searchpeoplefree.com${r.detailLink.startsWith('/') ? '' : '/'}${r.detailLink}` : '',
   ]);
   
-  const csvContent = [
+  // 添加 UTF-8 BOM 头以确保 Excel 正确识别中文
+  const BOM = "\uFEFF";
+  const csvContent = BOM + [
     headers.join(','),
     ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')),
   ].join('\n');
