@@ -14,8 +14,8 @@ import * as cheerio from 'cheerio';
 
 // ==================== Scrape.do API ====================
 
-const SCRAPE_TIMEOUT_MS = 8000;  // 8 秒超时 (SPF 页面较大)
-const SCRAPE_MAX_RETRIES = 2;    // 最多重试 2 次
+const SCRAPE_TIMEOUT_MS = 30000;  // 30 秒超时 (SPF 页面较大，需要更长时间)
+const SCRAPE_MAX_RETRIES = 3;    // 最多重试 3 次
 
 /**
  * 使用 Scrape.do API 获取页面（带超时和重试）
@@ -23,14 +23,16 @@ const SCRAPE_MAX_RETRIES = 2;    // 最多重试 2 次
 async function fetchWithScrapedo(url: string, token: string): Promise<string> {
   const encodedUrl = encodeURIComponent(url);
   // 使用 render=true 确保 JavaScript 渲染完成
-  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&render=true&customWait=3000&geoCode=us&timeout=${SCRAPE_TIMEOUT_MS}`;
+  // 使用 super=true 启用住宅代理，提高成功率
+  // 使用 playWithBrowser 等待页面完全加载
+  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&render=true&super=true&geoCode=us&customWait=5000&timeout=${SCRAPE_TIMEOUT_MS}`;
   
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt <= SCRAPE_MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 5000);
+      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 15000);
       
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -59,7 +61,7 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
       
       if (isTimeout || isNetworkError) {
         console.log(`[SPF fetchWithScrapedo] 请求超时/失败，正在重试 (${attempt + 1}/${SCRAPE_MAX_RETRIES})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 等待 1 秒后重试
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 等待 3 秒后重试
         continue;
       }
       
