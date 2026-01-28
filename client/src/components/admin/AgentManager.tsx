@@ -36,7 +36,7 @@ export function AgentManager() {
   const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [txId, setTxId] = useState('');
+
   const [withdrawalStatus, setWithdrawalStatus] = useState('pending');
   
   // 代理申请审核
@@ -232,17 +232,10 @@ export function AgentManager() {
 
   // 处理提现审核
   const handleProcessWithdrawal = (action: 'approve' | 'reject' | 'paid') => {
-    console.log('handleProcessWithdrawal called with action:', action);
-    console.log('selectedWithdrawal:', selectedWithdrawal);
-    console.log('withdrawalId:', selectedWithdrawal?.withdrawal?.withdrawalId || selectedWithdrawal?.withdrawalId);
-    if (!selectedWithdrawal) {
-      console.log('selectedWithdrawal is null, returning');
-      return;
-    }
+    if (!selectedWithdrawal) return;
     processWithdrawalMutation.mutate({
       withdrawalId: selectedWithdrawal.withdrawal?.withdrawalId || selectedWithdrawal.withdrawalId,
       action,
-      txId: action === 'paid' ? txId : undefined,
       adminNote: action === 'reject' ? rejectReason : undefined,
     });
   };
@@ -710,7 +703,7 @@ export function AgentManager() {
                               <p>处理人: {item.withdrawal.processedBy}</p>
                               {item.withdrawal.processedAt && <p className="text-xs opacity-70">{new Date(item.withdrawal.processedAt).toLocaleString('zh-CN')}</p>}
                               {item.withdrawal.adminNote && <p className="text-xs text-orange-400 mt-1">备注: {item.withdrawal.adminNote}</p>}
-                              {item.withdrawal.txId && <p className="text-xs text-cyan-400 mt-1 truncate max-w-[150px]">TX: {item.withdrawal.txId}</p>}
+
                             </div>
                           )}
                           {!item.withdrawal?.processedBy && '-'}
@@ -721,7 +714,7 @@ export function AgentManager() {
                               size="sm"
                               onClick={() => {
                                 setSelectedWithdrawal(item);
-                                setTxId(item.withdrawal?.txId || '');
+
                                 setRejectReason(item.withdrawal?.adminNote || '');
                                 setWithdrawalDialogOpen(true);
                               }}
@@ -981,15 +974,6 @@ export function AgentManager() {
             {selectedWithdrawal?.withdrawal?.status !== 'paid' && selectedWithdrawal?.withdrawal?.status !== 'rejected' ? (
               <>
                 <div className="space-y-2">
-                  <Label className="text-white">交易ID (打款后填写)</Label>
-                  <Input
-                    placeholder="输入区块链交易ID"
-                    value={txId}
-                    onChange={(e) => setTxId(e.target.value)}
-                    className="bg-slate-800 border-slate-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label className="text-white">备注 (拒绝时必填)</Label>
                   <Textarea
                     placeholder="输入处理备注"
@@ -1017,14 +1001,7 @@ export function AgentManager() {
                     {selectedWithdrawal?.withdrawal?.processedAt ? new Date(selectedWithdrawal.withdrawal.processedAt).toLocaleString('zh-CN') : '-'}
                   </span>
                 </div>
-                {selectedWithdrawal?.withdrawal?.txId && (
-                  <div className="space-y-1">
-                    <p className="text-sm text-slate-400">交易ID:</p>
-                    <code className="text-xs text-cyan-400 bg-slate-800 p-2 rounded block break-all">
-                      {selectedWithdrawal.withdrawal.txId}
-                    </code>
-                  </div>
-                )}
+
                 {selectedWithdrawal?.withdrawal?.adminNote && (
                   <div className="space-y-1">
                     <p className="text-sm text-slate-400">备注:</p>
