@@ -752,11 +752,14 @@ export const spfSearchResults = mysqlTable("spf_search_results", {
   // 电话信息
   phone: varchar("phone", { length: 50 }),
   phoneType: varchar("phoneType", { length: 50 }),        // ★ "Home/LandLine" / "Wireless"
+  phoneYear: int("phoneYear"),                             // ★ 主电话的年份
   carrier: varchar("carrier", { length: 100 }),
   allPhones: json("allPhones").$type<Array<{
     number: string;
     type: string;
-  }>>(),                                                   // 所有电话及类型
+    year?: number;
+    date?: string;
+  }>>(),                                                   // 所有电话及类型（包含年份）
   reportYear: int("reportYear"),
   isPrimary: boolean("isPrimary").default(true),
   

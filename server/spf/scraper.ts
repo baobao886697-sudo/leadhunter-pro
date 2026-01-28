@@ -112,7 +112,8 @@ export interface SpfDetailResult {
   phone?: string;
   phoneType?: string;
   carrier?: string;
-  allPhones?: Array<{ number: string; type: string }>;
+  allPhones?: Array<{ number: string; type: string; year?: number; date?: string }>;  // 添加年份和日期
+  phoneYear?: number;  // 主电话的年份
   reportYear?: number;
   isPrimary?: boolean;
   email?: string;
@@ -725,28 +726,65 @@ export function parseDetailPage(html: string, detailLink: string): SpfDetailResu
       });
     }
     
-    // 8. 提取电话号码 (phone-bg)
+    // 8. 提取电话号码 (phone-bg) - 包含年份信息，选择最新号码
     const phoneBg = $('article.phone-bg').first();
     if (phoneBg.length) {
+      // 临时存储所有电话信息
+      const phoneEntries: Array<{ number: string; type: string; year: number; date: string }> = [];
+      
       phoneBg.find('ol.inline li').each((_, liEl) => {
         const li = $(liEl);
-        const phoneLink = li.find('a[href*="/phone-lookup/"]');
+        const phoneLink = li.find('a[href*="/phone-lookup/"], a[href*="hone-lookup"]');
         if (phoneLink.length) {
           const phoneText = phoneLink.text().trim();
           const phoneNumber = formatPhoneNumber(phoneText);
           const typeText = li.find('i.text-highlight').text();
           const phoneType = parsePhoneType(typeText);
           
-          // 检查是否已存在
-          if (phoneNumber && result.allPhones && !result.allPhones.some(p => p.number === phoneNumber)) {
-            result.allPhones.push({ number: phoneNumber, type: phoneType });
-            if (!result.phone) {
-              result.phone = phoneNumber;
-              result.phoneType = phoneType;
+          // 提取年份信息从 <time> 元素
+          const timeEl = li.find('time');
+          let year = 0;
+          let dateStr = '';
+          if (timeEl.length) {
+            const datetime = timeEl.attr('datetime'); // 格式: "2025-12-01 12:00"
+            const timeText = timeEl.text().trim(); // 格式: "- December 2025"
+            
+            if (datetime) {
+              const yearMatch = datetime.match(/^(\d{4})/);
+              if (yearMatch) {
+                year = parseInt(yearMatch[1], 10);
+              }
+              dateStr = datetime.split(' ')[0]; // "2025-12-01"
+            } else if (timeText) {
+              const yearMatch = timeText.match(/(\d{4})/);
+              if (yearMatch) {
+                year = parseInt(yearMatch[1], 10);
+              }
+              dateStr = timeText.replace(/^-\s*/, '');
             }
+          }
+          
+          // 检查是否已存在
+          if (phoneNumber && !phoneEntries.some(p => p.number === phoneNumber)) {
+            phoneEntries.push({ number: phoneNumber, type: phoneType, year, date: dateStr });
           }
         }
       });
+      
+      // 按年份降序排序，选择最新的电话号码
+      phoneEntries.sort((a, b) => b.year - a.year);
+      
+      // 存储到 result
+      result.allPhones = phoneEntries;
+      
+      // 选择最新的电话号码作为主电话
+      if (phoneEntries.length > 0) {
+        const newestPhone = phoneEntries[0];
+        result.phone = newestPhone.number;
+        result.phoneType = newestPhone.type;
+        result.phoneYear = newestPhone.year;
+        console.log(`[SPF] 选择最新电话: ${newestPhone.number} (${newestPhone.type}, ${newestPhone.year})`);
+      }
     }
     
     // 9. 提取地址 (address-bg)

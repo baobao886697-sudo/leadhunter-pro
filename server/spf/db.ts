@@ -307,8 +307,9 @@ export async function saveSpfSearchResults(
     location?: string;
     phone?: string;
     phoneType?: string;           // ★ 电话类型
+    phoneYear?: number;           // ★ 主电话年份
     carrier?: string;
-    allPhones?: Array<{ number: string; type: string }>;
+    allPhones?: Array<{ number: string; type: string; year?: number; date?: string }>;
     reportYear?: number | null;
     isPrimary?: boolean;
     // ★ SPF 独特字段
@@ -350,6 +351,7 @@ export async function saveSpfSearchResults(
     location: r.location || '',
     phone: r.phone || '',
     phoneType: r.phoneType || '',
+    phoneYear: r.phoneYear ?? null,
     carrier: r.carrier || '',
     allPhones: r.allPhones || [],
     reportYear: r.reportYear ?? null,

@@ -337,7 +337,7 @@ export const spfRouter = router({
       };
       
       // CSV 表头（按用户指定格式）
-      // 字段顺序：姓名、年龄、城市、州、电话、电话类型、邮箱、婚姻状态、配偶姓名、就业状态、企业、当前地址、搜索姓名、搜索地点、缓存命中、详情链接
+      // 字段顺序：姓名、年龄、城市、州、电话、电话类型、电话年份、邮箱、婚姻状态、配偶姓名、就业状态、企业、当前地址、搜索姓名、搜索地点、缓存命中、详情链接
       const headers = [
         "姓名",
         "年龄",
@@ -345,6 +345,7 @@ export const spfRouter = router({
         "州",
         "电话",
         "电话类型",
+        "电话年份",
         "邮箱",
         "婚姻状态",
         "配偶姓名",
@@ -364,6 +365,7 @@ export const spfRouter = router({
         r.state || "",
         formatPhone(r.phone),
         r.phoneType || "",
+        r.phoneYear?.toString() || "",
         r.email || "",
         r.maritalStatus || "",
         r.spouseName || "",
