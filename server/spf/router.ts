@@ -315,94 +315,66 @@ export const spfRouter = router({
         });
       }
       
-      const results = await getAllSpfSearchResults(task.id);
-      console.log('[SPF CSV Export] Results count:', results.length);
+      const allResults = await getAllSpfSearchResults(task.id);
+      console.log('[SPF CSV Export] Total results from DB:', allResults.length);
       
-      // CSV 表头（包含 SPF 独特字段）
-      let headers: string[];
-      let getRowData: (r: any, index: number) => string[];
+      // 数据质量过滤：必须有年龄和电话
+      const results = allResults.filter(r => r.age && r.phone);
+      console.log('[SPF CSV Export] Results after quality filter (age + phone):', results.length);
       
-      if (input.format === 'minimal') {
-        // 简洁版
-        headers = ["姓名", "年龄", "电话", "电话类型", "邮箱", "城市", "州"];
-        getRowData = (r, index) => [
-          r.name || "",
-          r.age?.toString() || "",
-          r.phone || "",
-          r.phoneType || "",
-          r.email || "",
-          r.city || "",
-          r.state || "",
-        ];
-      } else if (input.format === 'detailed') {
-        // 详细版（包含所有 SPF 独特字段）
-        headers = [
-          "序号", "姓名", "名", "姓", "年龄", "出生年份",
-          "电话", "电话类型", "运营商",
-          "邮箱", "所有邮箱",
-          "婚姻状态", "配偶姓名",
-          "就业状态",
-          "城市", "州", "完整地址",
-          "纬度", "经度",
-          "数据确认日期",
-          "家庭成员", "关联人", "关联企业",
-          "搜索姓名", "搜索地点",
-        ];
-        getRowData = (r, index) => [
-          (index + 1).toString(),
-          r.name || "",
-          r.firstName || "",
-          r.lastName || "",
-          r.age?.toString() || "",
-          r.birthYear || "",
-          r.phone || "",
-          r.phoneType || "",
-          r.carrier || "",
-          r.email || "",
-          (r.allEmails || []).join("; "),
-          r.maritalStatus || "",
-          r.spouseName || "",
-          r.employment || "",
-          r.city || "",
-          r.state || "",
-          r.location || "",
-          r.latitude?.toString() || "",
-          r.longitude?.toString() || "",
-          r.confirmedDate || "",
-          (r.familyMembers || []).join("; "),
-          (r.associates || []).join("; "),
-          (r.businesses || []).join("; "),
-          r.searchName || "",
-          r.searchLocation || "",
-        ];
-      } else {
-        // 标准版
-        headers = [
-          "序号", "姓名", "年龄", "出生年份",
-          "电话", "电话类型",
-          "邮箱",
-          "婚姻状态", "配偶姓名",
-          "就业状态",
-          "城市", "州", "地址",
-          "数据确认日期",
-        ];
-        getRowData = (r, index) => [
-          (index + 1).toString(),
-          r.name || "",
-          r.age?.toString() || "",
-          r.birthYear || "",
-          r.phone || "",
-          r.phoneType || "",
-          r.email || "",
-          r.maritalStatus || "",
-          r.spouseName || "",
-          r.employment || "",
-          r.city || "",
-          r.state || "",
-          r.location || "",
-          r.confirmedDate || "",
-        ];
-      }
+      // 格式化电话号码为 +1 格式
+      const formatPhone = (phone: string | null | undefined): string => {
+        if (!phone) return "";
+        // 移除所有非数字字符
+        const digits = phone.replace(/\D/g, "");
+        // 确保以 1 开头（美国区号）
+        if (digits.startsWith("1") && digits.length === 11) {
+          return "+" + digits;
+        } else if (digits.length === 10) {
+          return "+1" + digits;
+        }
+        return "+1" + digits;
+      };
+      
+      // CSV 表头（按用户指定格式）
+      // 字段顺序：姓名、年龄、城市、州、电话、电话类型、邮箱、婚姻状态、配偶姓名、就业状态、企业、当前地址、搜索姓名、搜索地点、缓存命中、详情链接
+      const headers = [
+        "姓名",
+        "年龄",
+        "城市",
+        "州",
+        "电话",
+        "电话类型",
+        "邮箱",
+        "婚姻状态",
+        "配偶姓名",
+        "就业状态",
+        "企业",
+        "当前地址",
+        "搜索姓名",
+        "搜索地点",
+        "缓存命中",
+        "详情链接",
+      ];
+      
+      const getRowData = (r: any): string[] => [
+        r.name || "",
+        r.age?.toString() || "",
+        r.city || "",
+        r.state || "",
+        formatPhone(r.phone),
+        r.phoneType || "",
+        r.email || "",
+        r.maritalStatus || "",
+        r.spouseName || "",
+        r.employment || "",
+        (r.businesses || []).join("; "),
+        r.location || "",
+        r.searchName || "",
+        r.searchLocation || "",
+        r.fromCache ? "是" : "否",
+        r.detailLink || "",
+      ];
       
       // 生成 CSV 内容
       const escapeCSV = (value: string) => {
@@ -414,8 +386,8 @@ export const spfRouter = router({
       };
       
       const csvRows = [headers.join(",")];
-      results.forEach((r, index) => {
-        const row = getRowData(r, index).map(escapeCSV);
+      results.forEach((r) => {
+        const row = getRowData(r).map(escapeCSV);
         csvRows.push(row.join(","));
       });
       
