@@ -986,7 +986,34 @@ export async function searchAndGetDetails(
       return { results, searchPageCalls, detailPageCalls };
     }
     
-    // 3. 从搜索页面提取基本数据
+    // 3. 检测返回的是搜索列表页还是详情页
+    // 当搜索 "姓名+地点" 时，SearchPeopleFree 可能直接返回匹配的详情页而不是搜索列表
+    const isDetailPage = (searchHtml.includes('current-bg') || searchHtml.includes('personDetails')) && 
+                         !searchHtml.includes('li class="toc l-i mb-5"');
+    
+    if (isDetailPage) {
+      console.log(`[SPF] 检测到直接返回详情页（姓名+地点搜索）`);
+      // 直接解析详情页
+      const detailResult = parseDetailPage(searchHtml, searchUrl);
+      if (detailResult) {
+        // 添加搜索信息
+        detailResult.searchName = name;
+        detailResult.searchLocation = location;
+        
+        // 应用过滤器
+        if (applyFilters(detailResult, filters)) {
+          results.push(detailResult);
+          console.log(`[SPF] 详情页解析成功: ${detailResult.name}, 年龄: ${detailResult.age}, 电话: ${detailResult.phone}`);
+        } else {
+          console.log(`[SPF] 详情页结果被过滤: ${detailResult.name}, 年龄: ${detailResult.age}`);
+        }
+      } else {
+        console.log(`[SPF] 详情页解析失败`);
+      }
+      return { results, searchPageCalls, detailPageCalls };
+    }
+    
+    // 4. 从搜索列表页提取基本数据
     const searchResults = parseSearchPageFull(searchHtml);
     console.log(`[SPF] 解析到 ${searchResults.length} 个结果`);
     
@@ -995,7 +1022,7 @@ export async function searchAndGetDetails(
       return { results, searchPageCalls, detailPageCalls };
     }
     
-    // 4. 处理每个结果
+    // 5. 处理每个结果
     for (const searchResult of searchResults) {
       if (results.length >= maxResults) break;
       
