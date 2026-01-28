@@ -64,6 +64,7 @@ function Router() {
       <Route path="/tps/history" component={TpsHistory} />
       <Route path="/people-search-now" component={PeopleSearchNow} />
       <Route path="/search-people-free" component={SearchPeopleFree} />
+      <Route path="/spf" component={SpfSearch} />
       <Route path="/spf/search" component={SpfSearch} />
       <Route path="/spf/task/:taskId" component={SpfTask} />
       <Route path="/spf/history" component={SpfHistory} />
