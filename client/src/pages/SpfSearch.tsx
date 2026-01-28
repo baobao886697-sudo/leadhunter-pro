@@ -50,10 +50,10 @@ export default function SpfSearch() {
   const [namesInput, setNamesInput] = useState("");
   const [locationsInput, setLocationsInput] = useState("");
   
-  // 过滤条件
+  // 过滤条件 - 默认不限制年龄，让用户自己选择
   const [filters, setFilters] = useState({
-    minAge: 50,
-    maxAge: 79,
+    minAge: 18,
+    maxAge: 100,
     minPropertyValue: 0,
     excludeTMobile: false,
     excludeComcast: false,
@@ -75,13 +75,14 @@ export default function SpfSearch() {
   // 获取 SPF 配置
   const { data: spfConfig } = trpc.spf.getConfig.useQuery();
   
-  // 从后端配置初始化默认年龄范围
+  // 从后端配置初始化默认年龄范围 - 使用更宽松的默认值
   useEffect(() => {
     if (spfConfig && !ageRangeInitialized) {
+      // 默认不限制年龄，让用户自己选择
       setFilters(prev => ({
         ...prev,
-        minAge: spfConfig.defaultMinAge || 50,
-        maxAge: spfConfig.defaultMaxAge || 79,
+        minAge: 18,
+        maxAge: 100,
       }));
       setAgeRangeInitialized(true);
     }
