@@ -594,23 +594,27 @@ export async function executeSearchV3(
       addLog(`⚠️ 未找到匹配的结果`, 'warning', 'complete', '⚠️');
       addLog(`   请尝试调整搜索条件后重试`, 'info', 'complete', '');
       
-      // 精准搜索无结果时，退还搜索基础费用
+      // ==================== 预扣费机制：无结果时的结算 ====================
       if (mode === 'exact') {
-        addLog(`💰 精准搜索无结果，正在退还搜索费用...`, 'info', 'complete', '');
-        const refunded = await deductCredits(
-          userId, 
-          -currentSearchCredits, // 负数表示退还
-          'refund', 
-          `精准搜索无结果退款: ${searchName} | ${searchTitle} | ${searchState}`, 
-          task.taskId
-        );
-        if (refunded) {
-          stats.creditsUsed -= currentSearchCredits;
-          addLog(`✅ 已退还搜索费用: ${currentSearchCredits} 积分`, 'success', 'complete', '✅');
-        } else {
-          addLog(`⚠️ 退还搜索费用失败，请联系客服`, 'warning', 'complete', '⚠️');
-        }
+        // 精准搜索无结果，实际消耗为0，退还全部预扣积分
+        stats.creditsUsed = 0;
+        addLog(`💰 精准搜索无结果，将退还全部预扣积分`, 'info', 'complete', '');
+      } else {
+        // 模糊搜索无结果，仍收取搜索基础费
+        stats.creditsUsed = currentSearchCredits;
+        addLog(`💰 模糊搜索无结果，收取搜索基础费 ${currentSearchCredits} 积分`, 'info', 'complete', '');
       }
+      
+      // 结算退还
+      const settlement = await settleCreditsLinkedIn(userId, frozenAmount, stats.creditsUsed, task.taskId);
+      addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
+      addLog(`💰 费用结算:`, 'info', 'complete', '');
+      addLog(`   • 预扣积分: ${frozenAmount} 积分`, 'info', 'complete', '');
+      addLog(`   • 实际消耗: ${stats.creditsUsed} 积分`, 'info', 'complete', '');
+      if (settlement.refundAmount > 0) {
+        addLog(`   • ✅ 已退还: ${settlement.refundAmount} 积分`, 'success', 'complete', '✅');
+      }
+      addLog(`   • 当前余额: ${settlement.newBalance} 积分`, 'info', 'complete', '');
       
       progress.status = 'completed';
       await updateProgress('搜索完成', 'completed', 'complete', 100);
