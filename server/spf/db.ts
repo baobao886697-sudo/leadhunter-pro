@@ -488,13 +488,18 @@ export async function saveSpfDetailCache(
 // ==================== 积分相关 ====================
 
 /**
- * 预扣积分
+ * 预扣积分（冻结机制）
+ * 
+ * 参考 TPS 实现：
+ * - 按最大预估消耗预扣积分
+ * - 记录冻结日志
+ * - 任务完成后结算退还
  */
-export async function preDeductSpfCredits(
+export async function freezeSpfCredits(
   userId: number,
   estimatedCredits: number,
   taskId: string
-): Promise<{ success: boolean; currentBalance: number }> {
+): Promise<{ success: boolean; message: string; currentBalance: number; frozenAmount: number }> {
   const database = await db();
   
   // 获取当前余额
@@ -505,69 +510,126 @@ export async function preDeductSpfCredits(
   
   const currentBalance = userResult[0]?.credits || 0;
   
-  if (currentBalance < estimatedCredits) {
-    return { success: false, currentBalance };
+  // 四舍五入到一位小数
+  const roundedEstimate = Math.round(estimatedCredits * 10) / 10;
+  
+  if (currentBalance < roundedEstimate) {
+    return { 
+      success: false, 
+      message: `积分不足，需要 ${roundedEstimate} 积分，当前余额 ${currentBalance} 积分`,
+      currentBalance,
+      frozenAmount: 0,
+    };
   }
   
-  // 预扣积分
+  // 预扣积分（冻结）
+  const newBalance = currentBalance - roundedEstimate;
   await database.update(users).set({
-    credits: sql`${users.credits} - ${estimatedCredits}`,
+    credits: newBalance,
   }).where(eq(users.id, userId));
   
-  // 记录积分变动
-  const newBalance = currentBalance - estimatedCredits;
+  // 记录冻结日志
   await database.insert(creditLogs).values({
     userId,
-    amount: -estimatedCredits,
+    amount: -roundedEstimate,
     balanceAfter: newBalance,
     type: "search",
-    description: `SPF搜索预扣积分`,
+    description: `SPF搜索预扣积分 [${taskId}]（最大预估 ${roundedEstimate} 积分，实际消耗后退还）`,
     relatedTaskId: taskId,
   });
   
-  return { success: true, currentBalance: newBalance };
+  console.log(`[SPF] 预扣积分成功: 用户 ${userId}, 预扣 ${roundedEstimate}, 余额 ${newBalance}`);
+  
+  return { 
+    success: true, 
+    message: '预扣成功',
+    currentBalance: newBalance,
+    frozenAmount: roundedEstimate,
+  };
 }
 
 /**
  * 结算积分（退还多扣的部分）
+ * 
+ * 参考 TPS 实现：
+ * - 计算实际消耗
+ * - 退还多扣的积分
+ * - 记录结算日志
  */
 export async function settleSpfCredits(
   userId: number,
-  preDeducted: number,
-  actualUsed: number,
+  frozenAmount: number,
+  actualCost: number,
   taskId: string
-): Promise<number> {
+): Promise<{ refundAmount: number; newBalance: number }> {
   const database = await db();
-  const refund = preDeducted - actualUsed;
   
-  if (refund > 0) {
+  // 四舍五入到一位小数
+  const roundedFrozen = Math.round(frozenAmount * 10) / 10;
+  const roundedActual = Math.round(actualCost * 10) / 10;
+  const refundAmount = Math.round((roundedFrozen - roundedActual) * 10) / 10;
+  
+  // 获取当前余额
+  const userResult = await database
+    .select({ credits: users.credits })
+    .from(users)
+    .where(eq(users.id, userId));
+  
+  let currentBalance = userResult[0]?.credits || 0;
+  
+  if (refundAmount > 0) {
     // 退还多扣的积分
+    const newBalance = currentBalance + refundAmount;
     await database.update(users).set({
-      credits: sql`${users.credits} + ${refund}`,
+      credits: newBalance,
     }).where(eq(users.id, userId));
     
-    // 获取新余额
-    const userResult = await database
-      .select({ credits: users.credits })
-      .from(users)
-      .where(eq(users.id, userId));
-    
-    const newBalance = userResult[0]?.credits || 0;
-    
-    // 记录退款
+    // 记录退款日志
     await database.insert(creditLogs).values({
       userId,
-      amount: refund,
+      amount: refundAmount,
       balanceAfter: newBalance,
       type: "refund",
-      description: `SPF搜索积分结算退款`,
+      description: `SPF搜索结算退款 [${taskId}] - 预扣 ${roundedFrozen}，实际 ${roundedActual}，退还 ${refundAmount}`,
       relatedTaskId: taskId,
     });
     
-    return refund;
+    console.log(`[SPF] 结算退款: 用户 ${userId}, 预扣 ${roundedFrozen}, 实际 ${roundedActual}, 退还 ${refundAmount}, 新余额 ${newBalance}`);
+    
+    return { refundAmount, newBalance };
+  } else if (roundedActual > roundedFrozen) {
+    // 极端情况：实际消耗超过预扣（理论上不应该发生）
+    // 记录日志但不额外扣费，保护用户利益
+    console.warn(`[SPF] 警告: 任务 ${taskId} 实际消耗 ${roundedActual} 超过预扣 ${roundedFrozen}`);
+    
+    await database.insert(creditLogs).values({
+      userId,
+      amount: 0,
+      balanceAfter: currentBalance,
+      type: "search",
+      description: `SPF搜索结算 [${taskId}] - 实际消耗 ${roundedActual}（已预扣 ${roundedFrozen}）`,
+      relatedTaskId: taskId,
+    });
+    
+    return { refundAmount: 0, newBalance: currentBalance };
   }
   
-  return 0;
+  // 预扣等于实际消耗，无需退款
+  console.log(`[SPF] 结算完成: 用户 ${userId}, 预扣 ${roundedFrozen}, 实际 ${roundedActual}, 无需退款`);
+  return { refundAmount: 0, newBalance: currentBalance };
+}
+
+/**
+ * 预扣积分（兼容旧接口）
+ * @deprecated 请使用 freezeSpfCredits
+ */
+export async function preDeductSpfCredits(
+  userId: number,
+  estimatedCredits: number,
+  taskId: string
+): Promise<{ success: boolean; currentBalance: number }> {
+  const result = await freezeSpfCredits(userId, estimatedCredits, taskId);
+  return { success: result.success, currentBalance: result.currentBalance };
 }
 
 // ==================== API 日志相关 ====================
