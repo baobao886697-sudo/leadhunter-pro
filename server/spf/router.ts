@@ -322,18 +322,24 @@ export const spfRouter = router({
       const results = allResults.filter(r => r.age && r.phone);
       console.log('[SPF CSV Export] Results after quality filter (age + phone):', results.length);
       
-      // 格式化电话号码为 +1 格式
+      // 格式化电话号码为纯数字格式（前面加 1）
       const formatPhone = (phone: string | null | undefined): string => {
         if (!phone) return "";
         // 移除所有非数字字符
         const digits = phone.replace(/\D/g, "");
-        // 确保以 1 开头（美国区号）
+        // 确保以 1 开头（美国标准）
         if (digits.startsWith("1") && digits.length === 11) {
-          return "+" + digits;
+          return digits;  // 已经是 1XXXXXXXXXX 格式
         } else if (digits.length === 10) {
-          return "+1" + digits;
+          return "1" + digits;  // 添加 1 前缀
         }
-        return "+1" + digits;
+        return "1" + digits;
+      };
+      
+      // 检查电话年份是否满足最低要求（>= 2025）
+      const isPhoneYearValid = (phoneYear: number | null | undefined): boolean => {
+        if (!phoneYear) return true;  // 如果没有年份信息，默认通过
+        return phoneYear >= 2025;
       };
       
       // CSV 表头（按用户指定格式）
