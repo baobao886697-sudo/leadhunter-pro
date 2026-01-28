@@ -27,8 +27,8 @@ import * as cheerio from 'cheerio';
 
 // ==================== Scrape.do API ====================
 
-const SCRAPE_TIMEOUT_MS = 60000;  // 60 秒超时
-const SCRAPE_MAX_RETRIES = 3;    // 最多重试 3 次
+const SCRAPE_TIMEOUT_MS = 15000;  // 15 秒超时（SearchPeopleFree 页面较复杂）
+const SCRAPE_MAX_RETRIES = 2;    // 最多重试 2 次
 
 /**
  * 使用 Scrape.do API 获取页面（带超时和重试）
@@ -40,14 +40,14 @@ const SCRAPE_MAX_RETRIES = 3;    // 最多重试 3 次
  */
 async function fetchWithScrapedo(url: string, token: string): Promise<string> {
   const encodedUrl = encodeURIComponent(url);
-  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&super=true&geoCode=us`;
+  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&super=true&geoCode=us&timeout=${SCRAPE_TIMEOUT_MS}`;
   
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt <= SCRAPE_MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 15000);
+      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 5000); // 客户端超时比 API 超时多 5 秒
       
       const response = await fetch(apiUrl, {
         method: 'GET',
