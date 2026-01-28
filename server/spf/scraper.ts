@@ -270,67 +270,106 @@ function formatPhoneNumber(phone: string): string {
 
 /**
  * 解析搜索结果页面
- * SearchPeopleFree 搜索结果页面直接显示详情，不需要额外请求
+ * SearchPeopleFree 搜索结果使用 <li class="toc l-i mb-5"> 和 <article> 结构
  */
 export function parseSearchPage(html: string): SpfSearchResult[] {
   const $ = cheerio.load(html);
   const results: SpfSearchResult[] = [];
   
-  // SPF 的搜索结果直接在页面上显示详情
-  // 查找包含人员信息的主要区域
-  const mainContent = $('article.current-bg, .person-card, .result-card').first();
+  // SPF 搜索结果结构: <li class="toc l-i mb-5"><article>...</article></li>
+  // 每个结果包含: h2 (姓名和位置), h3 (年龄), 地址列表, 电话列表等
   
-  if (mainContent.length > 0) {
-    // 提取姓名
-    const name = mainContent.find('header p').first().text().trim() || 
-                 $('h1').first().text().replace(/living in.*$/i, '').trim();
+  $('li.toc.l-i.mb-5 article, li.toc article').each((_, articleEl) => {
+    const article = $(articleEl);
     
-    // 提取年龄
-    const ageText = mainContent.text();
+    // 1. 提取姓名和详情链接
+    const h2 = article.find('h2.h2').first();
+    const nameLink = h2.find('a[href*="/find/"]').first();
+    const name = nameLink.text().replace(/in\s+[A-Za-z,\s]+$/i, '').replace(/also\s+.*/i, '').trim();
+    const detailLink = nameLink.attr('href') || '';
+    
+    if (!name || !detailLink) return;
+    
+    // 2. 提取位置 (从 h2 中的 span)
+    const locationSpan = h2.find('span').first();
+    let location = locationSpan.text().replace(/^in\s+/i, '').trim();
+    
+    // 3. 提取年龄
+    const h3 = article.find('h3.mb-3').first();
+    const ageText = h3.text();
     const ageMatch = ageText.match(/Age\s*(\d+)/i);
     const age = ageMatch ? parseInt(ageMatch[1], 10) : undefined;
     
-    // 提取位置
-    const location = mainContent.find('a[href*="/address/"]').first().text().trim();
+    // 4. 检查是否已故
+    const isDeceased = article.text().toLowerCase().includes('deceased');
     
-    // 详情链接就是当前页面
-    const detailLink = $('link[rel="canonical"]').attr('href') || '';
+    // 确保详情链接是完整 URL
+    const fullDetailLink = detailLink.startsWith('http') 
+      ? detailLink 
+      : `https://www.searchpeoplefree.com${detailLink}`;
     
-    if (name) {
-      results.push({
-        name,
-        age,
-        location,
-        detailLink,
-        isDeceased: false,
-      });
-    }
+    results.push({
+      name,
+      age,
+      location,
+      detailLink: fullDetailLink,
+      isDeceased,
+    });
+  });
+  
+  // 如果没有找到结果，尝试从 "More Free Details" 按钮获取
+  if (results.length === 0) {
+    $('a.btn-continue[href*="/find/"]').each((_, el) => {
+      const href = $(el).attr('href') || '';
+      if (href) {
+        const fullLink = href.startsWith('http') 
+          ? href 
+          : `https://www.searchpeoplefree.com${href}`;
+        
+        // 从 h1 获取姓名
+        const h1Name = $('h1.highlight-letter').text().trim();
+        
+        results.push({
+          name: h1Name || 'Unknown',
+          location: '',
+          detailLink: fullLink,
+          isDeceased: false,
+        });
+      }
+    });
   }
   
-  // 同时查找页面上的其他相关人员链接
+  // 同时查找页面上的其他相关人员链接 (在 "Also Known As" 或相关人员区域)
   $('a[href*="/find/"]').each((_, el) => {
     const href = $(el).attr('href') || '';
     const text = $(el).text().trim();
     
-    // 排除导航链接和字母索引
+    // 排除导航链接、字母索引和已存在的链接
     if (href.includes('/find/') && 
         !href.includes('/find/popular') && 
+        !href.includes('/find/john-smith') && // 排除当前搜索
         text.length > 3 &&
-        !text.match(/^[A-Z]$/)) {
+        !text.match(/^[A-Z]$/) &&
+        text.match(/^[A-Z][a-z]+ [A-Z]/)) {
+      
+      const fullLink = href.startsWith('http') 
+        ? href 
+        : `https://www.searchpeoplefree.com${href}`;
       
       // 检查是否已存在
-      const exists = results.some(r => r.detailLink === href);
-      if (!exists && text.match(/^[A-Z][a-z]+ [A-Z]/)) {
+      const exists = results.some(r => r.detailLink === fullLink);
+      if (!exists) {
         results.push({
           name: text,
           location: '',
-          detailLink: href.startsWith('http') ? href : `https://www.searchpeoplefree.com${href}`,
+          detailLink: fullLink,
           isDeceased: false,
         });
       }
     }
   });
   
+  console.log(`[SPF parseSearchPage] 解析到 ${results.length} 个搜索结果`);
   return deduplicateByDetailLink(results);
 }
 
