@@ -136,7 +136,7 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
 export const SPF_CONFIG = {
   TASK_CONCURRENCY: 4,       // 同时执行的搜索任务数
   SCRAPEDO_CONCURRENCY: 10,  // 每个任务的 Scrape.do 并发数
-  TOTAL_CONCURRENCY: 40,     // 总并发数 (4 * 10)
+  TOTAL_CONCURRENCY: 20,     // 详情页总并发数（降低以避免限流）
   MAX_SAFE_PAGES: 25,        // 最大搜索页数（网站上限）
   MAX_DETAILS_PER_TASK: 250, // 每个任务最大详情数 (25页 × 10条/页)
   SEARCH_COST: 0.85,         // 搜索页成本 (每次 API 调用)
