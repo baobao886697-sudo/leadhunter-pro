@@ -26,6 +26,25 @@ async function getPdlApiKey(): Promise<string | null> {
 const PDL_API_BASE_URL = 'https://api.peopledatalabs.com/v5/person/enrich';
 const CONCURRENT_LIMIT = 10; // 并发限制，平衡性能与 API 速率限制
 
+// PDL API 状态跟踪（用于检测积分耗尽）
+let pdlCreditsExhausted = false;
+let pdlRateLimited = false;
+
+/**
+ * 重置 PDL API 状态（在新搜索任务开始时调用）
+ */
+export function resetPdlStatus(): void {
+  pdlCreditsExhausted = false;
+  pdlRateLimited = false;
+}
+
+/**
+ * 获取 PDL API 状态
+ */
+export function getPdlStatus(): { creditsExhausted: boolean; rateLimited: boolean } {
+  return { creditsExhausted: pdlCreditsExhausted, rateLimited: pdlRateLimited };
+}
+
 /**
  * PDL API 返回的电话号码格式
  */
@@ -103,6 +122,16 @@ async function enrichSingleProfile(
   profile: BrightDataProfile,
   apiKey: string
 ): Promise<PdlEnrichedProfile> {
+  // 检查 PDL API 状态，如果积分耗尽或速率限制，跳过请求
+  if (pdlCreditsExhausted) {
+    return { ...profile, phone_numbers: [], emails: [] };
+  }
+  if (pdlRateLimited) {
+    // 速率限制时等待一下再重试
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    pdlRateLimited = false; // 重置标记，尝试继续
+  }
+  
   // 获取 LinkedIn URL
   const linkedinUrl = profile.linkedin_url || profile.profile_url;
   
@@ -189,12 +218,14 @@ async function enrichSingleProfile(
       console.log(`[PDL] No match found for: ${profile.full_name || profile.name}`);
       return { ...profile, phone_numbers: [], emails: [] };
     } else if (response.status === 402) {
-      // 积分不足
-      console.error('[PDL] Insufficient credits');
+      // 积分不足 - 设置全局标记，后续请求将被跳过
+      console.error('[PDL] Insufficient credits - marking as exhausted');
+      pdlCreditsExhausted = true;
       return { ...profile, phone_numbers: [], emails: [] };
     } else if (response.status === 429) {
-      // 速率限制
-      console.error('[PDL] Rate limit exceeded');
+      // 速率限制 - 设置全局标记
+      console.error('[PDL] Rate limit exceeded - marking as rate limited');
+      pdlRateLimited = true;
       return { ...profile, phone_numbers: [], emails: [] };
     } else {
       const errorText = await response.text();
@@ -215,6 +246,9 @@ async function enrichSingleProfile(
 export async function enrichWithPDL(
   profiles: BrightDataProfile[]
 ): Promise<PdlEnrichedProfile[]> {
+  // 重置 PDL API 状态（每次新的丰富任务开始时）
+  resetPdlStatus();
+  
   // 优先从数据库配置读取 API Key，否则回退到环境变量
   const apiKey = await getPdlApiKey();
 
@@ -240,6 +274,15 @@ export async function enrichWithPDL(
   const withEmails = enrichedProfiles.filter(p => p.emails && p.emails.length > 0).length;
   
   console.log(`[PDL] Enrichment complete: ${withPhones}/${profiles.length} with phones, ${withEmails}/${profiles.length} with emails`);
+  
+  // 检查是否有 API 限制问题
+  const status = getPdlStatus();
+  if (status.creditsExhausted) {
+    console.warn('[PDL] ⚠️ WARNING: PDL API credits exhausted during enrichment. Some profiles may not have phone numbers.');
+  }
+  if (status.rateLimited) {
+    console.warn('[PDL] ⚠️ WARNING: PDL API rate limited during enrichment. Some profiles may not have phone numbers.');
+  }
 
   return enrichedProfiles;
 }

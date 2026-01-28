@@ -147,11 +147,26 @@ async function triggerBrightDataCollection(
 }
 
 /**
+ * 计算动态超时时间（根据请求数量）
+ * - 基础超时: 3分钟
+ * - 每100条数据增加1分钟
+ * - 最大超时: 10分钟
+ */
+function calculateDynamicTimeout(limit: number): number {
+  const baseTimeout = 180000; // 3分钟基础
+  const extraPerHundred = 60000; // 每100条加1分钟
+  const maxTimeout = 600000; // 最大10分钟
+  
+  const dynamicTimeout = baseTimeout + Math.floor(limit / 100) * extraPerHundred;
+  return Math.min(dynamicTimeout, maxTimeout);
+}
+
+/**
  * 轮询获取 Bright Data 采集结果
  */
 async function pollBrightDataSnapshot(
   snapshotId: string,
-  maxWaitMs: number = 180000, // 最长等待 3 分钟
+  maxWaitMs: number = 180000, // 默认最长等待 3 分钟，可通过参数覆盖
   pollIntervalMs: number = 5000 // 每 5 秒轮询一次
 ): Promise<BrightDataProfile[]> {
   const startTime = Date.now();
@@ -367,8 +382,10 @@ export async function brightdataSearchPeople(
       return [];
     }
     
-    // 步骤 2: 轮询获取结果
-    const profiles = await pollBrightDataSnapshot(snapshotId);
+    // 步骤 2: 轮询获取结果（根据请求数量动态调整超时时间）
+    const dynamicTimeout = calculateDynamicTimeout(limit);
+    console.log(`[BrightData] Using dynamic timeout: ${dynamicTimeout / 1000}s for ${limit} records`);
+    const profiles = await pollBrightDataSnapshot(snapshotId, dynamicTimeout);
     
     if (profiles.length === 0) {
       console.log('[BrightData] No profiles found');

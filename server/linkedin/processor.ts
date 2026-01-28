@@ -483,8 +483,9 @@ export async function executeSearchV3(
     currentStep++;
     addLog('───────────────────────────────────────────────────────────', 'info', 'search', '');
     // 根据模式动态生成缓存键前缀
+    // 精准搜索也支持短期缓存（1天），模糊搜索支持长期缓存（180天）
     const cacheKey = `search:${mode}:${searchHash}`;
-    const cached = mode === 'fuzzy' ? await getCacheByKey(cacheKey) : null;
+    const cached = await getCacheByKey(cacheKey);
     
     let searchResults: LeadPerson[] = [];
     
@@ -565,6 +566,19 @@ export async function executeSearchV3(
         stats.apifyReturned = searchResults.length;
         addLog(`✅ 精准搜索返回 ${searchResults.length} 条数据`, 'success', 'search', '✅');
         addLog(`⏱️ API 响应时间: ${formatDuration(apiDuration)}`, 'info', 'search', '');
+        
+        // 精准搜索也保存缓存，但有效期较短（1天），节省API成本
+        if (searchResults.length > 0) {
+          const exactCacheData: SearchCacheData = {
+            data: searchResults,
+            totalAvailable: searchResults.length,
+            requestedCount: requestedCount,
+            searchParams: { name: searchName, title: searchTitle, state: searchState, limit: requestedCount },
+            createdAt: new Date().toISOString()
+          };
+          await setCache(cacheKey, exactCacheData, 'search', 1); // 1天有效期
+          addLog(`💾 已保存精准搜索缓存 (1天有效)`, 'info', 'search', '');
+        }
       }
     }
 
