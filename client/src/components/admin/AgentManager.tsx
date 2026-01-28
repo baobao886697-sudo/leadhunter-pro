@@ -1047,20 +1047,7 @@ export function AgentManager() {
             )}
             {selectedWithdrawal?.withdrawal?.status === 'approved' && (
               <Button
-                onClick={() => {
-                  console.log('已打款按钮被点击');
-                  console.log('selectedWithdrawal:', selectedWithdrawal);
-                  const withdrawalId = selectedWithdrawal?.withdrawal?.withdrawalId;
-                  console.log('withdrawalId:', withdrawalId);
-                  if (!withdrawalId) {
-                    toast.error('提现ID不存在');
-                    return;
-                  }
-                  processWithdrawalMutation.mutate({
-                    withdrawalId,
-                    action: 'paid',
-                  });
-                }}
+                onClick={() => handleProcessWithdrawal('paid')}
                 disabled={processWithdrawalMutation.isPending}
                 className="bg-green-500 hover:bg-green-600"
               >
