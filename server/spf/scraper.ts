@@ -946,8 +946,12 @@ export async function searchAndGetDetails(
       // 如果需要获取详情页面
       if (fetchDetails && searchResult.detailLink) {
         try {
-          console.log(`[SPF] 获取详情页: ${searchResult.detailLink}`);
-          const detailHtml = await fetchWithScrapedo(searchResult.detailLink, token);
+          // 将相对路径转换为完整 URL
+          const detailUrl = searchResult.detailLink.startsWith('http') 
+            ? searchResult.detailLink 
+            : `https://www.searchpeoplefree.com${searchResult.detailLink.startsWith('/') ? '' : '/'}${searchResult.detailLink}`;
+          console.log(`[SPF] 获取详情页: ${detailUrl}`);
+          const detailHtml = await fetchWithScrapedo(detailUrl, token);
           detailPageCalls++;  // 计数详情页 API 调用
           
           // 检查是否是错误响应
