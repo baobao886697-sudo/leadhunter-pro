@@ -3,7 +3,7 @@
  * 独立模块，方便后期管理和修改
  */
 
-import { getDb, getConfig } from "../db";
+import { getDb, getConfig, updateApiStats as updateApiStatsAnywho } from "../db";
 import { 
   anywhoConfig, 
   anywhoDetailCache, 
@@ -513,6 +513,14 @@ export async function logApi(data: {
     errorMessage: data.errorMessage,
     creditsUsed: data.creditsUsed ?? 0,
   });
+  
+  // 同时更新API统计（用于系统监控面板）
+  try {
+    await updateApiStatsAnywho(data.apiType, data.success ?? true, data.creditsUsed ?? 0, data.responseTime);
+  } catch (e) {
+    // 统计更新失败不影响主流程
+    console.error('[logApi] Failed to update API stats:', e);
+  }
 }
 
 

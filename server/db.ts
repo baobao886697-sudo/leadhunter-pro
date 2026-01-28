@@ -730,6 +730,14 @@ export async function logApi(apiType: "apollo_search" | "apollo_enrich" | "apify
   const db = await getDb();
   if (!db) return;
   await db.insert(apiLogs).values({ userId, apiType, endpoint, requestParams, responseStatus, responseTime, success, errorMessage, creditsUsed });
+  
+  // 同时更新API统计（用于系统监控面板）
+  try {
+    await updateApiStats(apiType, success, creditsUsed, responseTime);
+  } catch (e) {
+    // 统计更新失败不影响主流程
+    console.error('[logApi] Failed to update API stats:', e);
+  }
 }
 
 export async function getApiLogs(page: number = 1, limit: number = 50, apiType?: string): Promise<{ logs: ApiLog[]; total: number }> {
