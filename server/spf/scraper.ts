@@ -14,7 +14,7 @@ import * as cheerio from 'cheerio';
 
 // ==================== Scrape.do API ====================
 
-const SCRAPE_TIMEOUT_MS = 30000;  // 30 秒超时 (SPF 页面较大，需要更长时间)
+const SCRAPE_TIMEOUT_MS = 60000;  // 60 秒超时 (SPF 页面较大，需要更长时间)
 const SCRAPE_MAX_RETRIES = 3;    // 最多重试 3 次
 
 /**
@@ -31,7 +31,7 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
   const encodedUrl = encodeURIComponent(url);
   // 【关键修复】blockResources=false 是 SearchPeopleFree 必需的参数
   // 没有这个参数，API 会返回 502 错误
-  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&render=true&super=true&geoCode=us&blockResources=false&customWait=5000`;
+  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&render=true&super=true&geoCode=us&blockResources=false&customWait=5000&timeout=${SCRAPE_TIMEOUT_MS}`;
   
   let lastError: Error | null = null;
   
