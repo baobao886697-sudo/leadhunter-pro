@@ -37,6 +37,8 @@ import {
   getUserCredits,
   logCreditChange,
   logApi,
+  freezeCredits,
+  settleCredits,
 } from "./db";
 import { getDb, logUserActivity } from "../db";
 import { tpsSearchTasks } from "../../drizzle/schema";
@@ -147,8 +149,6 @@ export const tpsRouter = router({
         });
       }
       
-      // 检查用户积分
-      const userCredits = await getUserCredits(userId);
       const searchCost = parseFloat(config.searchCost);
       const detailCost = parseFloat(config.detailCost);
       const maxPages = config.maxPages || 25;
@@ -168,14 +168,7 @@ export const tpsRouter = router({
       const estimatedDetailCost = subTaskCount * avgDetailsPerTask * detailCost;
       const maxEstimatedCost = maxSearchPageCost + estimatedDetailCost;
       
-      if (userCredits < maxEstimatedCost) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: `积分不足，预估最多需要 ${maxEstimatedCost.toFixed(1)} 积分（搜索页 ${maxSearchPageCost.toFixed(1)} + 详情页 ${estimatedDetailCost.toFixed(1)}），当前余额 ${userCredits} 积分`,
-        });
-      }
-      
-      // 创建搜索任务
+      // 创建搜索任务（先创建任务，获取 taskId）
       const task = await createTpsSearchTask({
         userId,
         mode: input.mode,
@@ -185,14 +178,37 @@ export const tpsRouter = router({
         maxPages: config.maxPages,
       });
       
-      // 异步执行搜索（不阻塞响应）
-      executeTpsSearchUnifiedQueue(task.id, task.taskId, config, input, userId).catch(err => {
+      // ==================== 预扣费机制 ====================
+      // 预扣最大预估费用，确保任务能够完整执行
+      const freezeResult = await freezeCredits(userId, maxEstimatedCost, task.taskId);
+      
+      if (!freezeResult.success) {
+        // 预扣失败，标记任务为积分不足状态
+        const database = await getDb();
+        if (database) {
+          await database.update(tpsSearchTasks).set({
+            status: "insufficient_credits",
+            errorMessage: freezeResult.message,
+            completedAt: new Date(),
+          }).where(eq(tpsSearchTasks.id, task.id));
+        }
+        
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `积分不足，预估最多需要 ${maxEstimatedCost.toFixed(1)} 积分（搜索页 ${maxSearchPageCost.toFixed(1)} + 详情页 ${estimatedDetailCost.toFixed(1)}），当前余额 ${freezeResult.currentBalance} 积分`,
+        });
+      }
+      
+      // 异步执行搜索（不阻塞响应），传入预扣金额用于结算
+      executeTpsSearchUnifiedQueue(task.id, task.taskId, config, input, userId, freezeResult.frozenAmount).catch(err => {
         console.error(`TPS 搜索任务 ${task.taskId} 执行失败:`, err);
       });
       
       return {
         taskId: task.taskId,
         message: "搜索任务已提交",
+        frozenCredits: freezeResult.frozenAmount,
+        remainingBalance: freezeResult.currentBalance,
       };
     }),
 
@@ -376,22 +392,25 @@ export const tpsRouter = router({
 // ==================== 统一队列模式搜索执行逻辑 ====================
 
 /**
- * 统一队列模式执行搜索 (v3.3 优化版)
+ * 统一队列模式执行搜索 (v3.4 预扣费版)
  * 
  * 两阶段执行：
  * 1. 阶段一：并发执行所有搜索任务（4 并发），每个任务内部并发获取所有搜索页
  * 2. 阶段二：统一队列消费所有详情链接（40 并发）
  * 
- * v3.3 优化：
- * - 搜索阶段：每个任务内部并发获取所有搜索页（而非顺序获取）
- * - 预期性能提升：搜索阶段 10-15 倍
+ * v3.4 更新：
+ * - 预扣费机制：任务开始前预扣最大预估费用
+ * - 有始有终：预扣成功后任务必定完整执行
+ * - 结算退还：任务完成后退还多扣的积分
+ * - 移除中途积分检查：不再中途终止任务
  */
 async function executeTpsSearchUnifiedQueue(
   taskDbId: number,
   taskId: string,
   config: any,
   input: z.infer<typeof tpsSearchInputSchema>,
-  userId: number
+  userId: number,
+  frozenAmount: number  // 预扣金额，用于任务完成后结算
 ) {
   const searchCost = parseFloat(config.searchCost);
   const detailCost = parseFloat(config.detailCost);
@@ -597,60 +616,16 @@ async function executeTpsSearchUnifiedQueue(
       addLog(`📊 排除已故: ${totalSkippedDeceased} 条 (Deceased)`);
     }
     
-    // ==================== 搜索阶段完成后的积分检查 ====================
-    // 计算已消耗的搜索页费用
+    // ==================== 预扣费机制：无需中途检查积分 ====================
+    // 积分已在任务开始前预扣，任务必定完整执行
     const searchPageCostSoFar = totalSearchPages * searchCost;
-    
-    // 去重详情链接，计算需要获取的详情数
     const uniqueDetailLinks = [...new Set(allDetailTasks.map(t => t.searchResult.detailLink))];
     const estimatedDetailCostRemaining = uniqueDetailLinks.length * detailCost;
     const totalEstimatedCost = searchPageCostSoFar + estimatedDetailCostRemaining;
     
-    // 再次检查用户积分是否足够
-    const currentCredits = await getUserCredits(userId);
-    if (currentCredits < totalEstimatedCost) {
-      // 积分不足，终止任务
-      addLog(`⚠️ 积分不足！当前余额 ${currentCredits} 积分，需要 ${totalEstimatedCost.toFixed(1)} 积分（搜索页 ${searchPageCostSoFar.toFixed(1)} + 详情页 ${estimatedDetailCostRemaining.toFixed(1)}）`);
-      addLog(`❌ 任务提前终止，已完成的搜索页费用将正常扣除`);
-      
-      // 只扣除已完成的搜索页费用
-      if (searchPageCostSoFar > 0) {
-        await deductCredits(userId, searchPageCostSoFar, `TPS搜索[提前终止] [${taskId}]`);
-        await logCreditChange(userId, -searchPageCostSoFar, "search", `TPS搜索任务[提前终止] ${taskId}`, taskId);
-      }
-      
-      // 标记任务为积分不足状态
-      await updateTpsSearchTaskProgress(taskDbId, {
-        status: "insufficient_credits",
-        searchPageRequests: totalSearchPages,
-        logs,
-      });
-      
-      // 记录完成信息
-      const database = await getDb();
-      if (database) {
-        await database.update(tpsSearchTasks).set({
-          errorMessage: `积分不足，任务提前终止。已扣除搜索页费用 ${searchPageCostSoFar.toFixed(1)} 积分`,
-          creditsUsed: searchPageCostSoFar.toString(),
-          completedAt: new Date(),
-        }).where(eq(tpsSearchTasks.id, taskDbId));
-      }
-      
-      await logApi({
-        userId,
-        apiType: "scrape_tps",
-        endpoint: "fullSearch",
-        requestParams: { names: input.names.length, mode: input.mode },
-        responseStatus: 402,  // Payment Required
-        success: false,
-        errorMessage: "积分不足，任务提前终止",
-        creditsUsed: searchPageCostSoFar,
-      });
-      
-      return;  // 终止任务
-    }
-    
-    addLog(`✅ 积分检查通过: 当前 ${currentCredits} 积分，预估需要 ${totalEstimatedCost.toFixed(1)} 积分`);
+    addLog(`💰 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
+    addLog(`💰 当前预估: ${totalEstimatedCost.toFixed(1)} 积分（搜索页 ${searchPageCostSoFar.toFixed(1)} + 详情页 ${estimatedDetailCostRemaining.toFixed(1)}）`);
+    addLog(`✅ 积分已预扣，任务将完整执行`);
     
     // ==================== 阶段二：统一队列获取详情 ====================
     if (allDetailTasks.length > 0) {
@@ -733,14 +708,12 @@ async function executeTpsSearchUnifiedQueue(
       logs,
     });
     
+    // ==================== 结算退还机制 ====================
     // 计算实际消耗
     const actualCost = totalSearchPages * searchCost + totalDetailPages * detailCost;
     
-    // 扣除积分
-    if (actualCost > 0) {
-      await deductCredits(userId, actualCost, `TPS搜索 [${taskId}]`);
-      await logCreditChange(userId, -actualCost, "search", `TPS搜索任务 ${taskId}`, taskId);
-    }
+    // 结算：退还多扣的积分
+    const settlement = await settleCredits(userId, frozenAmount, actualCost, taskId);
     
     // 记录 API 日志
     await logApi({
@@ -776,8 +749,13 @@ async function executeTpsSearchUnifiedQueue(
     addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${searchPageCost.toFixed(1)} 积分`);
     addLog(`   • 详情页费用: ${totalDetailPages} 页 × ${detailCost} = ${detailPageCost.toFixed(1)} 积分`);
     addLog(`   • 缓存节省: ${totalCacheHits} 条 × ${detailCost} = ${savedByCache.toFixed(1)} 积分`);
-    addLog(`   ────────────────────────────`);
+    addLog(`   ──────────────────────────────`);
+    addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
     addLog(`   • 实际消耗: ${actualCost.toFixed(1)} 积分`);
+    if (settlement.refundAmount > 0) {
+      addLog(`   • ✅ 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
+    }
+    addLog(`   • 当前余额: ${settlement.newBalance.toFixed(1)} 积分`);
     
     // 费用效率分析
     addLog(`📈 费用效率:`);
@@ -787,7 +765,7 @@ async function executeTpsSearchUnifiedQueue(
     }
     const cacheHitRate = totalCacheHits > 0 ? ((totalCacheHits / (totalCacheHits + totalDetailPages)) * 100).toFixed(1) : '0';
     addLog(`   • 缓存命中率: ${cacheHitRate}%`);
-    if (savedByCache > 0) {
+    if (savedByCache > 0 && actualCost > 0) {
       addLog(`   • 缓存节省: ${savedByCache.toFixed(1)} 积分 (相当于 ${Math.round(savedByCache / actualCost * 100)}% 的实际费用)`);
     }
     
@@ -809,12 +787,27 @@ async function executeTpsSearchUnifiedQueue(
       userId,
       action: 'TPS搜索',
       details: `搜索完成: ${input.names.length}个姓名, ${totalResults}条结果, 消耗${actualCost.toFixed(1)}积分`,
-      ipAddress: null,
-      userAgent: null
+      ipAddress: undefined,
+      userAgent: undefined
     });
     
   } catch (error: any) {
     addLog(`❌ 搜索任务失败: ${error.message}`);
+    
+    // ==================== 失败时的结算退还 ====================
+    // 计算已完成的实际消耗（搜索页 + 详情页）
+    const partialCost = totalSearchPages * searchCost + totalDetailPages * detailCost;
+    
+    // 结算：退还未使用的积分
+    const settlement = await settleCredits(userId, frozenAmount, partialCost, taskId);
+    
+    addLog(`💰 失败结算:`);
+    addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
+    addLog(`   • 已消耗: ${partialCost.toFixed(1)} 积分（搜索页 ${totalSearchPages} + 详情页 ${totalDetailPages}）`);
+    if (settlement.refundAmount > 0) {
+      addLog(`   • ✅ 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
+    }
+    addLog(`   • 当前余额: ${settlement.newBalance.toFixed(1)} 积分`);
     
     await failTpsSearchTask(taskDbId, error.message, logs);
     
@@ -826,6 +819,7 @@ async function executeTpsSearchUnifiedQueue(
       responseStatus: 500,
       success: false,
       errorMessage: error.message,
+      creditsUsed: partialCost,
     });
   }
 }

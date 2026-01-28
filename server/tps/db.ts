@@ -502,3 +502,135 @@ export async function logApi(data: {
     console.error("Failed to update API stats:", e);
   }
 }
+
+
+// ==================== 预扣费机制 ====================
+
+/**
+ * 预扣积分（冻结）
+ * 
+ * 任务开始前预扣最大预估费用，确保任务能够完整执行
+ * 预扣成功后，任务必定完整执行并返回结果
+ * 
+ * @param userId 用户ID
+ * @param amount 预扣金额
+ * @param taskId 任务ID（用于追踪）
+ * @returns 是否预扣成功
+ */
+export async function freezeCredits(
+  userId: number, 
+  amount: number, 
+  taskId: string
+): Promise<{ success: boolean; frozenAmount: number; currentBalance: number; message: string }> {
+  const database = await db();
+  
+  // 获取当前余额
+  const result = await database.select({ credits: users.credits })
+    .from(users)
+    .where(eq(users.id, userId));
+  
+  const currentBalance = result[0]?.credits || 0;
+  const roundedAmount = Math.ceil(amount * 10) / 10;
+  
+  // 检查余额是否足够
+  if (currentBalance < roundedAmount) {
+    return {
+      success: false,
+      frozenAmount: 0,
+      currentBalance,
+      message: `积分不足，需要 ${roundedAmount} 积分，当前余额 ${currentBalance} 积分`,
+    };
+  }
+  
+  // 预扣积分（直接从余额中扣除）
+  await database.update(users).set({
+    credits: sql`${users.credits} - ${roundedAmount}`,
+  }).where(eq(users.id, userId));
+  
+  // 记录预扣日志
+  const newBalance = currentBalance - roundedAmount;
+  await database.insert(creditLogs).values({
+    userId,
+    amount: -roundedAmount,
+    balanceAfter: newBalance,
+    type: "search",
+    description: `TPS搜索预扣 [${taskId}] - 预估最大消耗`,
+    relatedTaskId: taskId,
+  });
+  
+  return {
+    success: true,
+    frozenAmount: roundedAmount,
+    currentBalance: newBalance,
+    message: `已预扣 ${roundedAmount} 积分`,
+  };
+}
+
+/**
+ * 结算积分（退还多扣的部分）
+ * 
+ * 任务完成后，计算实际消耗，退还多扣的积分
+ * 
+ * @param userId 用户ID
+ * @param frozenAmount 预扣金额
+ * @param actualCost 实际消耗
+ * @param taskId 任务ID
+ * @returns 结算结果
+ */
+export async function settleCredits(
+  userId: number,
+  frozenAmount: number,
+  actualCost: number,
+  taskId: string
+): Promise<{ refundAmount: number; actualCost: number; newBalance: number }> {
+  const database = await db();
+  
+  const roundedActualCost = Math.ceil(actualCost * 10) / 10;
+  const roundedFrozenAmount = Math.ceil(frozenAmount * 10) / 10;
+  const refundAmount = Math.max(0, roundedFrozenAmount - roundedActualCost);
+  
+  // 获取当前余额
+  const result = await database.select({ credits: users.credits })
+    .from(users)
+    .where(eq(users.id, userId));
+  
+  let currentBalance = result[0]?.credits || 0;
+  
+  if (refundAmount > 0) {
+    // 退还多扣的积分
+    await database.update(users).set({
+      credits: sql`${users.credits} + ${refundAmount}`,
+    }).where(eq(users.id, userId));
+    
+    currentBalance += refundAmount;
+    
+    // 记录退还日志
+    await database.insert(creditLogs).values({
+      userId,
+      amount: refundAmount,
+      balanceAfter: currentBalance,
+      type: "refund",
+      description: `TPS搜索结算退还 [${taskId}] - 预扣 ${roundedFrozenAmount} 实际 ${roundedActualCost}`,
+      relatedTaskId: taskId,
+    });
+  } else if (roundedActualCost > roundedFrozenAmount) {
+    // 极端情况：实际消耗超过预扣（理论上不应该发生）
+    // 记录日志但不额外扣费，保护用户利益
+    console.warn(`[警告] 任务 ${taskId} 实际消耗 ${roundedActualCost} 超过预扣 ${roundedFrozenAmount}`);
+    
+    await database.insert(creditLogs).values({
+      userId,
+      amount: 0,
+      balanceAfter: currentBalance,
+      type: "search",
+      description: `TPS搜索结算 [${taskId}] - 实际消耗 ${roundedActualCost}（已预扣 ${roundedFrozenAmount}）`,
+      relatedTaskId: taskId,
+    });
+  }
+  
+  return {
+    refundAmount,
+    actualCost: roundedActualCost,
+    newBalance: currentBalance,
+  };
+}
