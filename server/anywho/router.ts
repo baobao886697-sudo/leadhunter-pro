@@ -506,6 +506,7 @@ async function executeAnywhoSearch(
   const maxPages = config.maxPages || 4;
   
   let totalSearchPages = 0;
+  let totalDetailPages = 0;  // 详情页请求数
   let totalResults = 0;
   let completedSubTasks = 0;
   let totalFilteredOut = 0;  // 过滤掉的记录数
@@ -815,7 +816,6 @@ async function executeAnywhoSearch(
     await addLog(`📊 过滤完成: ${filteredResults.length} 条符合条件，${totalFilteredOut} 条已过滤`);
     
     // ==================== 混合模式：获取详情页完整信息 ====================
-    let totalDetailPages = 0;
     let detailSuccessCount = 0;
     
     if (filteredResults.length > 0) {
