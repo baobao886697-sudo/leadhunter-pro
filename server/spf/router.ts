@@ -336,11 +336,7 @@ export const spfRouter = router({
         return "1" + digits;
       };
       
-      // 检查电话年份是否满足最低要求（>= 2025）
-      const isPhoneYearValid = (phoneYear: number | null | undefined): boolean => {
-        if (!phoneYear) return true;  // 如果没有年份信息，默认通过
-        return phoneYear >= 2025;
-      };
+      // 注：无需年份过滤，因为 scraper.ts 已经自动选择每个人的最新电话号码
       
       // CSV 表头（按用户指定格式）
       // 字段顺序：姓名、年龄、城市、州、电话、电话类型、电话年份、邮箱、婚姻状态、配偶姓名、就业状态、企业、当前地址、搜索姓名、搜索地点、缓存命中、详情链接
