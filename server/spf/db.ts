@@ -201,7 +201,7 @@ export async function updateSpfSearchTaskProgress(
   if (data.searchPageRequests !== undefined) updateData.searchPageRequests = data.searchPageRequests;
   if (data.detailPageRequests !== undefined) updateData.detailPageRequests = data.detailPageRequests;
   if (data.cacheHits !== undefined) updateData.cacheHits = data.cacheHits;
-  if (data.logs !== undefined) updateData.logs = data.logs;
+  if (data.logs !== undefined) updateData.logs = data.logs.slice(-200); // 限制日志数量
   
   if (data.status === "running" && !updateData.startedAt) {
     updateData.startedAt = new Date();
@@ -225,6 +225,8 @@ export async function completeSpfSearchTask(
   }
 ) {
   const database = await db();
+  // 限制日志数量为最近 200 条，避免超过数据库字段大小限制
+  const truncatedLogs = data.logs.slice(-200);
   await database.update(spfSearchTasks).set({
     status: "completed",
     progress: 100,
@@ -233,7 +235,7 @@ export async function completeSpfSearchTask(
     detailPageRequests: data.detailPageRequests,
     cacheHits: data.cacheHits,
     creditsUsed: data.creditsUsed.toString(),
-    logs: data.logs,
+    logs: truncatedLogs,
     completedAt: new Date(),
   }).where(eq(spfSearchTasks.id, taskDbId));
 }
@@ -247,10 +249,12 @@ export async function failSpfSearchTask(
   logs: Array<{ timestamp: string; message: string }>
 ) {
   const database = await db();
+  // 限制日志数量为最近 200 条，避免超过数据库字段大小限制
+  const truncatedLogs = logs.slice(-200);
   await database.update(spfSearchTasks).set({
     status: "failed",
     errorMessage,
-    logs,
+    logs: truncatedLogs,
     completedAt: new Date(),
   }).where(eq(spfSearchTasks.id, taskDbId));
 }
