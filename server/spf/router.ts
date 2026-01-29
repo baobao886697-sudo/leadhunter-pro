@@ -455,11 +455,11 @@ async function executeSpfSearchUnifiedQueue(
   
   // 增强启动日志
   addLog(`═══════════════════════════════════════════════════`);
-  addLog(`🔍 开始 SPF 搜索`);
+  addLog(`[搜索] 开始 SPF 搜索`);
   addLog(`═══════════════════════════════════════════════════`);
   
   // 显示搜索配置
-  addLog(`📋 搜索配置:`);
+  addLog(`[配置] 搜索配置:`);
   addLog(`   • 搜索模式: ${input.mode === 'nameOnly' ? '仅姓名搜索' : '姓名+地点组合搜索'}`);
   addLog(`   • 搜索姓名: ${input.names.join(', ')}`);
   if (input.mode === 'nameLocation' && input.locations) {
@@ -469,7 +469,7 @@ async function executeSpfSearchUnifiedQueue(
   
   // 显示过滤条件
   const filters = input.filters || {};
-  addLog(`📋 过滤条件:`);
+  addLog(`[配置] 过滤条件:`);
   addLog(`   • 年龄范围: ${filters.minAge || 50} - ${filters.maxAge || 79} 岁`);
   if (filters.excludeLandline) addLog(`   • 排除座机号码`);
   if (filters.excludeWireless) addLog(`   • 排除手机号码`);
@@ -483,14 +483,14 @@ async function executeSpfSearchUnifiedQueue(
   const estimatedDetailCost = estimatedDetailPages * detailCost;
   const estimatedTotalCost = estimatedSearchCost + estimatedDetailCost;
   
-  addLog(`💰 费用预估 (最大值):`);
+  addLog(`[费用] 费用预估 (最大值):`);
   addLog(`   • 搜索页费用: 最多 ${estimatedSearchPages} 页 × ${searchCost} = ${estimatedSearchCost.toFixed(1)} 积分`);
   addLog(`   • 详情页费用: 最多 ${estimatedDetailPages} 页 × ${detailCost} = ${estimatedDetailCost.toFixed(1)} 积分`);
   addLog(`   • 预估总费用: ~${estimatedTotalCost.toFixed(1)} 积分 (实际费用取决于搜索结果)`);
-  addLog(`   💡 提示: 缓存命中的详情不收费，可节省大量积分`);
+  addLog(`   [提示] 提示: 缓存命中的详情不收费，可节省大量积分`);
   
   addLog(`═══════════════════════════════════════════════════`);
-  addLog(`🧵 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务并发 / 详情 ${TOTAL_CONCURRENCY} 并发`);
+  addLog(`[并发] 并发配置: 搜索 ${SEARCH_CONCURRENCY} 任务并发 / 详情 ${TOTAL_CONCURRENCY} 并发`);
   
   // 更新任务状态
   await updateSpfSearchTaskProgress(taskDbId, {
@@ -529,7 +529,7 @@ async function executeSpfSearchUnifiedQueue(
   
   try {
     // ==================== 阶段一：并发搜索 ====================
-    addLog(`📋 阶段一：并发搜索 (${SEARCH_CONCURRENCY} 任务并发 × ${maxPages}页)...`);
+    addLog(`[配置] 阶段一：并发搜索 (${SEARCH_CONCURRENCY} 任务并发 × ${maxPages}页)...`);
     
     // 收集所有详情任务
     const allDetailTasks: DetailTask[] = [];
@@ -577,9 +577,9 @@ async function executeSpfSearchUnifiedQueue(
         }
         
         const taskName = subTask.location ? `${subTask.name} @ ${subTask.location}` : subTask.name;
-        addLog(`✅ [${subTask.index + 1}/${subTasks.length}] ${taskName} - ${result.searchResults.length} 条结果, ${result.stats.searchPageRequests} 页, 过滤 ${result.stats.filteredOut} 条`);
+        addLog(`[成功] [${subTask.index + 1}/${subTasks.length}] ${taskName} - ${result.searchResults.length} 条结果, ${result.stats.searchPageRequests} 页, 过滤 ${result.stats.filteredOut} 条`);
       } else {
-        addLog(`❌ [${subTask.index + 1}/${subTasks.length}] 搜索失败: ${result.error}`);
+        addLog(`[失败] [${subTask.index + 1}/${subTasks.length}] 搜索失败: ${result.error}`);
       }
       
       // 更新进度（搜索阶段占 30%）
@@ -616,11 +616,11 @@ async function executeSpfSearchUnifiedQueue(
     
     // 增强搜索阶段完成日志
     addLog(`════════ 搜索阶段完成 ════════`);
-    addLog(`📊 搜索页请求: ${totalSearchPages} 页`);
-    addLog(`📊 待获取详情: ${allDetailTasks.length} 条`);
-    addLog(`📊 年龄预过滤: ${totalFilteredOut} 条被排除`);
+    addLog(`[统计] 搜索页请求: ${totalSearchPages} 页`);
+    addLog(`[统计] 待获取详情: ${allDetailTasks.length} 条`);
+    addLog(`[统计] 年龄预过滤: ${totalFilteredOut} 条被排除`);
     if (totalSkippedDeceased > 0) {
-      addLog(`📊 排除已故: ${totalSkippedDeceased} 条 (Deceased)`);
+      addLog(`[统计] 排除已故: ${totalSkippedDeceased} 条 (Deceased)`);
     }
     
     // 显示预扣费信息
@@ -629,17 +629,17 @@ async function executeSpfSearchUnifiedQueue(
     const estimatedDetailCostRemaining = uniqueDetailLinks.length * detailCost;
     const totalEstimatedCost = searchPageCostSoFar + estimatedDetailCostRemaining;
     
-    addLog(`💰 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
-    addLog(`💰 当前预估: ${totalEstimatedCost.toFixed(1)} 积分（搜索页 ${searchPageCostSoFar.toFixed(1)} + 详情页 ${estimatedDetailCostRemaining.toFixed(1)}）`);
-    addLog(`✅ 积分已预扣，任务将完整执行`);
+    addLog(`[费用] 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
+    addLog(`[费用] 当前预估: ${totalEstimatedCost.toFixed(1)} 积分（搜索页 ${searchPageCostSoFar.toFixed(1)} + 详情页 ${estimatedDetailCostRemaining.toFixed(1)}）`);
+    addLog(`[成功] 积分已预扣，任务将完整执行`);
     
     // ==================== 阶段二：统一队列获取详情 ====================
     if (allDetailTasks.length > 0) {
-      addLog(`📋 阶段二：统一队列获取详情（${TOTAL_CONCURRENCY} 并发）...`);
+      addLog(`[配置] 阶段二：统一队列获取详情（${TOTAL_CONCURRENCY} 并发）...`);
       
       // 去重详情链接
       const uniqueLinks = [...new Set(allDetailTasks.map(t => t.detailLink))];
-      addLog(`🔗 去重后 ${uniqueLinks.length} 个唯一详情链接`);
+      addLog(`[链接] 去重后 ${uniqueLinks.length} 个唯一详情链接`);
       
       // 统一获取详情
       const detailResult = await fetchDetailsInBatch(
@@ -694,10 +694,10 @@ async function executeSpfSearchUnifiedQueue(
       }
       
       addLog(`════════ 详情阶段完成 ════════`);
-      addLog(`📊 详情页请求: ${totalDetailPages} 页`);
-      addLog(`📊 缓存命中: ${totalCacheHits} 条`);
-      addLog(`📊 详情过滤: ${totalFilteredOut} 条被排除`);
-      addLog(`📊 有效结果: ${totalResults} 条`);
+      addLog(`[统计] 详情页请求: ${totalDetailPages} 页`);
+      addLog(`[统计] 缓存命中: ${totalCacheHits} 条`);
+      addLog(`[统计] 详情过滤: ${totalFilteredOut} 条被排除`);
+      addLog(`[统计] 有效结果: ${totalResults} 条`);
     }
     
     // 更新最终进度
@@ -731,11 +731,11 @@ async function executeSpfSearchUnifiedQueue(
     
     // 增强完成日志
     addLog(`═══════════════════════════════════════════════════`);
-    addLog(`🎉 任务完成!`);
+    addLog(`[完成] 任务完成!`);
     addLog(`═══════════════════════════════════════════════════`);
     
     // 搜索结果摘要
-    addLog(`📊 搜索结果摘要:`);
+    addLog(`[统计] 搜索结果摘要:`);
     addLog(`   • 有效结果: ${totalResults} 条联系人信息`);
     addLog(`   • 缓存命中: ${totalCacheHits} 条 (免费获取)`);
     addLog(`   • 过滤排除: ${totalFilteredOut} 条 (不符合筛选条件)`);
@@ -748,7 +748,7 @@ async function executeSpfSearchUnifiedQueue(
     const detailPageCost = totalDetailPages * detailCost;
     const savedByCache = totalCacheHits * detailCost;
     
-    addLog(`💰 费用明细:`);
+    addLog(`[费用] 费用明细:`);
     addLog(`   • 搜索页费用: ${totalSearchPages} 页 × ${searchCost} = ${searchPageCost.toFixed(1)} 积分`);
     addLog(`   • 详情页费用: ${totalDetailPages} 页 × ${detailCost} = ${detailPageCost.toFixed(1)} 积分`);
     addLog(`   • 缓存节省: ${totalCacheHits} 条 × ${detailCost} = ${savedByCache.toFixed(1)} 积分`);
@@ -756,12 +756,12 @@ async function executeSpfSearchUnifiedQueue(
     addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
     addLog(`   • 实际消耗: ${actualCost.toFixed(1)} 积分`);
     if (settlement.refundAmount > 0) {
-      addLog(`   • ✅ 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
+      addLog(`   • [成功] 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
     }
     addLog(`   • 当前余额: ${settlement.newBalance.toFixed(1)} 积分`);
     
     // 费用效率分析
-    addLog(`📈 费用效率:`);
+    addLog(`[效率] 费用效率:`);
     if (totalResults > 0) {
       const costPerResult = actualCost / totalResults;
       addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`);
@@ -773,7 +773,7 @@ async function executeSpfSearchUnifiedQueue(
     }
     
     addLog(`═══════════════════════════════════════════════════`);
-    addLog(`💡 提示: 相同姓名/地点的后续搜索将命中缓存，节省更多积分`);
+    addLog(`[提示] 提示: 相同姓名/地点的后续搜索将命中缓存，节省更多积分`);
     addLog(`═══════════════════════════════════════════════════`);
     
     await completeSpfSearchTask(taskDbId, {
@@ -795,7 +795,7 @@ async function executeSpfSearchUnifiedQueue(
     });
     
   } catch (error: any) {
-    addLog(`❌ 搜索任务失败: ${error.message}`);
+    addLog(`[失败] 搜索任务失败: ${error.message}`);
     
     // ==================== 失败时的结算退还 ====================
     const partialCost = totalSearchPages * searchCost + totalDetailPages * detailCost;
@@ -803,11 +803,11 @@ async function executeSpfSearchUnifiedQueue(
     // 结算：退还未使用的积分
     const settlement = await settleSpfCredits(userId, frozenAmount, partialCost, taskId);
     
-    addLog(`💰 失败结算:`);
+    addLog(`[费用] 失败结算:`);
     addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
     addLog(`   • 已消耗: ${partialCost.toFixed(1)} 积分（搜索页 ${totalSearchPages} + 详情页 ${totalDetailPages}）`);
     if (settlement.refundAmount > 0) {
-      addLog(`   • ✅ 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
+      addLog(`   • [成功] 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
     }
     addLog(`   • 当前余额: ${settlement.newBalance.toFixed(1)} 积分`);
     
