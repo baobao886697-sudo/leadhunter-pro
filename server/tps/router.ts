@@ -353,8 +353,23 @@ export const tpsRouter = router({
       const headers = [
         "姓名", "年龄", "城市", "州", "位置", "电话", "电话类型", 
         "运营商", "报告年份", "是否主号", "房产价值", "建造年份",
-        "搜索姓名", "搜索地点", "缓存命中", "详情链接"
+        "搜索姓名", "搜索地点", "缓存命中", "详情链接", "数据来源", "获取时间"
       ];
+      
+      // 格式化日期时间
+      const formatDateTime = (date: Date | string | null | undefined): string => {
+        if (!date) return "";
+        const d = new Date(date);
+        return d.toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).replace(/\//g, '/');
+      };
       
       const rows = results.data.map((r: any) => [
         r.name || "",
@@ -373,6 +388,8 @@ export const tpsRouter = router({
         r.searchLocation || "",
         r.fromCache ? "是" : "否",
         r.detailLink ? `https://www.truepeoplesearch.com${r.detailLink}` : "",
+        "实时获取",  // 数据来源：统一标记为实时获取
+        formatDateTime(r.createdAt),  // 获取时间
       ]);
       
       // 添加 UTF-8 BOM 头以确保 Excel 正确识别中文

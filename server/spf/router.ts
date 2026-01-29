@@ -354,8 +354,23 @@ export const spfRouter = router({
         "电话", "电话类型", "电话年份",
         "邮箱", "婚姻状态", "配偶姓名",
         "就业信息",
-        "搜索姓名", "缓存命中"
+        "搜索姓名", "缓存命中", "数据来源", "获取时间"
       ];
+      
+      // 格式化日期时间
+      const formatDateTime = (date: Date | string | null | undefined): string => {
+        if (!date) return "";
+        const d = new Date(date);
+        return d.toLocaleString('zh-CN', { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).replace(/\//g, '/');
+      };
       
       const csvRows = results.map((r: any) => [
         r.name || "",
@@ -373,6 +388,8 @@ export const spfRouter = router({
         (r.employment || "").replace(/[\r\n]+/g, " | "),  // 将换行符替换为分隔符
         r.searchName || "",
         r.fromCache ? "是" : "否",
+        "实时获取",  // 数据来源：统一标记为实时获取
+        formatDateTime(r.createdAt),  // 获取时间
       ]);
       
       // 生成 CSV 内容
