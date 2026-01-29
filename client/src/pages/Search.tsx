@@ -1,3 +1,8 @@
+/**
+ * LinkedIn 搜索页面 - 黄金模板 v2.0
+ * 统一 UI 风格，保留 LinkedIn 独特功能
+ */
+
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -9,14 +14,123 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { 
   Search as SearchIcon, Loader2, AlertCircle, Info, Zap, Target, MapPin, 
   Briefcase, User, Sparkles, Users, Calendar, ChevronRight, Coins,
   CheckCircle2, AlertTriangle, Eye, Database, Shield, TrendingUp,
-  ArrowRight, RefreshCw, Rocket, ArrowLeft, Clock, History, Star, Home
+  ArrowRight, RefreshCw, Rocket, ArrowLeft, Clock, History, Star, Home,
+  Phone, Crown, Building, Globe, Linkedin
 } from "lucide-react";
+
+// 七彩鎏金动画样式 - 与其他搜索系统统一
+const rainbowStyles = `
+  @keyframes rainbow-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.4),
+                  0 0 40px rgba(99, 102, 241, 0.3),
+                  0 0 60px rgba(139, 92, 246, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(59, 130, 246, 0.6),
+                  0 0 60px rgba(99, 102, 241, 0.5),
+                  0 0 90px rgba(139, 92, 246, 0.4);
+    }
+  }
+  
+  @keyframes border-dance {
+    0%, 100% { border-color: #3b82f6; }
+    16% { border-color: #6366f1; }
+    33% { border-color: #8b5cf6; }
+    50% { border-color: #a855f7; }
+    66% { border-color: #06b6d4; }
+    83% { border-color: #10b981; }
+  }
+  
+  @keyframes star-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+  }
+  
+  .rainbow-text {
+    background: linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6, #a855f7, #06b6d4, #10b981, #3b82f6);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+  }
+  
+  .rainbow-border {
+    border: 2px solid transparent;
+    animation: border-dance 4s linear infinite;
+  }
+  
+  .rainbow-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  .rainbow-bg {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15), rgba(168, 85, 247, 0.15), rgba(6, 182, 212, 0.15), rgba(16, 185, 129, 0.15));
+    background-size: 400% 400%;
+    animation: rainbow-flow 8s ease infinite;
+  }
+  
+  .rainbow-btn {
+    background: linear-gradient(135deg, #3b82f6, #6366f1, #8b5cf6, #a855f7);
+    background-size: 300% 300%;
+    animation: rainbow-flow 3s ease infinite;
+  }
+  
+  .rainbow-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+  
+  .star-pulse {
+    animation: star-pulse 1.5s ease-in-out infinite;
+  }
+  
+  .recommend-badge {
+    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+    background-size: 200% 200%;
+    animation: rainbow-flow 2s ease infinite;
+  }
+  
+  @keyframes float-slow {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  @keyframes float-medium {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+  }
+  
+  @keyframes float-fast {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+  
+  .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
+  .animate-float-medium { animation: float-medium 3s ease-in-out infinite; }
+  .animate-float-fast { animation: float-fast 2s ease-in-out infinite; }
+`;
 
 const US_STATES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
@@ -71,6 +185,9 @@ export default function Search() {
 
   // 搜索模式
   const [searchMode, setSearchMode] = useState<'fuzzy' | 'exact'>('fuzzy');
+  
+  // 高级选项展开状态
+  const [showAdvanced, setShowAdvanced] = useState(false);
   
   // 预览结果
   const [previewResult, setPreviewResult] = useState<{
@@ -188,7 +305,7 @@ export default function Search() {
       canAfford,
       maxAffordable: Math.max(0, maxAffordable),
     };
-  }, [searchLimit, profile?.credits, searchMode]);
+  }, [searchLimit, profile?.credits, searchMode, FUZZY_SEARCH_COST, FUZZY_PHONE_COST_PER_PERSON, EXACT_SEARCH_COST, EXACT_PHONE_COST_PER_PERSON]);
 
   // 预览搜索
   const handlePreview = (e: React.FormEvent) => {
@@ -251,262 +368,152 @@ export default function Search() {
 
   return (
     <DashboardLayout>
+      <style>{rainbowStyles}</style>
+      
       {/* 全屏加载遮罩 */}
       {isSearching && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-sm overflow-hidden">
           {/* 动态背景效果 */}
           <div className="absolute inset-0 pointer-events-none">
             {/* 渐变光晕 */}
-            <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[120px] animate-pulse" />
+            <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
             <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
             
             {/* 浮动粒子 */}
-            <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-cyan-400/40 rounded-full animate-float-slow" />
-            <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-blue-400/30 rounded-full animate-float-medium" />
+            <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-400/40 rounded-full animate-float-slow" />
+            <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-indigo-400/30 rounded-full animate-float-medium" />
             <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-400/35 rounded-full animate-float-fast" />
-            <div className="absolute top-1/2 right-1/3 w-1.5 h-1.5 bg-cyan-300/40 rounded-full animate-float-slow" style={{ animationDelay: '1s' }} />
-            <div className="absolute bottom-1/3 right-1/4 w-2.5 h-2.5 bg-blue-300/30 rounded-full animate-float-medium" style={{ animationDelay: '0.5s' }} />
-            <div className="absolute top-2/3 left-1/4 w-1.5 h-1.5 bg-purple-300/35 rounded-full animate-float-fast" style={{ animationDelay: '1.5s' }} />
-            <div className="absolute top-1/5 left-1/2 w-2 h-2 bg-cyan-400/30 rounded-full animate-float-medium" style={{ animationDelay: '0.8s' }} />
-            <div className="absolute bottom-1/5 right-1/2 w-2.5 h-2.5 bg-purple-400/25 rounded-full animate-float-slow" style={{ animationDelay: '1.2s' }} />
-            
-            {/* 连接线效果 */}
-            <svg className="absolute inset-0 w-full h-full opacity-20">
-              <defs>
-                <linearGradient id="loading-line-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#06b6d4" />
-                  <stop offset="100%" stopColor="#8b5cf6" />
-                </linearGradient>
-              </defs>
-              <line x1="15%" y1="25%" x2="35%" y2="45%" stroke="url(#loading-line-gradient)" strokeWidth="1" className="animate-pulse" />
-              <line x1="65%" y1="15%" x2="85%" y2="35%" stroke="url(#loading-line-gradient)" strokeWidth="1" className="animate-pulse" style={{ animationDelay: '0.5s' }} />
-              <line x1="25%" y1="55%" x2="45%" y2="75%" stroke="url(#loading-line-gradient)" strokeWidth="1" className="animate-pulse" style={{ animationDelay: '1s' }} />
-              <line x1="75%" y1="55%" x2="90%" y2="75%" stroke="url(#loading-line-gradient)" strokeWidth="1" className="animate-pulse" style={{ animationDelay: '1.5s' }} />
-            </svg>
-            
-            {/* 脉冲光环 */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-              <div className="w-[500px] h-[500px] rounded-full border border-cyan-500/10 animate-ping-slow" />
-              <div className="absolute inset-0 w-[500px] h-[500px] rounded-full border border-purple-500/10 animate-ping-slow" style={{ animationDelay: '1.5s' }} />
-            </div>
           </div>
           
-          <div className="max-w-md w-full mx-4 text-center relative z-10">
-            {/* 动画图标 */}
-            <div className="relative mb-8">
-              <div className="w-24 h-24 mx-auto relative">
-                {/* 外圈旋转 */}
-                <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20 animate-pulse" />
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyan-500 animate-spin" />
-                {/* 内圈图标 */}
-                <div className="absolute inset-4 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
-                  <Rocket className="w-8 h-8 text-cyan-400 animate-bounce" />
-                </div>
+          <div className="relative z-10 text-center space-y-6 max-w-md mx-auto px-6">
+            {/* 加载图标 */}
+            <div className="relative">
+              <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
               </div>
-              {/* 光晕效果 */}
-              <div className="absolute inset-0 w-32 h-32 mx-auto -top-4 bg-cyan-500/10 rounded-full blur-2xl animate-pulse" />
+              <div className="absolute inset-0 w-24 h-24 mx-auto rounded-full border-2 border-blue-500/30 animate-ping" />
             </div>
-
-            {/* 加载提示 */}
-            <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Orbitron, sans-serif' }}>
-              {loadingMessage}
-            </h2>
             
-            {/* 二次验证提示 */}
-            <p className="text-yellow-400 text-sm mb-2">
-              正在进行二次验证，请耐心等待
-            </p>
-            
-            {/* 预估时间 */}
-            <div className="flex items-center justify-center gap-2 text-slate-400 mb-4">
-              <Clock className="w-4 h-4" />
-              <span>
-                预计需要约 {searchLimit >= 60 ? `${Math.ceil(searchLimit * 0.8 / 60)} 分 ${Math.round((searchLimit * 0.8) % 60)} 秒` : `${Math.round(searchLimit * 0.8)} 秒`}
-              </span>
+            {/* 加载文字 */}
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold text-white">{loadingMessage}</h3>
+              <p className="text-sm text-slate-400">请稍候，正在为您准备搜索结果...</p>
             </div>
-
+            
             {/* 进度条 */}
-            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 ease-out"
+                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ease-out"
                 style={{ width: `${loadingProgress}%` }}
               />
             </div>
-
-            {/* 搜索条件摘要 */}
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 text-left mb-4">
-              <h3 className="text-sm text-slate-400 mb-3 flex items-center gap-2">
-                <SearchIcon className="w-4 h-4" />
-                搜索条件
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">关键词</span>
-                  <span className="text-white">{name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">职位</span>
-                  <span className="text-white">{title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">地区</span>
-                  <span className="text-white">{state}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">数量</span>
-                  <span className="text-cyan-400">{searchLimit} 条</span>
-                </div>
-                {enableAgeFilter && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">年龄范围</span>
-                    <span className="text-white">{ageRange[0]} - {ageRange[1]} 岁</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 提示信息 */}
-            <p className="text-xs text-slate-500 mb-4">
-              💡 提示：您可以点击返回查看其他任务，搜索会在后台继续进行
-            </p>
-            
-            {/* 返回按钮 */}
-            <button
-              onClick={() => {
-                setIsSearching(false);
-                setLocation('/history');
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all"
-            >
-              <History className="w-4 h-4" />
-              返回搜索历史
-            </button>
+            <p className="text-xs text-slate-500">{Math.round(loadingProgress)}%</p>
           </div>
         </div>
       )}
 
-      <div className="p-6 max-w-4xl mx-auto relative">
-        {/* 背景装饰 */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px]" />
-          <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px]" />
-        </div>
-
-        {/* 标题区域 */}
-        <div className="relative mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <Star className="w-5 h-5 text-yellow-400 animate-pulse" />
-            <span 
-              className="text-sm font-semibold"
-              style={{
-                background: 'linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #c678dd, #61afef, #98c379, #ffd700)',
-                backgroundSize: '200% auto',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                animation: 'rainbow 3s linear infinite'
-              }}
-            >
-              推荐
-            </span>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 
-              className="text-3xl font-bold" 
-              style={{ 
-                fontFamily: 'Orbitron, sans-serif',
-                background: 'linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #c678dd, #61afef, #98c379, #ffd700)',
-                backgroundSize: '200% auto',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                animation: 'rainbow 3s linear infinite'
-              }}
-            >
-              LinkedIn 搜索
-            </h1>
-            <span 
-              className="px-3 py-1 rounded-full text-xs font-bold"
-              style={{
-                background: 'linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #c678dd, #61afef, #98c379, #ffd700)',
-                backgroundSize: '200% auto',
-                animation: 'rainbow 3s linear infinite',
-                color: '#1a1a2e'
-              }}
-            >
-              ⭐ 推荐
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-3 flex-wrap">
-            <span className="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
-              双验证电话号码
-            </span>
-            <span className="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              用户年龄数据
-            </span>
-            <span className="px-2 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">
-              专业人士数据库
-            </span>
-          </div>
-          <p className="text-slate-400 mt-3">
-            输入搜索条件，获取全球商业人士的双验证联系方式和年龄信息
-          </p>
-          <style>{`
-            @keyframes rainbow {
-              0% { background-position: 0% center; }
-              100% { background-position: 200% center; }
-            }
-          `}</style>
-        </div>
-
-        {/* 当前积分余额 */}
-        <div className="relative mb-6 p-4 rounded-xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-                <Coins className="h-5 w-5 text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-sm text-slate-400">当前积分余额</p>
-                <p className="text-2xl font-bold text-yellow-400 font-mono">{credits}</p>
-              </div>
+      <div className="p-6 space-y-6">
+        {/* 顶部横幅 - 七彩鎏金风格（LinkedIn 蓝色主题） */}
+        <div className="relative overflow-hidden rounded-2xl rainbow-bg rainbow-border rainbow-glow p-8">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0">
+                <Star className="w-3 h-3 mr-1" />
+                推荐数据源
+              </Badge>
+              <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0">
+                <Shield className="w-3 h-3 mr-1" />
+                双验证电话
+              </Badge>
+              <Badge className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0">
+                <Calendar className="w-3 h-3 mr-1" />
+                用户年龄
+              </Badge>
+              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+                <Briefcase className="w-3 h-3 mr-1" />
+                专业人士
+              </Badge>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-              onClick={() => setLocation("/recharge")}
-            >
-              充值积分
-            </Button>
+            <h1 className="text-3xl font-bold rainbow-text mb-2 flex items-center gap-2">
+              <Linkedin className="h-8 w-8 text-blue-500 star-pulse" />
+              LinkedIn 搜索
+              <span className="recommend-badge text-xs px-3 py-1 rounded-full text-white font-bold shadow-lg">
+                ⭐ 推荐 ⭐
+              </span>
+            </h1>
+            <p className="text-muted-foreground max-w-2xl">
+              全球 6.5 亿+ 商业人士数据！获取双验证电话号码、用户年龄等高价值信息，精准触达目标客户。
+            </p>
           </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setLocation("/history")} 
+            className="absolute top-6 right-6 border-blue-500/50 hover:bg-blue-500/10"
+          >
+            <Clock className="h-4 w-4 mr-2 text-blue-500" />
+            搜索历史
+          </Button>
+        </div>
+
+        {/* LinkedIn 独特亮点展示 - 4个特色卡片 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/30 hover:border-blue-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Shield className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-blue-400">双验证电话</h3>
+              <p className="text-xs text-muted-foreground">多源交叉验证</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/30 hover:border-emerald-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Calendar className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-emerald-400">用户年龄</h3>
+              <p className="text-xs text-muted-foreground">精准年龄筛选</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 hover:border-purple-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Briefcase className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-purple-400">专业人士</h3>
+              <p className="text-xs text-muted-foreground">6.5亿+商业精英</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/30 hover:border-amber-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Zap className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-amber-400">双模式搜索</h3>
+              <p className="text-xs text-muted-foreground">模糊/精准可选</p>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 左侧：搜索表单 */}
           <div className="lg:col-span-2 space-y-6">
-            {/* 基本搜索条件 */}
-            <div className="relative p-6 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
-                  <SearchIcon className="h-5 w-5 text-cyan-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">搜索条件</h3>
-                  <p className="text-sm text-slate-400">填写目标人员的基本信息</p>
-                </div>
-              </div>
-
-              <form className="space-y-5">
+            {/* 搜索条件 */}
+            <Card className="rainbow-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <SearchIcon className="w-5 h-5 text-blue-400" />
+                  搜索条件
+                </CardTitle>
+                <CardDescription>
+                  填写目标人员的基本信息，获取精准联系方式
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-slate-300 flex items-center gap-2">
                     <User className="h-4 w-4 text-slate-500" />
-                    姓名关键词
+                    姓名关键词 <span className="text-red-400">*</span>
                   </Label>
                   <Input
                     id="name"
                     placeholder="例如：John, Smith, Wang"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="h-12 bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500 rounded-xl"
+                    className="h-12 bg-slate-800/50 border-slate-700 focus:border-blue-500 text-white placeholder:text-slate-500 rounded-xl"
                     required
                   />
                 </div>
@@ -514,14 +521,14 @@ export default function Search() {
                 <div className="space-y-2">
                   <Label htmlFor="title" className="text-slate-300 flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-slate-500" />
-                    职位/工作
+                    职位/工作 <span className="text-red-400">*</span>
                   </Label>
                   <Input
                     id="title"
                     placeholder="例如：CEO, Software Engineer, Marketing Manager"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="h-12 bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500 rounded-xl"
+                    className="h-12 bg-slate-800/50 border-slate-700 focus:border-blue-500 text-white placeholder:text-slate-500 rounded-xl"
                     required
                   />
                 </div>
@@ -529,7 +536,7 @@ export default function Search() {
                 <div className="space-y-2">
                   <Label htmlFor="state" className="text-slate-300 flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-slate-500" />
-                    州
+                    州 <span className="text-red-400">*</span>
                   </Label>
                   <Select value={state} onValueChange={setState} required>
                     <SelectTrigger className="h-12 bg-slate-800/50 border-slate-700 text-white rounded-xl">
@@ -544,477 +551,388 @@ export default function Search() {
                     </SelectContent>
                   </Select>
                 </div>
-              </form>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* 高级选项 */}
-            <div className="relative p-6 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/50 border border-slate-700/50">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
-                  <Sparkles className="h-5 w-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">高级选项</h3>
-                  <p className="text-sm text-slate-400">自定义搜索参数</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                {/* 搜索数量 */}
-                <div className="space-y-3">
-                  <Label className="text-slate-300 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-slate-500" />
-                    搜索数量
-                  </Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {SEARCH_LIMITS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => {
-                          setSearchLimit(option.value);
-                          setCustomLimit("");
-                        }}
-                        className={`relative p-3 rounded-xl border transition-all ${
-                          searchLimit === option.value && !customLimit
-                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
-                            : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
-                        }`}
-                      >
-                        <div className="text-lg font-bold">{option.value}</div>
-                        <div className="text-xs opacity-70">{option.description}</div>
-                      </button>
-                    ))}
+            <Card className="rainbow-border">
+              <CardHeader 
+                className="cursor-pointer hover:bg-slate-800/30 transition-colors rounded-t-lg"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+              >
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-5 h-5 text-purple-400" />
+                    高级选项
                   </div>
-                  {/* 自定义数量输入框 */}
-                  <div className="flex items-center gap-3 mt-3">
-                    <span className="text-sm text-slate-400">或自定义:</span>
-                    <div className="relative flex-1">
+                  <ChevronRight className={`h-5 w-5 text-slate-400 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
+                </CardTitle>
+                <CardDescription>
+                  自定义搜索参数和过滤条件
+                </CardDescription>
+              </CardHeader>
+              {showAdvanced && (
+                <CardContent className="space-y-6">
+                  {/* 搜索数量 */}
+                  <div className="space-y-3">
+                    <Label className="text-slate-300">搜索数量</Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {SEARCH_LIMITS.map((limit) => (
+                        <Button
+                          key={limit.value}
+                          variant={searchLimit === limit.value ? "default" : "outline"}
+                          className={`h-auto py-3 flex flex-col ${
+                            searchLimit === limit.value 
+                              ? "bg-blue-500/20 border-blue-500 text-blue-400" 
+                              : "border-slate-700 hover:border-blue-500/50"
+                          }`}
+                          onClick={() => {
+                            setSearchLimit(limit.value);
+                            setCustomLimit("");
+                          }}
+                        >
+                          <span className="font-bold">{limit.value}</span>
+                          <span className="text-xs opacity-70">{limit.description}</span>
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-400">或自定义:</span>
                       <Input
                         type="number"
                         placeholder="输入数量 (10-10000)"
                         value={customLimit}
                         onChange={(e) => {
-                          let value = e.target.value;
-                          let num = parseInt(value);
-                          
-                          // 自动限制范围
-                          if (num > 10000) {
-                            value = '10000';
-                            num = 10000;
-                          }
-                          
-                          setCustomLimit(value);
-                          
-                          // 如果是有效数字，更新 searchLimit
-                          if (!isNaN(num) && num >= 10 && num <= 10000) {
-                            setSearchLimit(num);
+                          setCustomLimit(e.target.value);
+                          const val = parseInt(e.target.value);
+                          if (val >= 10 && val <= 10000) {
+                            setSearchLimit(val);
                           }
                         }}
-                        className={`bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 pr-12 ${
-                          customLimit ? 'border-cyan-500 ring-1 ring-cyan-500/30' : ''
-                        }`}
-                        min={10}
-                        max={10000}
+                        className="w-40 h-10 bg-slate-800/50 border-slate-700"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">条</span>
+                      <span className="text-sm text-slate-400">条</span>
                     </div>
                   </div>
-                  {customLimit && parseInt(customLimit) < 10 && customLimit.length >= 2 && (
-                    <p className="text-xs text-amber-400 mt-1">最小搜索数量为 10 条</p>
-                  )}
-                </div>
 
-                {/* 年龄筛选 */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-slate-300 flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-slate-500" />
-                      年龄筛选
-                    </Label>
-                    <Switch
-                      checked={enableAgeFilter}
-                      onCheckedChange={setEnableAgeFilter}
-                    />
-                  </div>
-                  {enableAgeFilter && (
-                    <div className="space-y-4 p-4 rounded-xl bg-slate-800/30">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">年龄范围</span>
-                        <span className="text-cyan-400 font-mono">{ageRange[0]} - {ageRange[1]} 岁</span>
-                      </div>
-                      <Slider
-                        value={ageRange}
-                        onValueChange={(value) => setAgeRange(value as [number, number])}
-                        min={18}
-                        max={100}
-                        step={1}
-                        className="w-full"
+                  {/* 年龄筛选 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-slate-300 flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-emerald-400" />
+                        年龄筛选
+                      </Label>
+                      <Switch
+                        checked={enableAgeFilter}
+                        onCheckedChange={setEnableAgeFilter}
                       />
-                      <p className="text-xs text-slate-500">
-                        只返回年龄在此范围内的结果
-                      </p>
                     </div>
-                  )}
-                </div>
+                    {enableAgeFilter && (
+                      <div className="space-y-2 p-4 bg-slate-800/30 rounded-lg">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400">年龄范围</span>
+                          <span className="text-emerald-400 font-mono">{ageRange[0]} - {ageRange[1]} 岁</span>
+                        </div>
+                        <Slider
+                          value={ageRange}
+                          onValueChange={(value) => setAgeRange(value as [number, number])}
+                          min={18}
+                          max={100}
+                          step={1}
+                          className="mt-2"
+                        />
+                        <p className="text-xs text-slate-500">只返回年龄在此范围内的结果</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
 
-                {/* 搜索模式选择器 - 全新设计 */}
-                <div className="space-y-4">
-                  <Label className="text-slate-300 flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-yellow-400" />
-                    <span className="font-semibold">搜索模式选择</span>
-                    <span className="text-xs text-slate-500 ml-2">根据需求选择合适的搜索方式</span>
-                  </Label>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 模糊搜索卡片 */}
-                    <button
-                      type="button"
-                      onClick={() => setSearchMode('fuzzy')}
-                      className={`relative p-5 rounded-2xl border-2 transition-all text-left overflow-hidden ${
-                        searchMode === 'fuzzy'
-                          ? 'bg-gradient-to-br from-cyan-500/20 via-blue-500/15 to-teal-500/20 border-cyan-400 shadow-lg shadow-cyan-500/20'
-                          : 'bg-slate-800/50 border-slate-700 hover:border-cyan-500/50 hover:bg-slate-800'
-                      }`}
-                    >
-                      {/* 推荐标签 */}
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-cyan-500/30 text-cyan-300 border border-cyan-500/50">
-                          💰 性价比之选
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/30 to-blue-500/30 flex items-center justify-center">
-                          <Database className="h-6 w-6 text-cyan-400" />
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold text-cyan-400">模糊搜索</div>
-                          <div className="text-xs text-cyan-300/70">Fuzzy Search</div>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <CheckCircle2 className="h-4 w-4 text-cyan-400 flex-shrink-0" />
-                          <span>大批量数据采集，成本低廉</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <CheckCircle2 className="h-4 w-4 text-cyan-400 flex-shrink-0" />
-                          <span>适合广泛撰网、市场调研</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <CheckCircle2 className="h-4 w-4 text-cyan-400 flex-shrink-0" />
-                          <span>缓存数据，快速返回结果</span>
-                        </div>
-                      </div>
-                      
-                      <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-400">积分费用</span>
-                          <span className="text-sm font-bold text-cyan-400">
-                            {FUZZY_SEARCH_COST} + {FUZZY_PHONE_COST_PER_PERSON}/条
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                    
-                    {/* 精准搜索卡片 */}
-                    <button
-                      type="button"
-                      onClick={() => setSearchMode('exact')}
-                      className={`relative p-5 rounded-2xl border-2 transition-all text-left overflow-hidden ${
-                        searchMode === 'exact'
-                          ? 'bg-gradient-to-br from-purple-500/20 via-pink-500/15 to-violet-500/20 border-purple-400 shadow-lg shadow-purple-500/20'
-                          : 'bg-slate-800/50 border-slate-700 hover:border-purple-500/50 hover:bg-slate-800'
-                      }`}
-                    >
-                      {/* 推荐标签 */}
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-purple-500/30 text-purple-300 border border-purple-500/50">
-                          ⭐ 高质量之选
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-pink-500/30 flex items-center justify-center">
-                          <Target className="h-6 w-6 text-purple-400" />
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold text-purple-400">精准搜索</div>
-                          <div className="text-xs text-purple-300/70">Exact Search</div>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <CheckCircle2 className="h-4 w-4 text-purple-400 flex-shrink-0" />
-                          <span>实时数据，电话号码更准确</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <CheckCircle2 className="h-4 w-4 text-purple-400 flex-shrink-0" />
-                          <span>适合重点客户、精准营销</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <CheckCircle2 className="h-4 w-4 text-purple-400 flex-shrink-0" />
-                          <span>无结果时退还搜索费用</span>
-                        </div>
-                      </div>
-                      
-                      <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-400">积分费用</span>
-                          <span className="text-sm font-bold text-purple-400">
-                            {EXACT_SEARCH_COST} + {EXACT_PHONE_COST_PER_PERSON}/条
-                          </span>
-                        </div>
-                      </div>
-                    </button>
+            {/* 搜索模式选择 */}
+            <Card className="rainbow-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-400" />
+                  搜索模式选择
+                </CardTitle>
+                <CardDescription>
+                  根据需求选择合适的搜索方式
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* 模糊搜索 */}
+                  <div 
+                    className={`relative p-4 rounded-xl cursor-pointer transition-all ${
+                      searchMode === 'fuzzy' 
+                        ? 'bg-blue-500/20 border-2 border-blue-500' 
+                        : 'bg-slate-800/50 border-2 border-slate-700 hover:border-blue-500/50'
+                    }`}
+                    onClick={() => setSearchMode('fuzzy')}
+                  >
+                    <Badge className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs">
+                      💰 性价比之选
+                    </Badge>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Database className="h-5 w-5 text-blue-400" />
+                      <h4 className="font-bold text-blue-400">模糊搜索</h4>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-2">Fuzzy Search</p>
+                    <ul className="text-xs text-slate-400 space-y-1">
+                      <li className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-400" />
+                        大批量数据采集，成本低廉
+                      </li>
+                      <li className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-400" />
+                        适合广泛撒网、市场调研
+                      </li>
+                      <li className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-400" />
+                        缓存数据，快速返回结果
+                      </li>
+                    </ul>
+                    <div className="mt-3 pt-3 border-t border-slate-700">
+                      <span className="text-xs text-slate-500">积分费用</span>
+                      <span className="text-blue-400 font-mono font-bold ml-2">{FUZZY_SEARCH_COST} + {FUZZY_PHONE_COST_PER_PERSON}/条</span>
+                    </div>
+                  </div>
+
+                  {/* 精准搜索 */}
+                  <div 
+                    className={`relative p-4 rounded-xl cursor-pointer transition-all ${
+                      searchMode === 'exact' 
+                        ? 'bg-purple-500/20 border-2 border-purple-500' 
+                        : 'bg-slate-800/50 border-2 border-slate-700 hover:border-purple-500/50'
+                    }`}
+                    onClick={() => setSearchMode('exact')}
+                  >
+                    <Badge className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs">
+                      ⭐ 高质量之选
+                    </Badge>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="h-5 w-5 text-purple-400" />
+                      <h4 className="font-bold text-purple-400">精准搜索</h4>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-2">Exact Search</p>
+                    <ul className="text-xs text-slate-400 space-y-1">
+                      <li className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-400" />
+                        实时数据，电话号码更准确
+                      </li>
+                      <li className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-400" />
+                        适合重点客户、精准营销
+                      </li>
+                      <li className="flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-400" />
+                        无结果时退还搜索费用
+                      </li>
+                    </ul>
+                    <div className="mt-3 pt-3 border-t border-slate-700">
+                      <span className="text-xs text-slate-500">积分费用</span>
+                      <span className="text-purple-400 font-mono font-bold ml-2">{EXACT_SEARCH_COST} + {EXACT_PHONE_COST_PER_PERSON}/条</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* 搜索按钮 */}
-            <div className="flex gap-3">
-              <Button
-                onClick={handlePreview}
-                disabled={previewMutation.isPending || !name || !title || !state}
-                variant="outline"
-                className="flex-1 h-14 border-slate-700 text-slate-300 hover:bg-slate-800 rounded-xl"
-              >
-                {previewMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    预览中...
-                  </>
-                ) : (
-                  <>
-                    <Eye className="mr-2 h-5 w-5" />
+                {/* 搜索按钮 */}
+                <div className="flex gap-3 mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={handlePreview}
+                    disabled={previewMutation.isPending || !name || !title || !state}
+                    className="flex-1 border-slate-700 hover:border-blue-500/50"
+                  >
+                    {previewMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Eye className="mr-2 h-4 w-4" />
+                    )}
                     预览搜索
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleDirectSearch}
-                disabled={!creditEstimate.canAfford || !name || !title || !state}
-                className="flex-1 h-14 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 rounded-xl text-lg font-semibold"
-              >
-                <Zap className="mr-2 h-5 w-5" />
-                开始搜索
-              </Button>
-            </div>
+                  </Button>
+                  <Button
+                    onClick={handleDirectSearch}
+                    disabled={searchMutation.isPending || !name || !title || !state || !creditEstimate.canAfford}
+                    className="flex-1 rainbow-btn text-white font-bold"
+                  >
+                    {searchMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Zap className="mr-2 h-4 w-4" />
+                    )}
+                    开始搜索
+                    <Star className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* 右侧：积分预估 */}
+          {/* 右侧：积分信息和核心优势 */}
           <div className="space-y-6">
-            {/* 积分预估卡片 */}
-            <div className="relative p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-purple-400" />
+            {/* 积分余额 */}
+            <Card className="rainbow-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Coins className="h-5 w-5 text-amber-400" />
+                  积分余额
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-amber-400 font-mono">
+                  {credits.toLocaleString()}
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">积分预估</h3>
-                  <p className="text-sm text-slate-400">本次搜索消耗</p>
-                </div>
-              </div>
+                <p className="text-xs text-muted-foreground mt-1">可用积分</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-3 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                  onClick={() => setLocation("/recharge")}
+                >
+                  充值积分
+                </Button>
+              </CardContent>
+            </Card>
 
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
+            {/* 费用预估 */}
+            <Card className="rainbow-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <TrendingUp className="h-5 w-5 text-blue-400" />
+                  费用预估
+                  <Badge variant="outline" className="text-xs">
+                    {searchMode === 'fuzzy' ? '模糊模式' : '精准模式'}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">搜索数量</span>
+                  <span className="text-white font-mono">{searchLimit} 条</span>
+                </div>
+                <div className="flex justify-between text-sm">
                   <span className="text-slate-400">搜索费用</span>
                   <span className="text-white font-mono">{creditEstimate.searchCost} 积分</span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between text-sm">
                   <span className="text-slate-400">数据费用</span>
                   <span className="text-white font-mono">{creditEstimate.phoneCost} 积分</span>
                 </div>
-                <div className="h-px bg-slate-700" />
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-300 font-medium">预估总计</span>
-                  <span className="text-cyan-400 font-mono text-xl font-bold">~{creditEstimate.totalCost} 积分</span>
+                <div className="border-t border-slate-700 pt-3">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">预估总计</span>
+                    <span className="text-blue-400 font-mono font-bold">~{creditEstimate.totalCost} 积分</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between text-sm">
                   <span className="text-slate-400">搜索后余额</span>
                   <span className={`font-mono ${creditEstimate.remainingCredits >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    ~{creditEstimate.remainingCredits} 积分
+                    ~{creditEstimate.remainingCredits.toLocaleString()} 积分
                   </span>
                 </div>
-              </div>
-
-              {/* 积分不足警告 */}
-              {!creditEstimate.canAfford && (
-                <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-red-400 font-medium">积分不足</p>
-                      <p className="text-sm text-slate-400 mt-1">
-                        需要 <span className="text-white font-mono">{creditEstimate.totalCost}</span> 积分，
-                        当前余额 <span className="text-white font-mono">{creditEstimate.currentCredits}</span> 积分
-                      </p>
-                      {creditEstimate.maxAffordable > 0 && (
-                        <p className="text-sm text-slate-400 mt-1">
-                          您最多可搜索 <span className="text-cyan-400 font-mono">{creditEstimate.maxAffordable}</span> 条数据
-                        </p>
-                      )}
-                      <div className="flex gap-2 mt-3">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
-                          onClick={() => setLocation("/recharge")}
-                        >
-                          <Coins className="mr-1.5 h-3.5 w-3.5" />
-                          去充值
-                        </Button>
-                        {creditEstimate.maxAffordable > 0 && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="border-slate-500/30 text-slate-400 hover:bg-slate-500/10"
-                            onClick={() => setSearchLimit(creditEstimate.maxAffordable)}
-                          >
-                            调整为 {creditEstimate.maxAffordable} 条
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 搜索模式对比说明 */}
-            <div className="relative p-4 rounded-xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700">
-              <div className="flex items-center gap-2 mb-4">
-                <Info className="h-5 w-5 text-yellow-400" />
-                <span className="font-bold text-white">模糊搜索 vs 精准搜索</span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {/* 模糊搜索说明 */}
-                <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Database className="h-4 w-4 text-cyan-400" />
-                    <span className="font-bold text-cyan-400">模糊搜索</span>
-                  </div>
-                  <ul className="space-y-1 text-xs text-slate-400">
-                    <li>• 搜索费: {FUZZY_SEARCH_COST} 积分</li>
-                    <li>• 每条数据: {FUZZY_PHONE_COST_PER_PERSON} 积分</li>
-                    <li>• 数据来源: 缓存数据库</li>
-                    <li>• 适用场景: 大批量采集</li>
-                    <li className="text-cyan-300">• 特点: 性价比高</li>
-                  </ul>
-                </div>
-                
-                {/* 精准搜索说明 */}
-                <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="h-4 w-4 text-purple-400" />
-                    <span className="font-bold text-purple-400">精准搜索</span>
-                  </div>
-                  <ul className="space-y-1 text-xs text-slate-400">
-                    <li>• 搜索费: {EXACT_SEARCH_COST} 积分</li>
-                    <li>• 每条数据: {EXACT_PHONE_COST_PER_PERSON} 积分</li>
-                    <li>• 数据来源: 实时查询</li>
-                    <li>• 适用场景: 精准营销</li>
-                    <li className="text-purple-300">• 特点: 无结果退款</li>
-                  </ul>
-                </div>
-              </div>
-              
-              <div className="mt-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <p className="text-xs text-yellow-300 text-center">
-                  💡 新用户推荐使用「模糊搜索」，性价比更高；重点客户推荐「精准搜索」，数据更准确
-                </p>
-              </div>
-            </div>
-
-            {/* 搜索流程说明 */}
-            <div className="relative p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
-              <div className="flex items-start gap-3">
-                <Sparkles className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" />
-                <div className="text-sm text-slate-400">
-                  <p className="text-purple-400 font-medium mb-2">搜索流程</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Database className="h-3 w-3 text-blue-400" />
-                      <span>数据获取</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ArrowRight className="h-3 w-3 text-slate-600" />
-                      <span>数据处理与筛选</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-3 w-3 text-green-400" />
-                      <span>二次验证</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-3 w-3 text-cyan-400" />
-                      <span>导出 CSV 报表</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* LinkedIn 核心优势 - 突出卖点 */}
-            <div className="relative p-4 rounded-xl bg-gradient-to-br from-amber-900/30 via-orange-900/20 to-yellow-900/30 border border-amber-500/50">
-              <div className="flex items-center gap-2 mb-4">
-                <Star className="h-5 w-5 text-amber-400" />
-                <span className="font-bold golden-rainbow-title">LinkedIn 核心优势</span>
-              </div>
-              
-              <div className="space-y-3">
-                {/* 优势1: 双验证电话 */}
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <Shield className="h-4 w-4 text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-amber-300 text-sm">双验证电话号码</p>
-                    <p className="text-xs text-slate-400">多数据源交叉验证，电话准确率更高</p>
-                  </div>
-                </div>
-                
-                {/* 优势2: 用户年龄数据 */}
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                    <Calendar className="h-4 w-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-emerald-300 text-sm flex items-center gap-2">
-                      用户年龄数据
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200">独家</span>
+                {!creditEstimate.canAfford && (
+                  <div className="p-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <p className="text-xs text-red-400 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      积分不足，请充值后再搜索
                     </p>
-                    <p className="text-xs text-slate-400">精准筛选目标年龄段，提升营销效率</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 核心优势 */}
+            <Card className="rainbow-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Crown className="h-5 w-5 text-amber-400" />
+                  核心优势
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <Shield className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-blue-400 text-sm">双验证电话号码</p>
+                    <p className="text-xs text-slate-400">多数据源交叉验证，准确率更高</p>
                   </div>
                 </div>
-                
-                {/* 优势3: 专业人士数据库 */}
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-                  <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                    <Briefcase className="h-4 w-4 text-purple-400" />
-                  </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <Calendar className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-bold text-purple-300 text-sm">专业人士数据库</p>
-                    <p className="text-xs text-slate-400">覆盖全球商业精英，职位信息完整</p>
+                    <p className="font-semibold text-emerald-400 text-sm flex items-center gap-2">
+                      用户年龄数据
+                      <Badge className="bg-emerald-500/30 text-emerald-200 text-[10px]">独家</Badge>
+                    </p>
+                    <p className="text-xs text-slate-400">精准筛选目标年龄段</p>
                   </div>
                 </div>
-                
-                {/* 优势4: 灵活搜索模式 */}
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20">
-                  <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
-                    <Zap className="h-4 w-4 text-cyan-400" />
-                  </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                  <Briefcase className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-bold text-cyan-300 text-sm">灵活搜索模式</p>
+                    <p className="font-semibold text-purple-400 text-sm">专业人士数据库</p>
+                    <p className="text-xs text-slate-400">覆盖全球 6.5 亿+ 商业精英</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <Zap className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-400 text-sm">灵活搜索模式</p>
                     <p className="text-xs text-slate-400">模糊/精准双模式，满足不同需求</p>
                   </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+
+            {/* 快速入门 */}
+            <Card className="rainbow-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="h-5 w-5 text-purple-400" />
+                  快速入门
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-400">1</div>
+                    <span className="text-sm text-slate-300">填写姓名、职位、州</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400">2</div>
+                    <span className="text-sm text-slate-300">选择搜索模式和数量</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-400">3</div>
+                    <span className="text-sm text-slate-300">点击"开始搜索"</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">4</div>
+                    <span className="text-sm text-slate-300">导出 CSV，开始联系客户</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 费用说明 */}
+            <Card className="bg-slate-800/30 border-slate-700">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Coins className="h-4 w-4 text-amber-400" />
+                  费用说明
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-xs text-slate-400 space-y-1">
+                  <li>• 模糊搜索：{FUZZY_SEARCH_COST} 积分 + {FUZZY_PHONE_COST_PER_PERSON} 积分/条</li>
+                  <li>• 精准搜索：{EXACT_SEARCH_COST} 积分 + {EXACT_PHONE_COST_PER_PERSON} 积分/条</li>
+                  <li>• 缓存命中的数据免费使用</li>
+                  <li>• 精准搜索无结果时退还搜索费</li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -1024,7 +942,7 @@ export default function Search() {
         <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <Eye className="h-5 w-5 text-cyan-400" />
+              <Eye className="h-5 w-5 text-blue-400" />
               预览搜索结果
             </DialogTitle>
             <DialogDescription className="text-slate-400">
@@ -1048,7 +966,7 @@ export default function Search() {
                 </div>
                 
                 <div className="text-center py-4">
-                  <div className="text-4xl font-bold text-cyan-400 font-mono">
+                  <div className="text-4xl font-bold text-blue-400 font-mono">
                     {previewResult.totalAvailable}
                   </div>
                   <div className="text-sm text-slate-400 mt-1">可用记录数</div>
@@ -1070,8 +988,8 @@ export default function Search() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">预估消耗</span>
-                  <span className="text-cyan-400 font-mono font-bold">
-                    ~{creditEstimate.searchCost + Math.min(searchLimit, previewResult.totalAvailable) * creditEstimate.phoneCost / searchLimit} 积分
+                  <span className="text-blue-400 font-mono font-bold">
+                    ~{creditEstimate.searchCost + Math.min(searchLimit, previewResult.totalAvailable) * (searchMode === 'fuzzy' ? FUZZY_PHONE_COST_PER_PERSON : EXACT_PHONE_COST_PER_PERSON)} 积分
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -1093,14 +1011,14 @@ export default function Search() {
                       </p>
                       {previewResult.maxAffordable > 0 && (
                         <p className="text-sm text-slate-400 mt-1">
-                          您最多可搜索 <span className="text-cyan-400 font-mono">{previewResult.maxAffordable}</span> 条数据
+                          您最多可搜索 <span className="text-blue-400 font-mono">{previewResult.maxAffordable}</span> 条数据
                         </p>
                       )}
                       <div className="flex gap-2 mt-3">
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                          className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
                           onClick={() => {
                             setShowPreviewDialog(false);
                             setLocation("/recharge");
@@ -1156,7 +1074,7 @@ export default function Search() {
             <Button
               onClick={handleConfirmSearch}
               disabled={searchMutation.isPending || !previewResult?.canAfford || previewResult?.totalAvailable === 0}
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
             >
               <Zap className="mr-2 h-4 w-4" />
               开始搜索
@@ -1170,7 +1088,7 @@ export default function Search() {
         <DialogContent className="bg-slate-900 border-slate-700 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <SearchIcon className="h-5 w-5 text-cyan-400" />
+              <SearchIcon className="h-5 w-5 text-blue-400" />
               确认搜索
             </DialogTitle>
             <DialogDescription className="text-slate-400">
@@ -1205,9 +1123,9 @@ export default function Search() {
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-slate-400">电话验证</span>
-                <span className={enableVerification ? "text-green-400" : "text-slate-500"}>
-                  {enableVerification ? "已启用" : "已禁用"}
+                <span className="text-slate-400">搜索模式</span>
+                <span className={searchMode === 'fuzzy' ? "text-blue-400" : "text-purple-400"}>
+                  {searchMode === 'fuzzy' ? "模糊搜索" : "精准搜索"}
                 </span>
               </div>
             </div>
@@ -1217,7 +1135,7 @@ export default function Search() {
               <h4 className="text-sm text-purple-400 mb-3">积分消耗</h4>
               <div className="flex justify-between">
                 <span className="text-slate-400">预估消耗</span>
-                <span className="text-cyan-400 font-mono font-bold">~{creditEstimate.totalCost} 积分</span>
+                <span className="text-blue-400 font-mono font-bold">~{creditEstimate.totalCost} 积分</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">当前余额</span>
@@ -1247,7 +1165,7 @@ export default function Search() {
             <Button
               onClick={handleConfirmSearch}
               disabled={searchMutation.isPending}
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
               确认搜索
@@ -1258,3 +1176,4 @@ export default function Search() {
     </DashboardLayout>
   );
 }
+// LinkedIn Search Golden Template v2.0

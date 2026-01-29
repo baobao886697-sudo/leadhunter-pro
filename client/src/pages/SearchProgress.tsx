@@ -1,3 +1,8 @@
+/**
+ * LinkedIn 搜索任务详情页 - 黄金模板 v2.0
+ * 统一 UI 风格，包含实时日志终端
+ */
+
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -25,6 +30,45 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParticleNetwork } from "@/components/ParticleNetwork";
+import { Star, CreditCard } from "lucide-react";
+
+// 七彩鎏金动画样式 - LinkedIn 蓝色主题
+const rainbowStyles = `
+  @keyframes rainbow-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4), 0 0 40px rgba(99, 102, 241, 0.3); }
+    50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.6), 0 0 60px rgba(99, 102, 241, 0.5); }
+  }
+  @keyframes border-dance {
+    0%, 100% { border-color: #3b82f6; }
+    25% { border-color: #6366f1; }
+    50% { border-color: #8b5cf6; }
+    75% { border-color: #06b6d4; }
+  }
+  .rainbow-text {
+    background: linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6, #06b6d4, #10b981, #3b82f6);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+  }
+  .rainbow-border { border: 2px solid transparent; animation: border-dance 4s linear infinite; }
+  .rainbow-glow { animation: pulse-glow 2s ease-in-out infinite; }
+  .rainbow-bg {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    background-size: 400% 400%;
+    animation: rainbow-flow 8s ease infinite;
+  }
+`;
 
 // 定义搜索结果数据类型
 interface ResultData {
@@ -526,6 +570,7 @@ export default function SearchProgress() {
 
   return (
     <DashboardLayout>
+      <style>{rainbowStyles}</style>
       <div className="p-6 max-w-7xl mx-auto relative">
         {/* 动态粒子网络背景 - 仅在运行时显示 */}
         {isRunning && (
@@ -564,8 +609,9 @@ export default function SearchProgress() {
             </Button>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Orbitron, sans-serif' }}>
-                  搜索任务
+                <h1 className="text-2xl font-bold rainbow-text flex items-center gap-2">
+                  <Linkedin className="h-6 w-6 text-blue-500" />
+                  LinkedIn 搜索任务
                 </h1>
                 {getStatusBadge(task.status)}
               </div>
