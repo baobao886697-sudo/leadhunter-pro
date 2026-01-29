@@ -353,35 +353,61 @@ export async function getCacheByKey(key: string): Promise<any | null> {
 
 /**
  * 设置缓存
+ * 
+ * 使用健壮的错误处理，确保缓存失败不会导致任务中断
  */
 export async function setCache(
   key: string, 
   value: any, 
   cacheType: 'search' | 'person' | 'verification' = 'search',
   expiryDays: number = 180
-): Promise<void> {
+): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.warn('[LinkedIn/DB] setCache: Database not available');
+    return false;
+  }
   
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expiryDays);
   
-  // 使用 upsert 逻辑
-  try {
-    await db.insert(globalCache).values({
-      cacheKey: key,
-      cacheType,
-      data: value,
-      expiresAt,
-    });
-  } catch (error: any) {
-    // 如果已存在，则更新
-    if (error.code === 'ER_DUP_ENTRY') {
-      await db.update(globalCache)
-        .set({ data: value, expiresAt })
-        .where(eq(globalCache.cacheKey, key));
-    } else {
-      throw error;
+  // 使用 upsert 逻辑，带重试机制
+  const maxRetries = 3;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // 先尝试插入
+      await db.insert(globalCache).values({
+        cacheKey: key,
+        cacheType,
+        data: value,
+        expiresAt,
+      });
+      return true;
+    } catch (error: any) {
+      // 如果是重复键错误，尝试更新
+      if (error.code === 'ER_DUP_ENTRY') {
+        try {
+          await db.update(globalCache)
+            .set({ data: value, expiresAt, hitCount: sql`hitCount + 1` })
+            .where(eq(globalCache.cacheKey, key));
+          return true;
+        } catch (updateError: any) {
+          console.warn(`[LinkedIn/DB] setCache update failed (attempt ${attempt}/${maxRetries}):`, updateError.message);
+        }
+      } else {
+        // 其他错误，记录日志但不抛出异常
+        console.warn(`[LinkedIn/DB] setCache insert failed (attempt ${attempt}/${maxRetries}):`, error.message);
+      }
+      
+      // 重试前等待
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+      }
     }
   }
+  
+  // 所有重试都失败，但不抛出异常，只返回 false
+  console.error(`[LinkedIn/DB] setCache failed after ${maxRetries} attempts for key: ${key.substring(0, 50)}...`);
+  return false;
 }
