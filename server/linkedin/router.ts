@@ -304,6 +304,7 @@ export const linkedinRouter = router({
           "邮箱",
           "LinkedIn",
           "双验证",
+          "数据来源",
           "获取时间",
         ];
         getRowData = (r, data, index) => [
@@ -324,6 +325,7 @@ export const linkedinRouter = router({
           data.email || "",
           data.linkedinUrl || data.linkedin_url || "",
           r.verified ? "已验证" : "未验证",
+          "实时获取",
           r.createdAt ? new Date(r.createdAt).toLocaleString('zh-CN') : "",
         ];
       }
