@@ -5,8 +5,8 @@
  * 
  * 基于 Scrape.do 官方文档最佳实践：
  * - 线程池 + 并发模式
- * - 3 个 Worker Thread，每个 Worker 5 并发
- * - 全局最大 15 并发
+ * - 3 个 Worker Thread，每个 Worker 10 并发
+ * - 全局最大 30 并发
  */
 
 // ==================== 线程池配置 ====================
@@ -24,10 +24,10 @@ export const THREAD_POOL_CONFIG = {
   WORKER_THREAD_COUNT: 3,
   
   /** 每个 Worker 的并发数 */
-  CONCURRENCY_PER_WORKER: 5,
+  CONCURRENCY_PER_WORKER: 10,
   
-  /** 全局最大并发（3 × 5 = 15） */
-  GLOBAL_MAX_CONCURRENCY: 15,
+  /** 全局最大并发（3 × 10 = 30） */
+  GLOBAL_MAX_CONCURRENCY: 30,
   
   /** 任务队列最大长度 */
   TASK_QUEUE_MAX_SIZE: 1000,

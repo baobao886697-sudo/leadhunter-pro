@@ -24,6 +24,13 @@ import {
   DetailTaskWithIndex,
   TPS_CONFIG,
 } from "./scraper";
+import { 
+  fetchDetailsWithSmartPool,
+} from "./smartPoolExecutor";
+import {
+  TPS_POOL_CONFIG,
+  getTpsTaskScaleDescription,
+} from "./smartConcurrencyPool";
 import {
   getTpsConfig,
   createTpsSearchTask,
@@ -47,9 +54,9 @@ import {
   formatTpsCostBreakdown,
 } from "./realtimeCredits";
 
-// 统一队列并发配置
-const TOTAL_CONCURRENCY = TPS_CONFIG.TOTAL_CONCURRENCY;  // 40 总并发
-const SEARCH_CONCURRENCY = TPS_CONFIG.TASK_CONCURRENCY;  // 4 搜索并发
+// 统一队列并发配置 (v5.0 智能动态并发池)
+const TOTAL_CONCURRENCY = TPS_POOL_CONFIG.GLOBAL_MAX_CONCURRENCY;  // 40 总并发 (4×10)
+const SEARCH_CONCURRENCY = TPS_POOL_CONFIG.MAX_THREADS;  // 4 搜索并发
 
 // 输入验证 schema
 const tpsFiltersSchema = z.object({
@@ -636,81 +643,55 @@ async function executeTpsSearchRealtimeDeduction(
       addLog(`⚠️ 搜索阶段因积分不足提前停止`);
     }
     
-    // ==================== 阶段二：统一队列获取详情（实时扣费，无缓存命中） ====================
+    // ==================== 阶段二：智能并发池获取详情（v5.0 实时扣费） ====================
     if (allDetailTasks.length > 0 && !stoppedDueToCredits) {
-      addLog(`📋 阶段二：统一队列获取详情（${TOTAL_CONCURRENCY} 并发，无缓存命中）...`);
+      addLog(`📋 阶段二：智能并发池获取详情（最大 ${TOTAL_CONCURRENCY} 并发）...`);
       
-      // 去重详情链接
-      const uniqueLinks = Array.from(new Set(allDetailTasks.map(t => t.searchResult.detailLink)));
-      addLog(`🔗 去重后 ${uniqueLinks.length} 个唯一详情链接`);
+      // 使用智能并发池获取详情
+      const detailResult = await fetchDetailsWithSmartPool(
+        allDetailTasks,
+        token,
+        input.filters || {},
+        addLog,
+        setCachedDetails,
+        creditTracker
+      );
       
-      // 检查是否有足够积分获取详情
-      const { canAfford, affordableCount } = await creditTracker.canAffordDetailBatch(uniqueLinks.length);
+      totalDetailPages += detailResult.stats.detailPageRequests;
+      totalFilteredOut += detailResult.stats.filteredOut;
       
-      if (!canAfford) {
+      // 检查是否因积分不足停止
+      if (detailResult.stats.stoppedDueToCredits || creditTracker.isStopped()) {
         stoppedDueToCredits = true;
-        addLog(`⚠️ 积分不足，无法获取详情`);
-      } else if (affordableCount < uniqueLinks.length) {
-        addLog(`⚠️ 积分有限，只能获取 ${affordableCount}/${uniqueLinks.length} 条详情`);
       }
       
-      if (canAfford) {
-        // 限制详情任务数量
-        const limitedDetailTasks = allDetailTasks.slice(0, affordableCount);
-        
-        // 统一获取详情（不使用缓存命中）
-        const detailResult = await fetchDetailsInBatch(
-          limitedDetailTasks,
-          token,
-          TOTAL_CONCURRENCY,
-          input.filters || {},
-          addLog,
-          async () => new Map(), // 空的缓存读取函数（不使用缓存命中）
-          setCachedDetails,      // 保留缓存保存
-          creditTracker          // 传入积分跟踪器用于实时扣费
-        );
-        
-        totalDetailPages += detailResult.stats.detailPageRequests;
-        totalFilteredOut += detailResult.stats.filteredOut;
-        
-        // 检查是否因积分不足停止
-        if (creditTracker.isStopped()) {
-          stoppedDueToCredits = true;
-          addLog(`⚠️ 详情阶段因积分不足提前停止`);
+      // 按子任务分组保存结果
+      const resultsBySubTask = new Map<number, TpsDetailResult[]>();
+      
+      for (const { task, details } of detailResult.results) {
+        if (!resultsBySubTask.has(task.subTaskIndex)) {
+          resultsBySubTask.set(task.subTaskIndex, []);
         }
         
-        // 按子任务分组保存结果
-        const resultsBySubTask = new Map<number, TpsDetailResult[]>();
-        
-        for (const { task, details } of detailResult.results) {
-          if (!resultsBySubTask.has(task.subTaskIndex)) {
-            resultsBySubTask.set(task.subTaskIndex, []);
+        // 跨任务电话号码去重
+        for (const detail of details) {
+          if (detail.phone && seenPhones.has(detail.phone)) {
+            continue;
           }
-          
-          // 跨任务电话号码去重
-          for (const detail of details) {
-            if (detail.phone && seenPhones.has(detail.phone)) {
-              continue;
-            }
-            if (detail.phone) {
-              seenPhones.add(detail.phone);
-            }
-            resultsBySubTask.get(task.subTaskIndex)!.push(detail);
+          if (detail.phone) {
+            seenPhones.add(detail.phone);
           }
+          resultsBySubTask.get(task.subTaskIndex)!.push(detail);
         }
-        
-        // 保存结果到数据库
-        for (const [subTaskIndex, results] of Array.from(resultsBySubTask.entries())) {
-          const subTask = subTasks.find(t => t.index === subTaskIndex);
-          if (subTask && results.length > 0) {
-            await saveTpsSearchResults(taskDbId, subTaskIndex, subTask.name, subTask.location, results);
-            totalResults += results.length;
-          }
+      }
+      
+      // 保存结果到数据库
+      for (const [subTaskIndex, results] of Array.from(resultsBySubTask.entries())) {
+        const subTask = subTasks.find(t => t.index === subTaskIndex);
+        if (subTask && results.length > 0) {
+          await saveTpsSearchResults(taskDbId, subTaskIndex, subTask.name, subTask.location, results);
+          totalResults += results.length;
         }
-        
-        addLog(`════════ 详情阶段完成 ════════`);
-        addLog(`📊 详情页请求: ${totalDetailPages} 页`);
-        addLog(`📊 有效结果: ${totalResults} 条`);
       }
     }
     
