@@ -450,26 +450,26 @@ export async function executeSearchV3(
 
   try {
     currentStep++;
-    addLog('═══════════════════════════════════════════════════════════', 'info', 'init', '');
+    addLog('═══════════════════════════════════════════════════', 'info', 'init', '');
     addLog(`🔍 开始 LinkedIn 搜索`, 'success', 'init', '🚀');
     addLog(`任务编号: #${task.taskId.slice(0, 8)}`, 'info', 'init', '📋');
     addLog('──────────────────────────────', 'info', 'init', '');
     addLog(`📋 搜索配置:`, 'info', 'init', '');
-    addLog(`   姓名关键词: ${searchName}`, 'info', 'init', '');
-    addLog(`   职位: ${searchTitle}`, 'info', 'init', '');
-    addLog(`   地区: ${searchState}`, 'info', 'init', '');
-    addLog(`   请求数量: ${requestedCount} 条`, 'info', 'init', '');
+    addLog(`   • 姓名关键词: ${searchName}`, 'info', 'init', '');
+    addLog(`   • 职位: ${searchTitle}`, 'info', 'init', '');
+    addLog(`   • 地区: ${searchState}`, 'info', 'init', '');
+    addLog(`   • 请求数量: ${requestedCount} 条`, 'info', 'init', '');
     if (ageMin && ageMax) {
-      addLog(`   年龄筛选: ${ageMin} - ${ageMax} 岁`, 'info', 'init', '');
+      addLog(`   • 年龄筛选: ${ageMin} - ${ageMax} 岁`, 'info', 'init', '');
     }
-    addLog(`   电话验证: ${enableVerification ? '✅ 已启用' : '❌ 已禁用'}`, 'info', 'init', '');
-    addLog(`   搜索模式: ${mode === 'fuzzy' ? '模糊搜索' : '精准搜索'}`, 'info', 'init', '');
+    addLog(`   • 电话验证: ${enableVerification ? '✅ 已启用' : '❌ 已禁用'}`, 'info', 'init', '');
+    addLog(`   • 搜索模式: ${mode === 'fuzzy' ? '模糊搜索' : '精准搜索'}`, 'info', 'init', '');
     addLog('──────────────────────────────', 'info', 'init', '');
     addLog(`💰 费用预估:`, 'info', 'init', '');
-    addLog(`   当前余额: ${user.credits} 积分`, 'info', 'init', '');
-    addLog(`   预估消耗: ${currentSearchCredits + requestedCount * currentPhoneCreditsPerPerson} 积分`, 'info', 'init', '');
+    addLog(`   • 当前余额: ${user.credits} 积分`, 'info', 'init', '');
+    addLog(`   • 预估消耗: ${currentSearchCredits + requestedCount * currentPhoneCreditsPerPerson} 积分`, 'info', 'init', '');
     addLog(`   (搜索费 ${currentSearchCredits} + 数据费 ${requestedCount} × ${currentPhoneCreditsPerPerson})`, 'info', 'init', '');
-    addLog('═══════════════════════════════════════════════════════════', 'info', 'init', '');
+    addLog('═══════════════════════════════════════════════════', 'info', 'init', '');
     await updateProgress('初始化搜索任务', 'searching', 'init', 10);
 
     // ==================== 预扣费已完成，显示信息 ====================
@@ -881,9 +881,9 @@ export async function executeSearchV3(
         
         if (apiCreditsExhausted) {
           addLog('', 'info', 'process', '');
-          addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error', 'process', '');
+          addLog('═══════════════════════════════════════════════════', 'error', 'process', '');
           addLog('⚠️ 系统 API 积分已耗尽，搜索提前结束', 'error', 'process', '');
-          addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error', 'process', '');
+          addLog('═══════════════════════════════════════════════════', 'error', 'process', '');
           addLog('📌 已验证的数据已保存，您可以导出已完成的结果', 'warning', 'process', '');
           addLog('📞 请联系管理员处理 API 积分问题', 'warning', 'process', '');
           addLog('', 'info', 'process', '');
@@ -914,7 +914,7 @@ export async function executeSearchV3(
       stats.verifySuccessRate = Math.round((stats.resultsVerified / stats.resultsWithPhone) * 100);
     }
 
-    addLog('═══════════════════════════════════════════════════════════', 'info', 'complete', '');
+    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
     
     const finalStatus = progress.status === 'stopped' ? 'stopped' : 
                          progress.status === 'insufficient_credits' ? 'insufficient_credits' : 'completed';
@@ -926,12 +926,13 @@ export async function executeSearchV3(
     } else {
       addLog(`🎉 任务完成!`, 'success', 'complete', '');
     }
+    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
     
     addLog('──────────────────────────────', 'info', 'complete', '');
     addLog(`📊 搜索结果摘要:`, 'info', 'complete', '');
-    addLog(`   LinkedIn 返回: ${stats.apifyReturned} 条`, 'info', 'complete', '');
-    addLog(`   处理记录: ${stats.recordsProcessed} 条`, 'info', 'complete', '');
-    addLog(`   有效结果: ${stats.totalResults} 条`, 'info', 'complete', '');
+    addLog(`   • LinkedIn 返回: ${stats.apifyReturned} 条`, 'info', 'complete', '');
+    addLog(`   • 处理记录: ${stats.recordsProcessed} 条`, 'info', 'complete', '');
+    addLog(`   • 有效结果: ${stats.totalResults} 条`, 'info', 'complete', '');
     addLog(`   ├─ 有电话: ${stats.resultsWithPhone} 条`, 'info', 'complete', '');
     addLog(`   ├─ 有邮箱: ${stats.resultsWithEmail} 条`, 'info', 'complete', '');
     addLog(`   └─ 验证通过: ${stats.resultsVerified} 条`, 'info', 'complete', '');
@@ -977,9 +978,9 @@ export async function executeSearchV3(
       addLog(`   • 数据效率: ${(stats.totalResults / stats.creditsUsed).toFixed(2)} 条/积分`, 'info', 'complete', '');
     }
     
-    addLog('═══════════════════════════════════════════════════════════', 'info', 'complete', '');
-    addLog(`💡 提示: 相同搜索条件的后续搜索将命中缓存，节省更多积分`, 'info', 'complete', '');
-    addLog('═══════════════════════════════════════════════════════════', 'info', 'complete', '');
+    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
+    addLog(`💡 提示: 相同姓名/地点的后续搜索将命中缓存，节省更多积分`, 'info', 'complete', '');
+    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
 
     const statsLog: SearchLogEntry = {
       timestamp: formatTimestamp(),
