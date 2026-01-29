@@ -353,8 +353,8 @@ export const spfRouter = router({
         "姓名", "年龄", "出生年份", "城市", "州", "位置",
         "电话", "电话类型", "电话年份",
         "邮箱", "婚姻状态", "配偶姓名",
-        "就业信息", "教育信息",
-        "搜索姓名", "搜索地点", "缓存命中"
+        "就业信息",
+        "搜索姓名", "缓存命中"
       ];
       
       const csvRows = results.map((r: any) => [
@@ -371,9 +371,7 @@ export const spfRouter = router({
         r.maritalStatus || "",
         r.spouseName || "",
         r.employment || "",
-        r.education || "",
         r.searchName || "",
-        r.searchLocation || "",
         r.fromCache ? "是" : "否",
       ]);
       
