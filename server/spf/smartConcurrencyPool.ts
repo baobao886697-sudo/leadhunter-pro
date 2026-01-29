@@ -4,7 +4,7 @@
  * 版本: 5.0
  * 
  * 核心特性:
- * - 4 虚拟线程 × 10 并发 = 最大 40 并发
+ * - 2 虚拟线程 × 10 并发 = 最大 20 并发
  * - 智能任务规模评估，动态调整并发数
  * - 错误回退机制，保护 API
  * - 负载均衡，任务均匀分配
@@ -17,23 +17,23 @@
 // ============================================================================
 
 export const SPF_POOL_CONFIG = {
-  // 线程配置 (3×10=30)
-  MAX_THREADS: 3,                    // 最大虚拟线程数
+  // 线程配置 (2×10=20)
+  MAX_THREADS: 2,                    // 最大虚拟线程数
   MAX_CONCURRENCY_PER_THREAD: 10,    // 每线程最大并发数
-  GLOBAL_MAX_CONCURRENCY: 30,        // 全局最大并发 (3 × 10 = 30)
+  GLOBAL_MAX_CONCURRENCY: 20,        // 全局最大并发 (2 × 10 = 20)
   
   // 任务规模阈值
   SMALL_TASK_THRESHOLD: 5,           // 小任务: ≤5 页
   MEDIUM_TASK_THRESHOLD: 15,         // 中任务: 6-15 页
   // 大任务: 16-25 页
   
-  // 动态并发配置 (SPF 专用: 3×10=30)
+  // 动态并发配置 (SPF 专用: 2×10=20)
   SMALL_TASK_THREADS: 1,             // 小任务线程数
   SMALL_TASK_CONCURRENCY: 5,         // 小任务每线程并发 (1×5=5)
-  MEDIUM_TASK_THREADS: 2,            // 中任务线程数
-  MEDIUM_TASK_CONCURRENCY: 8,        // 中任务每线程并发 (2×8=16)
-  LARGE_TASK_THREADS: 3,             // 大任务线程数
-  LARGE_TASK_CONCURRENCY: 10,        // 大任务每线程并发 (3×10=30)
+  MEDIUM_TASK_THREADS: 1,            // 中任务线程数
+  MEDIUM_TASK_CONCURRENCY: 10,       // 中任务每线程并发 (1×10=10)
+  LARGE_TASK_THREADS: 2,             // 大任务线程数
+  LARGE_TASK_CONCURRENCY: 10,        // 大任务每线程并发 (2×10=20)
   
   // 速率限制
   REQUEST_DELAY_MS: 200,             // 请求间隔 (毫秒)
