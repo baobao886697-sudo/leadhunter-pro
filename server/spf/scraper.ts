@@ -407,6 +407,21 @@ function applyFilters(detail: SpfDetailResult, filters: SpfFilters): boolean {
     return false;
   }
   
+  // 运营商过滤 - 检查 carrier 字段是否包含指定运营商
+  if (filters.excludeTMobile && detail.carrier) {
+    const carrierLower = detail.carrier.toLowerCase();
+    if (carrierLower.includes('t-mobile') || carrierLower.includes('tmobile')) {
+      return false;
+    }
+  }
+  
+  if (filters.excludeComcast && detail.carrier) {
+    const carrierLower = detail.carrier.toLowerCase();
+    if (carrierLower.includes('comcast') || carrierLower.includes('xfinity')) {
+      return false;
+    }
+  }
+  
   return true;
 }
 

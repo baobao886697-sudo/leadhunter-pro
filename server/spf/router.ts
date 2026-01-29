@@ -484,6 +484,8 @@ async function executeSpfSearchUnifiedQueue(
   addLog(`   • 年龄范围: ${filters.minAge || 50} - ${filters.maxAge || 79} 岁`);
   if (filters.excludeLandline) addLog(`   • 排除座机号码`);
   if (filters.excludeWireless) addLog(`   • 排除手机号码`);
+  if (filters.excludeTMobile) addLog(`   • 排除 T-Mobile 运营商`);
+  if (filters.excludeComcast) addLog(`   • 排除 Comcast/Xfinity 运营商`);
   
   // 显示预估费用
   const maxPagesPerTask = SPF_CONFIG.MAX_SAFE_PAGES;
