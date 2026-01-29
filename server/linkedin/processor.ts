@@ -602,7 +602,7 @@ export async function executeSearchV3(
       // 结算退还
       const settlement = await settleCredits(userId, frozenAmount, stats.creditsUsed, task.taskId);
       addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
-      addLog(`💰 费用结算:`, 'info', 'complete', '');
+      addLog(`💰 费用明细:`, 'info', 'complete', '');
       addLog(`   • 预扣积分: ${frozenAmount} 积分`, 'info', 'complete', '');
       addLog(`   • 实际消耗: ${stats.creditsUsed} 积分`, 'info', 'complete', '');
       if (settlement.refundAmount > 0) {
@@ -924,11 +924,11 @@ export async function executeSearchV3(
     } else if (finalStatus === 'insufficient_credits') {
       addLog(`⚠️ 积分不足，搜索提前结束`, 'warning', 'complete', '⚠️');
     } else {
-      addLog(`🎉 搜索完成！`, 'success', 'complete', '');
+      addLog(`🎉 任务完成!`, 'success', 'complete', '');
     }
     
     addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
-    addLog(`📊 搜索结果统计:`, 'info', 'complete', '');
+    addLog(`📊 搜索结果摘要:`, 'info', 'complete', '');
     addLog(`   LinkedIn 返回: ${stats.apifyReturned} 条`, 'info', 'complete', '');
     addLog(`   处理记录: ${stats.recordsProcessed} 条`, 'info', 'complete', '');
     addLog(`   有效结果: ${stats.totalResults} 条`, 'info', 'complete', '');
@@ -959,7 +959,7 @@ export async function executeSearchV3(
     const settlement = await settleCredits(userId, frozenAmount, stats.creditsUsed, task.taskId);
     
     addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
-    addLog(`💰 费用结算:`, 'info', 'complete', '');
+    addLog(`💰 费用明细:`, 'info', 'complete', '');
     addLog(`   • 预扣积分: ${frozenAmount} 积分`, 'info', 'complete', '');
     addLog(`   • 实际消耗: ${stats.creditsUsed} 积分`, 'info', 'complete', '');
     if (settlement.refundAmount > 0) {

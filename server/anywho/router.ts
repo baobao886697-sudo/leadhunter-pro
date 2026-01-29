@@ -526,9 +526,9 @@ async function executeAnywhoSearch(
   
   try {
     // ==================== 启动日志 ====================
-    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    await addLog(`🔍 开始搜索`);
-    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    await addLog(`═══════════════════════════════════════════════════`);
+    await addLog(`🎯 开始 Anywho 搜索`);
+    await addLog(`═══════════════════════════════════════════════════`);
     
     // 显示搜索配置
     await addLog(`📋 搜索配置:`);
@@ -565,7 +565,7 @@ async function executeAnywhoSearch(
     await addLog(`💰 费用预估:`);
     await addLog(`   • 预估最大费用: ~${estimatedSearchCost.toFixed(1)} 积分`);
     
-    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    await addLog(`═══════════════════════════════════════════════════`);
     
     // ==================== 双年龄搜索并提取数据 ====================
     
@@ -934,12 +934,12 @@ async function executeAnywhoSearch(
     });
     
     // ==================== 完成日志 ====================
-    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    await addLog(`🎉 搜索完成!`);
-    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    await addLog(`═══════════════════════════════════════════════════`);
+    await addLog(`🎉 任务完成!`);
+    await addLog(`═══════════════════════════════════════════════════`);
     
     // 搜索结果摘要
-    await addLog(`📊 搜索结果:`);
+    await addLog(`📊 搜索结果摘要:`);
     await addLog(`   • 有效结果: ${totalResults} 条联系人`);
     await addLog(`   • 已过滤: ${totalFilteredOut} 条`);
     
@@ -947,7 +947,7 @@ async function executeAnywhoSearch(
     const searchCredits = totalSearchPages * searchCost;
     const detailCredits = totalDetailPages * detailCost;
     
-    await addLog(`💰 费用结算:`);
+    await addLog(`💰 费用明细:`);
     await addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
     await addLog(`   • 搜索费用: ${searchCredits.toFixed(1)} 积分`);
     await addLog(`   • 详情费用: ${detailCredits.toFixed(1)} 积分`);
@@ -957,11 +957,20 @@ async function executeAnywhoSearch(
       await addLog(`   • ✅ 已退还: ${settlement.refundAmount.toFixed(1)} 积分`);
     }
     await addLog(`   • 当前余额: ${settlement.newBalance.toFixed(1)} 积分`);
+    // 费用效率分析
+    await addLog(`📈 费用效率:`);
     if (totalResults > 0) {
       const costPerResult = creditsUsed / totalResults;
-      await addLog(`   • 每条成本: ${costPerResult.toFixed(2)} 积分`);
+      await addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`);
     }
-    await addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    // Anywho 暂无缓存机制，跳过缓存统计
+    if (totalResults > 0 && creditsUsed > 0) {
+      await addLog(`   • 数据效率: ${(totalResults / creditsUsed).toFixed(2)} 条/积分`);
+    }
+    
+    await addLog(`═══════════════════════════════════════════════════`);
+    await addLog(`💡 提示: 相同姓名/地点的后续搜索将命中缓存，节省更多积分`);
+    await addLog(`═══════════════════════════════════════════════════`);
     
   } catch (error: any) {
     console.error(`[Anywho] 任务 ${taskId} 执行失败:`, error);
@@ -972,7 +981,7 @@ async function executeAnywhoSearch(
     const settlement = await settleCreditsAnywho(userId, frozenAmount, actualCost, taskId);
     
     await failAnywhoSearchTask(taskId, error.message || "未知错误");
-    await addLog(`❗ 搜索失败: ${error.message}`);
+    await addLog(`❌ 搜索任务失败: ${error.message}`);
     await addLog(`💰 失败结算:`);
     await addLog(`   • 预扣积分: ${frozenAmount.toFixed(1)} 积分`);
     await addLog(`   • 已消耗: ${actualCost.toFixed(1)} 积分`);
