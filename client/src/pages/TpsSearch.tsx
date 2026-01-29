@@ -1,3 +1,8 @@
+/**
+ * TruePeopleSearch 搜索页面 - 黄金模板 v2.0
+ * 整合 TPS + SPF 最佳设计
+ */
+
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -29,9 +35,98 @@ import {
   Phone,
   Crown,
   Zap,
-  TrendingUp
+  TrendingUp,
+  Building,
+  Calendar,
+  Shield
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// 七彩鎏金动画样式
+const rainbowStyles = `
+  @keyframes rainbow-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.4),
+                  0 0 40px rgba(255, 165, 0, 0.3),
+                  0 0 60px rgba(255, 105, 180, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
+                  0 0 60px rgba(255, 165, 0, 0.5),
+                  0 0 90px rgba(255, 105, 180, 0.4);
+    }
+  }
+  
+  @keyframes border-dance {
+    0%, 100% { border-color: #ffd700; }
+    16% { border-color: #ff6b6b; }
+    33% { border-color: #ff69b4; }
+    50% { border-color: #9b59b6; }
+    66% { border-color: #3498db; }
+    83% { border-color: #2ecc71; }
+  }
+  
+  @keyframes star-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+  }
+  
+  .rainbow-text {
+    background: linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #ff69b4, #9b59b6, #3498db, #2ecc71, #ffd700);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+  }
+  
+  .rainbow-border {
+    border: 2px solid transparent;
+    animation: border-dance 4s linear infinite;
+  }
+  
+  .rainbow-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  .rainbow-bg {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 179, 71, 0.15), rgba(255, 107, 107, 0.15), rgba(255, 105, 180, 0.15), rgba(155, 89, 182, 0.15), rgba(52, 152, 219, 0.15), rgba(46, 204, 113, 0.15));
+    background-size: 400% 400%;
+    animation: rainbow-flow 8s ease infinite;
+  }
+  
+  .rainbow-btn {
+    background: linear-gradient(135deg, #ffd700, #ff6b6b, #ff69b4, #9b59b6);
+    background-size: 300% 300%;
+    animation: rainbow-flow 3s ease infinite;
+  }
+  
+  .rainbow-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+  }
+  
+  .star-pulse {
+    animation: star-pulse 1.5s ease-in-out infinite;
+  }
+  
+  .recommend-badge {
+    background: linear-gradient(135deg, #ffd700 0%, #ff6b6b 50%, #9b59b6 100%);
+    background-size: 200% 200%;
+    animation: rainbow-flow 2s ease infinite;
+  }
+`;
 
 export default function TpsSearch() {
   const { user, loading } = useAuth();
@@ -45,7 +140,6 @@ export default function TpsSearch() {
   const [locationsInput, setLocationsInput] = useState("");
   
   // 过滤条件 - 默认值会从后端配置获取
-  // 注：已移除minYear，因为现在只提取每个人的第一个号码（Primary主号），它本身就是最新的
   const [filters, setFilters] = useState({
     minAge: 50,
     maxAge: 79,
@@ -139,7 +233,6 @@ export default function TpsSearch() {
       locations: mode === "nameLocation" ? locations : undefined,
       mode,
       filters: filters,  // 始终传递过滤条件（包含默认值）
-      // maxPages 已删除，后端固定使用 25 页
     });
   };
 
@@ -147,11 +240,8 @@ export default function TpsSearch() {
     return (
       <DashboardLayout>
         <div className="p-6 space-y-6">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Skeleton className="h-96" />
-            <Skeleton className="h-96" />
-          </div>
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
       </DashboardLayout>
     );
@@ -159,80 +249,93 @@ export default function TpsSearch() {
 
   return (
     <DashboardLayout>
+      <style>{rainbowStyles}</style>
+      
       <div className="p-6 space-y-6">
-        {/* 七彩鎏金色标题样式 */}
-        <style>{`
-          .golden-rainbow-title {
-            background: linear-gradient(
-              90deg,
-              #ffd700, #ffb347, #ff6b6b, #ff69b4, #9b59b6, #3498db, #2ecc71, #ffd700
-            );
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: golden-shine 3s linear infinite;
-          }
-          @keyframes golden-shine {
-            to {
-              background-position: 200% center;
-            }
-          }
-          .star-pulse {
-            animation: star-pulse 1.5s ease-in-out infinite;
-          }
-          @keyframes star-pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.8; }
-          }
-          .recommend-badge {
-            background: linear-gradient(135deg, #ffd700 0%, #ff6b6b 50%, #9b59b6 100%);
-            background-size: 200% 200%;
-            animation: badge-gradient 2s ease infinite;
-          }
-          @keyframes badge-gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-          }
-        `}</style>
-        
-        {/* 页面标题 */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 flex-wrap">
-              <Star className="h-6 w-6 text-yellow-500 fill-yellow-500 star-pulse" />
-              <Star className="h-6 w-6 text-yellow-500 fill-yellow-500 star-pulse" style={{ animationDelay: '0.2s' }} />
-              <span className="golden-rainbow-title">TruePeopleSearch 搜索</span>
+        {/* 顶部横幅 - 七彩鎏金风格 */}
+        <div className="relative overflow-hidden rounded-2xl rainbow-bg rainbow-border rainbow-glow p-8">
+          <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-pink-500/10"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white border-0">
+                <Star className="w-3 h-3 mr-1" />
+                推荐数据源
+              </Badge>
+              <Badge className="bg-gradient-to-r from-pink-500 to-purple-500 text-white border-0">
+                <Home className="w-3 h-3 mr-1" />
+                房产价格
+              </Badge>
+              <Badge className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0">
+                <Phone className="w-3 h-3 mr-1" />
+                最新号码
+              </Badge>
+            </div>
+            <h1 className="text-3xl font-bold rainbow-text mb-2 flex items-center gap-2">
+              <Star className="h-8 w-8 text-yellow-500 fill-yellow-500 star-pulse" />
+              TruePeopleSearch 搜索
               <span className="recommend-badge text-xs px-3 py-1 rounded-full text-white font-bold shadow-lg">
                 ⭐ 推荐 ⭐
               </span>
             </h1>
-            <p className="text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
-              <span className="text-amber-400 font-medium">华侨/美国人最新数据</span>
-              <span className="text-slate-500">|</span>
-              <span className="text-emerald-400 font-medium">最新电话号码</span>
-              <span className="text-slate-500">|</span>
-              <span className="text-pink-400 font-medium flex items-center gap-1">
-                <Home className="h-4 w-4" />
-                房产价格信息
-              </span>
+            <p className="text-muted-foreground max-w-2xl">
+              华侨/美国人最新数据！获取房产价格、最新电话号码、运营商信息等高价值数据。
             </p>
           </div>
-          <Button variant="outline" onClick={() => setLocation("/tps/history")} className="border-amber-500/50 hover:bg-amber-500/10">
+          <Button 
+            variant="outline" 
+            onClick={() => setLocation("/tps/history")} 
+            className="absolute top-6 right-6 border-amber-500/50 hover:bg-amber-500/10"
+          >
             <Clock className="h-4 w-4 mr-2 text-amber-500" />
             搜索历史
           </Button>
+        </div>
+
+        {/* TPS 独特亮点展示 - 4个特色卡片 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/30 hover:border-amber-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Home className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-amber-400">房产价格</h3>
+              <p className="text-xs text-muted-foreground">独家房产价值数据</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/30 hover:border-emerald-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Phone className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-emerald-400">最新号码</h3>
+              <p className="text-xs text-muted-foreground">Primary 主号提取</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/30 hover:border-blue-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Shield className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-blue-400">运营商信息</h3>
+              <p className="text-xs text-muted-foreground">精准过滤运营商</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 hover:border-purple-500/50 transition-colors">
+            <CardContent className="p-4 text-center">
+              <Building className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+              <h3 className="font-semibold text-purple-400">建造年份</h3>
+              <p className="text-xs text-muted-foreground">房屋建造信息</p>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 左侧：搜索表单 */}
           <div className="lg:col-span-2 space-y-6">
             {/* 搜索模式选择 */}
-            <Card className="bg-gradient-to-br from-amber-900/20 to-orange-900/20 border-amber-700/50">
+            <Card className="rainbow-border">
               <CardHeader>
-                <CardTitle className="text-lg">搜索模式</CardTitle>
-                <CardDescription>选择搜索方式</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="w-5 h-5 text-amber-400" />
+                  搜索模式
+                </CardTitle>
+                <CardDescription>
+                  选择搜索方式：仅姓名搜索或姓名+地点组合搜索
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Tabs value={mode} onValueChange={(v) => setMode(v as "nameOnly" | "nameLocation")}>
@@ -282,7 +385,7 @@ export default function TpsSearch() {
                         <Label htmlFor="locations">地点列表（每行一个）</Label>
                         <Textarea
                           id="locations"
-                          placeholder="New York, NY&#10;Los Angeles, CA&#10;Chicago, IL"
+                          placeholder="Los Angeles, CA&#10;New York, NY&#10;Chicago, IL"
                           value={locationsInput}
                           onChange={(e) => setLocationsInput(e.target.value)}
                           className="mt-2 min-h-[150px] font-mono bg-slate-800/50"
@@ -322,6 +425,36 @@ export default function TpsSearch() {
               </CardHeader>
               {showFilters && (
                 <CardContent className="space-y-6">
+                  {/* 当前过滤条件显示 */}
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <p className="text-sm text-amber-400 font-medium mb-2">当前过滤条件：</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline" className="border-amber-500/50 text-amber-400">
+                        年龄: {filters.minAge}-{filters.maxAge}岁
+                      </Badge>
+                      {filters.minPropertyValue > 0 && (
+                        <Badge variant="outline" className="border-green-500/50 text-green-400">
+                          房产 ≥ ${filters.minPropertyValue.toLocaleString()}
+                        </Badge>
+                      )}
+                      {filters.excludeTMobile && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除 T-Mobile
+                        </Badge>
+                      )}
+                      {filters.excludeComcast && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除 Comcast
+                        </Badge>
+                      )}
+                      {filters.excludeLandline && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除固话
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  
                   {/* 年龄范围 */}
                   <div>
                     <Label>年龄范围: {filters.minAge} - {filters.maxAge} 岁</Label>
@@ -480,7 +613,7 @@ export default function TpsSearch() {
             <Button
               onClick={handleSearch}
               disabled={searchMutation.isPending || names.length === 0}
-              className="w-full h-14 text-lg font-bold bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 hover:from-amber-500 hover:via-orange-400 hover:to-amber-500 shadow-lg shadow-amber-500/25"
+              className="w-full h-14 text-lg font-bold rainbow-btn text-white shadow-lg"
             >
               {searchMutation.isPending ? (
                 <>
@@ -496,12 +629,12 @@ export default function TpsSearch() {
               )}
             </Button>
 
-            {/* TPS 核心优势 - 突出卖点 */}
+            {/* TPS 核心优势 */}
             <Card className="bg-gradient-to-br from-amber-900/30 via-orange-900/20 to-pink-900/30 border-amber-600/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Crown className="h-5 w-5 text-amber-400" />
-                  <span className="golden-rainbow-title">TPS 核心优势</span>
+                  <span className="rainbow-text">核心优势</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -527,7 +660,7 @@ export default function TpsSearch() {
                   </div>
                 </div>
                 
-                {/* 核心优势3: 房产价格 - 重点突出 */}
+                {/* 核心优势3: 房产价格 */}
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20">
                   <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center flex-shrink-0">
                     <Home className="h-5 w-5 text-pink-400" />
@@ -537,7 +670,7 @@ export default function TpsSearch() {
                       房产价格信息
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-200">独家</span>
                     </p>
-                    <p className="text-xs text-muted-foreground">快速判断客户资质，筛选高净值目标客户</p>
+                    <p className="text-xs text-muted-foreground">获取目标人物的房产估值，精准筛选高净值客户</p>
                   </div>
                 </div>
                 
@@ -573,7 +706,7 @@ export default function TpsSearch() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold text-black">3</div>
-                  <p className="text-sm">点击“开始搜索”，等待结果</p>
+                  <p className="text-sm">点击"开始搜索"，等待结果</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-xs font-bold text-black">4</div>
@@ -603,4 +736,4 @@ export default function TpsSearch() {
     </DashboardLayout>
   );
 }
-// TPS Integration v1.0
+// TPS Golden Template v2.0

@@ -1,5 +1,5 @@
 /**
- * SearchPeopleFree 搜索历史页面 - 七彩鎏金风格
+ * SearchPeopleFree 搜索历史页面 - 基于黄金模板 v2.0
  */
 
 import { useState } from "react";
@@ -30,7 +30,8 @@ import {
   XCircle,
   AlertCircle,
   Star,
-  Sparkles,
+  Plus,
+  Heart,
 } from "lucide-react";
 
 // 七彩鎏金动画样式
@@ -75,10 +76,28 @@ const rainbowStyles = `
     animation: rainbow-flow 8s ease infinite;
   }
   
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(255, 105, 180, 0.4),
+                  0 0 40px rgba(155, 89, 182, 0.3),
+                  0 0 60px rgba(52, 152, 219, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(255, 105, 180, 0.6),
+                  0 0 60px rgba(155, 89, 182, 0.5),
+                  0 0 90px rgba(52, 152, 219, 0.4);
+    }
+  }
+  
   .rainbow-btn {
-    background: linear-gradient(135deg, #ffd700, #ff6b6b, #ff69b4, #9b59b6);
+    background: linear-gradient(135deg, #ff69b4, #9b59b6, #3498db);
     background-size: 300% 300%;
     animation: rainbow-flow 3s ease infinite;
+  }
+  
+  .rainbow-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 30px rgba(255, 105, 180, 0.5);
   }
 `;
 
@@ -148,8 +167,9 @@ export default function SpfHistory() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Star className="h-6 w-6 text-yellow-400" />
-                <span className="rainbow-text">SPF 搜索历史</span>
+                <Heart className="h-6 w-6 text-pink-400" />
+                <History className="h-6 w-6 text-pink-500" />
+                <span className="rainbow-text">搜索历史</span>
               </h1>
               <p className="text-muted-foreground mt-1">
                 查看您的 SearchPeopleFree 搜索记录
@@ -158,9 +178,9 @@ export default function SpfHistory() {
           </div>
           <Button
             onClick={() => setLocation("/spf/search")}
-            className="rainbow-btn text-white border-0"
+            className="rainbow-btn text-white font-bold"
           >
-            <Sparkles className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4 mr-2" />
             新建搜索
           </Button>
         </div>
@@ -169,14 +189,14 @@ export default function SpfHistory() {
         <Card className="rainbow-border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <History className="h-5 w-5 text-yellow-400" />
+              <History className="h-5 w-5 text-pink-400" />
               搜索记录
             </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-yellow-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-pink-500" />
               </div>
             ) : data?.tasks && data.tasks.length > 0 ? (
               <>
@@ -195,20 +215,22 @@ export default function SpfHistory() {
                   </TableHeader>
                   <TableBody>
                     {data.tasks.map((task: any) => (
-                      <TableRow key={task.id}>
+                      <TableRow key={task.id} className="hover:bg-pink-500/5">
                         <TableCell className="font-mono text-sm">
                           {task.taskId.slice(0, 8)}...
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs border-yellow-500/30 text-yellow-400">
+                          <Badge variant="outline" className="text-xs border-pink-500/50 text-pink-400">
                             {task.mode === "nameOnly" ? "仅姓名" : "姓名+地点"}
                           </Badge>
                         </TableCell>
-                        <TableCell>{task.totalSubTasks}</TableCell>
-                        <TableCell className="font-medium text-green-400">
+                        <TableCell>
+                          {task.completedSubTasks} / {task.totalSubTasks}
+                        </TableCell>
+                        <TableCell className="font-medium text-pink-400">
                           {task.totalResults}
                         </TableCell>
-                        <TableCell className="rainbow-text font-bold">
+                        <TableCell className="text-purple-400">
                           {task.creditsUsed?.toFixed(1) || 0}
                         </TableCell>
                         <TableCell>{getStatusBadge(task.status)}</TableCell>
@@ -220,7 +242,7 @@ export default function SpfHistory() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setLocation(`/spf/task/${task.taskId}`)}
-                            className="hover:bg-yellow-500/10"
+                            className="hover:bg-pink-500/10 hover:text-pink-400"
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             查看
@@ -235,7 +257,7 @@ export default function SpfHistory() {
                 {data.totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <p className="text-sm text-muted-foreground">
-                      第 {page} / {data.totalPages} 页，共 {data.total} 条记录
+                      第 {page} 页，共 {data.totalPages} 页
                     </p>
                     <div className="flex items-center gap-2">
                       <Button
@@ -243,6 +265,7 @@ export default function SpfHistory() {
                         size="sm"
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
+                        className="border-pink-500/30 hover:bg-pink-500/10"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
@@ -251,6 +274,7 @@ export default function SpfHistory() {
                         size="sm"
                         onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
                         disabled={page === data.totalPages}
+                        className="border-pink-500/30 hover:bg-pink-500/10"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </Button>
@@ -260,17 +284,14 @@ export default function SpfHistory() {
               </>
             ) : (
               <div className="text-center py-12">
-                <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">暂无搜索记录</h3>
-                <p className="text-muted-foreground mb-4">
-                  开始您的第一次 SearchPeopleFree 搜索
-                </p>
+                <History className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground mb-4">暂无搜索记录</p>
                 <Button
                   onClick={() => setLocation("/spf/search")}
-                  className="rainbow-btn text-white border-0"
+                  className="rainbow-btn text-white"
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  开始搜索
+                  <Search className="h-4 w-4 mr-2" />
+                  开始第一次搜索
                 </Button>
               </div>
             )}

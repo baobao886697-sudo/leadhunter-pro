@@ -1,3 +1,8 @@
+/**
+ * SearchPeopleFree 搜索页面 - 基于黄金模板 v2.0
+ * SPF 特色：电子邮件、婚姻状态、配偶信息、就业状态
+ */
+
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,9 +40,95 @@ import {
   Heart,
   Briefcase,
   Calendar,
-  Globe
+  Shield
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// 七彩鎏金动画样式
+const rainbowStyles = `
+  @keyframes rainbow-flow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.4),
+                  0 0 40px rgba(255, 165, 0, 0.3),
+                  0 0 60px rgba(255, 105, 180, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
+                  0 0 60px rgba(255, 165, 0, 0.5),
+                  0 0 90px rgba(255, 105, 180, 0.4);
+    }
+  }
+  
+  @keyframes border-dance {
+    0%, 100% { border-color: #ffd700; }
+    16% { border-color: #ff6b6b; }
+    33% { border-color: #ff69b4; }
+    50% { border-color: #9b59b6; }
+    66% { border-color: #3498db; }
+    83% { border-color: #2ecc71; }
+  }
+  
+  @keyframes star-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+  }
+  
+  .rainbow-text {
+    background: linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #ff69b4, #9b59b6, #3498db, #2ecc71, #ffd700);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+  }
+  
+  .rainbow-border {
+    border: 2px solid transparent;
+    animation: border-dance 4s linear infinite;
+  }
+  
+  .rainbow-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  .rainbow-bg {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 179, 71, 0.15), rgba(255, 107, 107, 0.15), rgba(255, 105, 180, 0.15), rgba(155, 89, 182, 0.15), rgba(52, 152, 219, 0.15), rgba(46, 204, 113, 0.15));
+    background-size: 400% 400%;
+    animation: rainbow-flow 8s ease infinite;
+  }
+  
+  .rainbow-btn {
+    background: linear-gradient(135deg, #ffd700, #ff6b6b, #ff69b4, #9b59b6);
+    background-size: 300% 300%;
+    animation: rainbow-flow 3s ease infinite;
+  }
+  
+  .rainbow-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+  }
+  
+  .star-pulse {
+    animation: star-pulse 1.5s ease-in-out infinite;
+  }
+  
+  .feature-badge {
+    background: linear-gradient(135deg, #ff69b4 0%, #9b59b6 50%, #3498db 100%);
+    background-size: 200% 200%;
+    animation: rainbow-flow 2s ease infinite;
+  }
+`;
 
 export default function SpfSearch() {
   const { user, loading } = useAuth();
@@ -50,7 +141,7 @@ export default function SpfSearch() {
   const [namesInput, setNamesInput] = useState("");
   const [locationsInput, setLocationsInput] = useState("");
   
-  // 过滤条件 - 默认年龄 50-79，但需要用户启用才生效
+  // 过滤条件
   const [filters, setFilters] = useState({
     minAge: 50,
     maxAge: 79,
@@ -127,10 +218,9 @@ export default function SpfSearch() {
       return;
     }
     
-    // 构建过滤器，只有启用年龄过滤时才传递年龄参数
+    // 构建过滤器
     const effectiveFilters = {
       ...filters,
-      // 如果未启用年龄过滤，则不传递年龄参数
       minAge: enableAgeFilter ? filters.minAge : undefined,
       maxAge: enableAgeFilter ? filters.maxAge : undefined,
     };
@@ -142,77 +232,6 @@ export default function SpfSearch() {
       filters: effectiveFilters,
     });
   };
-  
-  // 七彩鎏金动画样式
-  const rainbowStyles = `
-    @keyframes rainbow-flow {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    
-    @keyframes shimmer {
-      0% { background-position: -200% center; }
-      100% { background-position: 200% center; }
-    }
-    
-    @keyframes pulse-glow {
-      0%, 100% {
-        box-shadow: 0 0 20px rgba(255, 215, 0, 0.4),
-                    0 0 40px rgba(255, 165, 0, 0.3),
-                    0 0 60px rgba(255, 105, 180, 0.2);
-      }
-      50% {
-        box-shadow: 0 0 30px rgba(255, 215, 0, 0.6),
-                    0 0 60px rgba(255, 165, 0, 0.5),
-                    0 0 90px rgba(255, 105, 180, 0.4);
-      }
-    }
-    
-    @keyframes border-dance {
-      0%, 100% { border-color: #ffd700; }
-      16% { border-color: #ff6b6b; }
-      33% { border-color: #ff69b4; }
-      50% { border-color: #9b59b6; }
-      66% { border-color: #3498db; }
-      83% { border-color: #2ecc71; }
-    }
-    
-    .rainbow-text {
-      background: linear-gradient(90deg, #ffd700, #ffb347, #ff6b6b, #ff69b4, #9b59b6, #3498db, #2ecc71, #ffd700);
-      background-size: 200% auto;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      animation: shimmer 3s linear infinite;
-    }
-    
-    .rainbow-border {
-      border: 2px solid transparent;
-      animation: border-dance 4s linear infinite;
-    }
-    
-    .rainbow-glow {
-      animation: pulse-glow 2s ease-in-out infinite;
-    }
-    
-    .rainbow-bg {
-      background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 179, 71, 0.15), rgba(255, 107, 107, 0.15), rgba(255, 105, 180, 0.15), rgba(155, 89, 182, 0.15), rgba(52, 152, 219, 0.15), rgba(46, 204, 113, 0.15));
-      background-size: 400% 400%;
-      animation: rainbow-flow 8s ease infinite;
-    }
-    
-    .rainbow-btn {
-      background: linear-gradient(135deg, #ffd700, #ff6b6b, #ff69b4, #9b59b6);
-      background-size: 300% 300%;
-      animation: rainbow-flow 3s ease infinite;
-    }
-    
-    .rainbow-btn:hover {
-      transform: scale(1.02);
-      box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
-    }
-  `;
 
   if (loading || !user) {
     return (
@@ -232,9 +251,9 @@ export default function SpfSearch() {
       <div className="p-6 space-y-6">
         {/* 顶部横幅 - 七彩鎏金风格 */}
         <div className="relative overflow-hidden rounded-2xl rainbow-bg rainbow-border rainbow-glow p-8">
-          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-pink-500/10 to-purple-500/10"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-blue-500/10"></div>
           <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
               <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-0">
                 <Star className="w-3 h-3 mr-1" />
                 独家数据
@@ -248,39 +267,51 @@ export default function SpfSearch() {
                 电子邮件
               </Badge>
             </div>
-            <h1 className="text-3xl font-bold rainbow-text mb-2">
+            <h1 className="text-3xl font-bold rainbow-text mb-2 flex items-center gap-2">
+              <Star className="h-8 w-8 text-pink-500 fill-pink-500 star-pulse" />
               SearchPeopleFree 搜索
+              <span className="feature-badge text-xs px-3 py-1 rounded-full text-white font-bold shadow-lg">
+                独家数据
+              </span>
             </h1>
             <p className="text-muted-foreground max-w-2xl">
-              独家数据源！获取电子邮件、婚姻状态、配偶信息、就业状态等 TPS/FPS 没有的独特数据。
+              独家数据源！获取电子邮件、婚姻状态、配偶信息、就业状态等 TPS 没有的独特数据。
             </p>
           </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setLocation("/spf/history")} 
+            className="absolute top-6 right-6 border-pink-500/50 hover:bg-pink-500/10"
+          >
+            <Clock className="h-4 w-4 mr-2 text-pink-500" />
+            搜索历史
+          </Button>
         </div>
 
-        {/* SPF 独特亮点展示 */}
+        {/* SPF 独特亮点展示 - 4个特色卡片 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/30">
+          <Card className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/30 hover:border-yellow-500/50 transition-colors">
             <CardContent className="p-4 text-center">
               <Mail className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
               <h3 className="font-semibold text-yellow-400">电子邮件</h3>
               <p className="text-xs text-muted-foreground">独家邮箱数据</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-pink-500/10 to-purple-500/10 border-pink-500/30">
+          <Card className="bg-gradient-to-br from-pink-500/10 to-purple-500/10 border-pink-500/30 hover:border-pink-500/50 transition-colors">
             <CardContent className="p-4 text-center">
               <Heart className="w-8 h-8 text-pink-400 mx-auto mb-2" />
               <h3 className="font-semibold text-pink-400">婚姻状态</h3>
               <p className="text-xs text-muted-foreground">配偶信息查询</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/30">
+          <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/30 hover:border-blue-500/50 transition-colors">
             <CardContent className="p-4 text-center">
               <Briefcase className="w-8 h-8 text-blue-400 mx-auto mb-2" />
               <h3 className="font-semibold text-blue-400">就业状态</h3>
               <p className="text-xs text-muted-foreground">职业信息</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30">
+          <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30 hover:border-green-500/50 transition-colors">
             <CardContent className="p-4 text-center">
               <Calendar className="w-8 h-8 text-green-400 mx-auto mb-2" />
               <h3 className="font-semibold text-green-400">数据确认日期</h3>
@@ -296,7 +327,7 @@ export default function SpfSearch() {
             <Card className="rainbow-border">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Search className="w-5 h-5 text-yellow-400" />
+                  <Search className="w-5 h-5 text-pink-400" />
                   搜索模式
                 </CardTitle>
                 <CardDescription>
@@ -307,27 +338,24 @@ export default function SpfSearch() {
                 <Tabs value={mode} onValueChange={(v) => setMode(v as "nameOnly" | "nameLocation")}>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="nameOnly" className="flex items-center gap-2">
-                      <Users className="w-4 h-4" />
+                      <Users className="h-4 w-4" />
                       仅姓名搜索
                     </TabsTrigger>
                     <TabsTrigger value="nameLocation" className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
+                      <MapPin className="h-4 w-4" />
                       姓名 + 地点
                     </TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="nameOnly" className="space-y-4 mt-4">
+                  <TabsContent value="nameOnly" className="mt-4 space-y-4">
                     <div>
-                      <Label htmlFor="names" className="flex items-center gap-2 mb-2">
-                        <Users className="w-4 h-4 text-yellow-400" />
-                        姓名列表（每行一个）
-                      </Label>
+                      <Label htmlFor="names">姓名列表（每行一个）</Label>
                       <Textarea
                         id="names"
-                        placeholder="John Smith&#10;Jane Doe&#10;Michael Johnson"
+                        placeholder="John Smith&#10;Jane Doe&#10;Robert Johnson"
                         value={namesInput}
                         onChange={(e) => setNamesInput(e.target.value)}
-                        className="min-h-[200px] font-mono"
+                        className="mt-2 min-h-[200px] font-mono bg-slate-800/50"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         已输入 {names.length} 个姓名
@@ -335,45 +363,39 @@ export default function SpfSearch() {
                     </div>
                   </TabsContent>
                   
-                  <TabsContent value="nameLocation" className="space-y-4 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <TabsContent value="nameLocation" className="mt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="names2" className="flex items-center gap-2 mb-2">
-                          <Users className="w-4 h-4 text-yellow-400" />
-                          姓名列表（每行一个）
-                        </Label>
+                        <Label htmlFor="names2">姓名列表（每行一个）</Label>
                         <Textarea
                           id="names2"
                           placeholder="John Smith&#10;Jane Doe"
                           value={namesInput}
                           onChange={(e) => setNamesInput(e.target.value)}
-                          className="min-h-[150px] font-mono"
+                          className="mt-2 min-h-[150px] font-mono bg-slate-800/50"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           已输入 {names.length} 个姓名
                         </p>
                       </div>
                       <div>
-                        <Label htmlFor="locations" className="flex items-center gap-2 mb-2">
-                          <MapPin className="w-4 h-4 text-pink-400" />
-                          地点列表（每行一个）
-                        </Label>
+                        <Label htmlFor="locations">地点列表（每行一个）</Label>
                         <Textarea
                           id="locations"
-                          placeholder="New York, NY&#10;Los Angeles, CA&#10;Chicago, IL"
+                          placeholder="Los Angeles, CA&#10;New York, NY&#10;Chicago, IL"
                           value={locationsInput}
                           onChange={(e) => setLocationsInput(e.target.value)}
-                          className="min-h-[150px] font-mono"
+                          className="mt-2 min-h-[150px] font-mono bg-slate-800/50"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                           已输入 {locations.length} 个地点
                         </p>
                       </div>
                     </div>
-                    <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                      <p className="text-sm text-yellow-400 flex items-center gap-2">
-                        <Info className="w-4 h-4" />
-                        将生成 {names.length} × {Math.max(locations.length, 1)} = {estimatedSearches} 个搜索组合
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <p className="text-sm text-blue-400 flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        将搜索 {names.length} × {locations.length} = {names.length * locations.length} 个组合
                       </p>
                     </div>
                   </TabsContent>
@@ -381,18 +403,16 @@ export default function SpfSearch() {
               </CardContent>
             </Card>
 
-            {/* 过滤条件 */}
-            <Card className="rainbow-border">
+            {/* 高级选项 */}
+            <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-slate-700">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Filter className="w-5 h-5 text-purple-400" />
-                      过滤条件
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Filter className="h-5 w-5" />
+                      高级选项
                     </CardTitle>
-                    <CardDescription>
-                      设置年龄范围和其他过滤选项
-                    </CardDescription>
+                    <CardDescription>过滤和筛选条件</CardDescription>
                   </div>
                   <Switch
                     checked={showFilters}
@@ -402,81 +422,117 @@ export default function SpfSearch() {
               </CardHeader>
               {showFilters && (
                 <CardContent className="space-y-6">
-                  {/* 年龄范围 */}
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <Label className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-yellow-400" />
-                        年龄过滤: {enableAgeFilter ? `${filters.minAge} - ${filters.maxAge} 岁` : '已禁用'}
-                      </Label>
-                      <Switch
-                        checked={enableAgeFilter}
-                        onCheckedChange={setEnableAgeFilter}
-                      />
+                  {/* 当前过滤条件显示 */}
+                  <div className="p-3 bg-pink-500/10 border border-pink-500/20 rounded-lg">
+                    <p className="text-sm text-pink-400 font-medium mb-2">当前过滤条件：</p>
+                    <div className="flex flex-wrap gap-2">
+                      {enableAgeFilter && (
+                        <Badge variant="outline" className="border-pink-500/50 text-pink-400">
+                          年龄: {filters.minAge}-{filters.maxAge}岁
+                        </Badge>
+                      )}
+                      {filters.minPropertyValue > 0 && (
+                        <Badge variant="outline" className="border-green-500/50 text-green-400">
+                          房产 ≥ ${filters.minPropertyValue.toLocaleString()}
+                        </Badge>
+                      )}
+                      {filters.excludeTMobile && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除 T-Mobile
+                        </Badge>
+                      )}
+                      {filters.excludeComcast && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除 Comcast
+                        </Badge>
+                      )}
+                      {filters.excludeLandline && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除固话
+                        </Badge>
+                      )}
+                      {filters.excludeWireless && (
+                        <Badge variant="outline" className="border-red-500/50 text-red-400">
+                          排除无线
+                        </Badge>
+                      )}
                     </div>
-                    {enableAgeFilter && (
-                      <div className="px-2">
+                  </div>
+                  
+                  {/* 年龄过滤开关 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>启用年龄过滤</Label>
+                      <p className="text-xs text-muted-foreground">开启后将按年龄范围过滤结果</p>
+                    </div>
+                    <Switch
+                      checked={enableAgeFilter}
+                      onCheckedChange={setEnableAgeFilter}
+                    />
+                  </div>
+                  
+                  {/* 年龄范围 */}
+                  {enableAgeFilter && (
+                    <div>
+                      <Label>年龄范围: {filters.minAge} - {filters.maxAge} 岁</Label>
+                      <div className="flex gap-4 mt-2">
                         <Slider
                           value={[filters.minAge, filters.maxAge]}
+                          onValueChange={([min, max]) => setFilters(f => ({ ...f, minAge: min, maxAge: max }))}
                           min={18}
-                          max={100}
+                          max={99}
                           step={1}
-                          onValueChange={([min, max]) => setFilters(prev => ({ ...prev, minAge: min, maxAge: max }))}
-                          className="w-full"
-                        />
-                        <p className="text-xs text-muted-foreground mt-2">
-                          默认过滤 50-79 岁，可调整范围或禁用此过滤器
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 电话类型过滤 */}
-                  <div className="space-y-3">
-                    <Label className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-pink-400" />
-                      电话类型过滤
-                    </Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <span className="text-sm">排除座机</span>
-                        <Switch
-                          checked={filters.excludeLandline}
-                          onCheckedChange={(v) => setFilters(prev => ({ ...prev, excludeLandline: v }))}
                         />
                       </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <span className="text-sm">排除手机</span>
-                        <Switch
-                          checked={filters.excludeWireless}
-                          onCheckedChange={(v) => setFilters(prev => ({ ...prev, excludeWireless: v }))}
-                        />
-                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        过滤掉不在此年龄范围内的记录
+                      </p>
                     </div>
-                  </div>
-
-                  {/* 运营商过滤 */}
-                  <div className="space-y-3">
-                    <Label className="flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-blue-400" />
-                      运营商过滤
-                    </Label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <span className="text-sm">排除 T-Mobile</span>
-                        <Switch
-                          checked={filters.excludeTMobile}
-                          onCheckedChange={(v) => setFilters(prev => ({ ...prev, excludeTMobile: v }))}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <span className="text-sm">排除 Comcast</span>
-                        <Switch
-                          checked={filters.excludeComcast}
-                          onCheckedChange={(v) => setFilters(prev => ({ ...prev, excludeComcast: v }))}
-                        />
-                      </div>
+                  )}
+                  
+                  {/* 排除运营商 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>排除 T-Mobile 号码</Label>
+                      <p className="text-xs text-muted-foreground">过滤掉 T-Mobile 运营商的号码</p>
                     </div>
+                    <Switch
+                      checked={filters.excludeTMobile}
+                      onCheckedChange={(v) => setFilters(f => ({ ...f, excludeTMobile: v }))}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>排除 Comcast 号码</Label>
+                      <p className="text-xs text-muted-foreground">过滤掉 Comcast/Spectrum 运营商的号码</p>
+                    </div>
+                    <Switch
+                      checked={filters.excludeComcast}
+                      onCheckedChange={(v) => setFilters(f => ({ ...f, excludeComcast: v }))}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>排除固话号码</Label>
+                      <p className="text-xs text-muted-foreground">过滤掉 Landline 类型的固定电话号码</p>
+                    </div>
+                    <Switch
+                      checked={filters.excludeLandline}
+                      onCheckedChange={(v) => setFilters(f => ({ ...f, excludeLandline: v }))}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>排除无线号码</Label>
+                      <p className="text-xs text-muted-foreground">过滤掉 Wireless 类型的手机号码</p>
+                    </div>
+                    <Switch
+                      checked={filters.excludeWireless}
+                      onCheckedChange={(v) => setFilters(f => ({ ...f, excludeWireless: v }))}
+                    />
                   </div>
                 </CardContent>
               )}
@@ -485,50 +541,64 @@ export default function SpfSearch() {
 
           {/* 右侧：费用预估和提交 */}
           <div className="space-y-6">
+            {/* 积分余额 */}
+            <Card className="bg-gradient-to-br from-pink-900/30 to-purple-900/30 border-pink-700/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-pink-500" />
+                  积分余额
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-pink-400">
+                  {profileLoading ? (
+                    <Skeleton className="h-9 w-24" />
+                  ) : (
+                    profile?.credits?.toLocaleString() || 0
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">可用积分</p>
+              </CardContent>
+            </Card>
+
             {/* 费用预估 */}
-            <Card className="rainbow-border rainbow-glow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-yellow-400" />
+            <Card className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 border-purple-700/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-500" />
                   费用预估
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">搜索任务数</span>
-                    <span className="font-medium">{estimatedSearches} 个</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">单次搜索费用</span>
-                    <span className="font-medium">{searchCost} 积分</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">单条数据费用</span>
-                    <span className="font-medium">{detailCost} 积分</span>
-                  </div>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">搜索任务数</span>
+                  <span>{estimatedSearches} 个</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">单次搜索费用</span>
+                  <span>{searchCost} + {detailCost} = {(searchCost + detailCost).toFixed(1)} 积分</span>
                 </div>
                 
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center">
+                <div className="border-t border-slate-700 pt-3">
+                  <div className="flex justify-between">
                     <span className="font-medium">预估总消耗</span>
-                    <span className="text-2xl font-bold rainbow-text">
+                    <span className="text-xl font-bold text-purple-400">
                       ~{estimatedCost.toFixed(1)} 积分
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    实际消耗按返回结果数量计算
+                    实际费用取决于搜索结果数量
                   </p>
                 </div>
-
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">当前余额</span>
-                    <span className="font-medium text-green-400">
-                      {profile?.credits?.toLocaleString() || 0} 积分
-                    </span>
+                
+                {profile && estimatedCost > (profile.credits || 0) && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <p className="text-sm text-red-400 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      积分不足，请先充值
+                    </p>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -536,40 +606,124 @@ export default function SpfSearch() {
             <Button
               onClick={handleSearch}
               disabled={searchMutation.isPending || names.length === 0}
-              className="w-full h-14 text-lg font-bold rainbow-btn text-white border-0"
+              className="w-full h-14 text-lg font-bold rainbow-btn text-white shadow-lg"
             >
               {searchMutation.isPending ? (
                 <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  创建任务中...
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  搜索中...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-5 h-5 mr-2" />
+                  <Search className="h-5 w-5 mr-2" />
                   开始搜索
+                  <Star className="h-4 w-4 ml-2 fill-current" />
                 </>
               )}
             </Button>
 
-            {/* 快捷链接 */}
-            <Card>
-              <CardContent className="p-4 space-y-2">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => setLocation("/spf/history")}
-                >
-                  <Clock className="w-4 h-4 mr-2" />
-                  查看搜索历史
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => setLocation("/recharge")}
-                >
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  充值积分
-                </Button>
+            {/* SPF 核心优势 */}
+            <Card className="bg-gradient-to-br from-pink-900/30 via-purple-900/20 to-blue-900/30 border-pink-600/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-pink-400" />
+                  <span className="rainbow-text">核心优势</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* 核心优势1: 电子邮件 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20">
+                  <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                    <Mail className="h-5 w-5 text-yellow-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-yellow-300 flex items-center gap-2">
+                      电子邮件
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/30 text-yellow-200">独家</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">获取目标人物的电子邮箱地址</p>
+                  </div>
+                </div>
+                
+                {/* 核心优势2: 婚姻状态 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20">
+                  <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center flex-shrink-0">
+                    <Heart className="h-5 w-5 text-pink-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-pink-300 flex items-center gap-2">
+                      婚姻状态
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-200">独家</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">查询婚姻状态和配偶信息</p>
+                  </div>
+                </div>
+                
+                {/* 核心优势3: 就业状态 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <Briefcase className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-blue-300">就业状态</p>
+                    <p className="text-xs text-muted-foreground">获取职业和就业信息</p>
+                  </div>
+                </div>
+                
+                {/* 核心优势4: 数据新鲜度 */}
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
+                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                    <Calendar className="h-5 w-5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-green-300">数据确认日期</p>
+                    <p className="text-xs text-muted-foreground">显示数据最后确认时间，确保新鲜度</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 快速入门 */}
+            <Card className="bg-gradient-to-br from-slate-900/50 to-pink-900/10 border-pink-700/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-pink-500" />
+                  快速入门
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-xs font-bold text-black">1</div>
+                  <p className="text-sm">选择搜索模式（仅姓名 / 姓名+地点）</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-xs font-bold text-black">2</div>
+                  <p className="text-sm">输入姓名列表，每行一个姓名</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-xs font-bold text-black">3</div>
+                  <p className="text-sm">点击"开始搜索"，等待结果</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-xs font-bold text-black">4</div>
+                  <p className="text-sm">导出 CSV 文档，开始联系客户</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 费用说明 */}
+            <Card className="bg-slate-900/50 border-slate-700">
+              <CardContent className="pt-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-yellow-500" />
+                  费用说明
+                </h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• 每页搜索消耗 {searchCost} 积分</li>
+                  <li>• 每条详情消耗 {detailCost} 积分</li>
+                  <li>• 缓存命中的数据免费使用</li>
+                  <li>• 搜索结果缓存 180 天</li>
+                </ul>
               </CardContent>
             </Card>
           </div>
@@ -578,3 +732,4 @@ export default function SpfSearch() {
     </DashboardLayout>
   );
 }
+// SPF Golden Template v2.0
