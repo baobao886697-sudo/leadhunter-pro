@@ -527,7 +527,7 @@ async function executeAnywhoSearch(
   try {
     // ==================== 启动日志 ====================
     await addLog(`═══════════════════════════════════════════════════`);
-    await addLog(`🎯 开始 Anywho 搜索`);
+    await addLog(`🔍 开始 Anywho 搜索`);
     await addLog(`═══════════════════════════════════════════════════`);
     
     // 显示搜索配置

@@ -451,10 +451,10 @@ export async function executeSearchV3(
   try {
     currentStep++;
     addLog('═══════════════════════════════════════════════════════════', 'info', 'init', '');
-    addLog(`🚀 搜索任务启动`, 'success', 'init', '🚀');
+    addLog(`🔍 开始 LinkedIn 搜索`, 'success', 'init', '🚀');
     addLog(`任务编号: #${task.taskId.slice(0, 8)}`, 'info', 'init', '📋');
-    addLog('───────────────────────────────────────────────────────────', 'info', 'init', '');
-    addLog(`📋 搜索条件:`, 'info', 'init', '');
+    addLog('──────────────────────────────', 'info', 'init', '');
+    addLog(`📋 搜索配置:`, 'info', 'init', '');
     addLog(`   姓名关键词: ${searchName}`, 'info', 'init', '');
     addLog(`   职位: ${searchTitle}`, 'info', 'init', '');
     addLog(`   地区: ${searchState}`, 'info', 'init', '');
@@ -464,8 +464,8 @@ export async function executeSearchV3(
     }
     addLog(`   电话验证: ${enableVerification ? '✅ 已启用' : '❌ 已禁用'}`, 'info', 'init', '');
     addLog(`   搜索模式: ${mode === 'fuzzy' ? '模糊搜索' : '精准搜索'}`, 'info', 'init', '');
-    addLog('───────────────────────────────────────────────────────────', 'info', 'init', '');
-    addLog(`💰 积分信息:`, 'info', 'init', '');
+    addLog('──────────────────────────────', 'info', 'init', '');
+    addLog(`💰 费用预估:`, 'info', 'init', '');
     addLog(`   当前余额: ${user.credits} 积分`, 'info', 'init', '');
     addLog(`   预估消耗: ${currentSearchCredits + requestedCount * currentPhoneCreditsPerPerson} 积分`, 'info', 'init', '');
     addLog(`   (搜索费 ${currentSearchCredits} + 数据费 ${requestedCount} × ${currentPhoneCreditsPerPerson})`, 'info', 'init', '');
@@ -481,7 +481,7 @@ export async function executeSearchV3(
     await updateProgress('预扣费完成', undefined, undefined, 20);
 
     currentStep++;
-    addLog('───────────────────────────────────────────────────────────', 'info', 'search', '');
+    addLog('──────────────────────────────', 'info', 'search', '');
     // 根据模式动态生成缓存键前缀
     // 精准搜索也支持短期缓存（1天），模糊搜索支持长期缓存（180天）
     const cacheKey = `search:${mode}:${searchHash}`;
@@ -601,7 +601,7 @@ export async function executeSearchV3(
       
       // 结算退还
       const settlement = await settleCredits(userId, frozenAmount, stats.creditsUsed, task.taskId);
-      addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
+      addLog('──────────────────────────────', 'info', 'complete', '');
       addLog(`💰 费用明细:`, 'info', 'complete', '');
       addLog(`   • 预扣积分: ${frozenAmount} 积分`, 'info', 'complete', '');
       addLog(`   • 实际消耗: ${stats.creditsUsed} 积分`, 'info', 'complete', '');
@@ -619,7 +619,7 @@ export async function executeSearchV3(
     const actualCount = Math.min(searchResults.length, requestedCount);
     const dataCreditsNeeded = actualCount * currentPhoneCreditsPerPerson;
     
-    addLog('───────────────────────────────────────────────────────────', 'info', 'process', '');
+    addLog('──────────────────────────────', 'info', 'process', '');
     addLog(`📊 数据量计算:`, 'info', 'process', '');
     addLog(`   用户请求: ${requestedCount} 条`, 'info', 'process', '');
     addLog(`   实际返回: ${searchResults.length} 条`, 'info', 'process', '');
@@ -635,12 +635,12 @@ export async function executeSearchV3(
     addLog(`   预估总计: ${stats.creditsUsed} 积分`, 'info', 'process', '');
     addLog(`   💡 已预扣 ${frozenAmount} 积分，任务完成后结算退还`, 'info', 'process', '');
     
-    addLog('───────────────────────────────────────────────────────────', 'info', 'process', '');
+    addLog('──────────────────────────────', 'info', 'process', '');
     
     const shuffledResults = shuffleArray(searchResults);
     addLog(`🔀 已打乱数据顺序，采用随机提取策略`, 'info', 'process', '');
     addLog(`📊 开始逐条处理数据...`, 'info', 'process', '');
-    addLog('───────────────────────────────────────────────────────────', 'info', 'process', '');
+    addLog('──────────────────────────────', 'info', 'process', '');
 
     const toProcess = shuffledResults.slice(0, actualCount);
     const CONCURRENT_BATCH_SIZE = 16;
@@ -726,7 +726,7 @@ export async function executeSearchV3(
     
     if (!taskStopped && recordsWithPhone.length > 0) {
       addLog(`🔄 开始并发验证 ${recordsWithPhone.length} 条有电话记录...`, 'info', 'verify', '');
-      addLog('───────────────────────────────────────────────────────────', 'info', 'process', '');
+      addLog('──────────────────────────────', 'info', 'process', '');
       
       const totalBatches = Math.ceil(recordsWithPhone.length / CONCURRENT_BATCH_SIZE);
       
@@ -901,7 +901,7 @@ export async function executeSearchV3(
         }
         
         if ((batchIndex + 1) % 5 === 0 && (batchIndex + 1) < totalBatches) {
-          addLog('───────────────────────────────────────────────────────────', 'info', 'process', '');
+          addLog('──────────────────────────────', 'info', 'process', '');
         }
       }
     }
@@ -927,7 +927,7 @@ export async function executeSearchV3(
       addLog(`🎉 任务完成!`, 'success', 'complete', '');
     }
     
-    addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
+    addLog('──────────────────────────────', 'info', 'complete', '');
     addLog(`📊 搜索结果摘要:`, 'info', 'complete', '');
     addLog(`   LinkedIn 返回: ${stats.apifyReturned} 条`, 'info', 'complete', '');
     addLog(`   处理记录: ${stats.recordsProcessed} 条`, 'info', 'complete', '');
@@ -937,7 +937,7 @@ export async function executeSearchV3(
     addLog(`   └─ 验证通过: ${stats.resultsVerified} 条`, 'info', 'complete', '');
     
     if (stats.excludedNoPhone > 0 || stats.excludedNoContact > 0 || stats.excludedAgeFilter > 0 || stats.excludedError > 0) {
-      addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
+      addLog('──────────────────────────────', 'info', 'complete', '');
       addLog(`🚫 排除统计:`, 'info', 'complete', '');
       if (stats.excludedNoPhone > 0) addLog(`   无电话号码: ${stats.excludedNoPhone}`, 'info', 'complete', '');
       if (stats.excludedNoContact > 0) addLog(`   无联系方式: ${stats.excludedNoContact}`, 'info', 'complete', '');
@@ -945,7 +945,7 @@ export async function executeSearchV3(
       if (stats.excludedError > 0) addLog(`   处理失败: ${stats.excludedError}`, 'info', 'complete', '');
     }
     
-    addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
+    addLog('──────────────────────────────', 'info', 'complete', '');
     stats.creditsFinal = stats.creditsUsed - stats.creditsRefunded;
     addLog(`💰 积分消耗: ${stats.creditsUsed} 积分`, 'info', 'complete', '');
     if (stats.creditsRefunded > 0) {
@@ -958,7 +958,7 @@ export async function executeSearchV3(
     // ==================== 结算退还机制 ====================
     const settlement = await settleCredits(userId, frozenAmount, stats.creditsUsed, task.taskId);
     
-    addLog('───────────────────────────────────────────────────────────', 'info', 'complete', '');
+    addLog('──────────────────────────────', 'info', 'complete', '');
     addLog(`💰 费用明细:`, 'info', 'complete', '');
     addLog(`   • 预扣积分: ${frozenAmount} 积分`, 'info', 'complete', '');
     addLog(`   • 实际消耗: ${stats.creditsUsed} 积分`, 'info', 'complete', '');
@@ -967,6 +967,18 @@ export async function executeSearchV3(
     }
     addLog(`   • 当前余额: ${settlement.newBalance} 积分`, 'info', 'complete', '');
     
+    // 费用效率分析
+    addLog(`📈 费用效率:`, 'info', 'complete', '');
+    if (stats.totalResults > 0 && stats.creditsUsed > 0) {
+      const costPerResult = stats.creditsUsed / stats.totalResults;
+      addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`, 'info', 'complete', '');
+    }
+    if (stats.totalResults > 0) {
+      addLog(`   • 数据效率: ${(stats.totalResults / stats.creditsUsed).toFixed(2)} 条/积分`, 'info', 'complete', '');
+    }
+    
+    addLog('═══════════════════════════════════════════════════════════', 'info', 'complete', '');
+    addLog(`💡 提示: 相同搜索条件的后续搜索将命中缓存，节省更多积分`, 'info', 'complete', '');
     addLog('═══════════════════════════════════════════════════════════', 'info', 'complete', '');
 
     const statsLog: SearchLogEntry = {
@@ -994,7 +1006,7 @@ export async function executeSearchV3(
 
   } catch (error: any) {
     progress.status = 'failed';
-    addLog(`❌ 错误: ${error.message}`, 'error', 'complete', '❌');
+    addLog(`❌ 搜索任务失败: ${error.message}`, 'error', 'complete', '❌');
     
     // ==================== 失败时的结算退还 ====================
     const settlement = await settleCredits(userId, frozenAmount, stats.creditsUsed, task.taskId);
