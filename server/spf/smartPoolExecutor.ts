@@ -252,7 +252,7 @@ export async function fetchDetailsWithSpfSmartPool(
   
   // 保存缓存
   if (cacheToSave.length > 0) {
-    onProgress(`💾 保存缓存: ${cacheToSave.length} 条...`);
+    // 静默保存缓存，不输出日志
     await setCachedDetails(cacheToSave);
   }
   

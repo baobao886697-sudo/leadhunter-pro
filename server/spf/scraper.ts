@@ -1177,7 +1177,7 @@ export async function fetchDetailsInBatch(
   const baseUrl = 'https://www.searchpeoplefree.com';
   const uniqueLinks = Array.from(new Set(tasks.map(t => t.detailLink)));
   
-  onProgress(`检查缓存: ${uniqueLinks.length} 个链接...`);
+  // 静默处理，不输出缓存检查日志
   const cachedMap = await getCachedDetails(uniqueLinks);
   
   // 分离缓存命中和需要获取的任务
@@ -1212,7 +1212,7 @@ export async function fetchDetailsInBatch(
     }
   }
   
-  onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length}`);
+  // 静默处理，不输出缓存命中日志
   
   const cacheToSave: Array<{ link: string; data: SpfDetailResult }> = [];
   let completed = 0;
@@ -1294,11 +1294,11 @@ export async function fetchDetailsInBatch(
   
   // 保存缓存
   if (cacheToSave.length > 0) {
-    onProgress(`保存缓存: ${cacheToSave.length} 条...`);
+    // 静默保存缓存，不输出日志
     await setCachedDetails(cacheToSave);
   }
   
-  onProgress(`详情获取完成: ${results.length} 条结果，缓存命中 ${cacheHits}，新获取 ${detailPageRequests}`);
+  // 静默处理，不输出详情完成日志
   
   return {
     results,
