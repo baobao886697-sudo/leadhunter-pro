@@ -84,7 +84,7 @@ export function getGlobalConcurrencyStatus() {
 // ==================== Scrape.do API ====================
 
 const SCRAPE_TIMEOUT_MS = 60000;   // 60 秒超时（地点搜索响应特别慢）
-const SCRAPE_MAX_RETRIES = 2;    // 最多重试 2 次
+const SCRAPE_MAX_RETRIES = 3;    // 最多重试 3 次（恢复成功版本配置）
 
 /**
  * 使用 Scrape.do API 获取页面（带超时和重试）
@@ -108,7 +108,7 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
     for (let attempt = 0; attempt <= SCRAPE_MAX_RETRIES; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 5000); // 客户端超时比 API 超时多 5 秒
+        const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 15000); // 客户端超时比 API 超时多 15 秒（恢复成功版本配置）
         
         const response = await fetch(apiUrl, {
           method: 'GET',
