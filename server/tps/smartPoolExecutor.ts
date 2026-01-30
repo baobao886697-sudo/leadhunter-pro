@@ -159,9 +159,7 @@ export async function fetchDetailsWithSmartPool(
     stoppedDueToCredits = true;
   }
   
-  // 显示任务规模和并发配置
-  const scaleDesc = getTpsTaskScaleDescription(linksToFetch.length);
-  onProgress(`🧵 ${scaleDesc}`);
+  // 不再显示技术性的线程并发配置信息
   
   // 构建并发池任务
   const poolTasks: PoolTask<DetailFetchTask, DetailFetchResult>[] = [];

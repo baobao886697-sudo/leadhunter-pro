@@ -521,7 +521,7 @@ async function executeTpsSearchRealtimeDeduction(
   
   try {
     // ==================== 阶段一：并发搜索（实时扣费） ====================
-    addLog(`📋 阶段一：并发搜索 (${SEARCH_CONCURRENCY} 任务并发)...`);
+    addLog(`📋 阶段一：开始搜索...`);
     
     // 收集所有详情任务
     const allDetailTasks: DetailTaskWithIndex[] = [];
