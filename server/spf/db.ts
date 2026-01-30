@@ -55,9 +55,9 @@ export async function getSpfConfig() {
   const defaultMinAge = minAgeConfig ? parseInt(minAgeConfig, 10) : 50;
   const defaultMaxAge = maxAgeConfig ? parseInt(maxAgeConfig, 10) : 79;
   
-  // 解析积分配置
-  const searchCost = searchCreditsConfig || "0.3";
-  const detailCost = detailCreditsConfig || "0.3";
+  // 解析积分配置 - 默认 0.85 积分/次 API 调用
+  const searchCost = searchCreditsConfig || "0.85";
+  const detailCost = detailCreditsConfig || "0.85";
   
   if (!config) {
     return {

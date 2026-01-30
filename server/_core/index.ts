@@ -860,12 +860,12 @@ async function ensureTables() {
     
     // ========== SPF (SearchPeopleFree) 相关表 ==========
     
-    // SPF 配置表
+    // SPF 配置表 (0.85 积分/次 API 调用)
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS spf_config (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        searchCost DECIMAL(10,2) NOT NULL DEFAULT 0.3,
-        detailCost DECIMAL(10,2) NOT NULL DEFAULT 0.3,
+        searchCost DECIMAL(10,2) NOT NULL DEFAULT 0.85,
+        detailCost DECIMAL(10,2) NOT NULL DEFAULT 0.85,
         maxConcurrent INT NOT NULL DEFAULT 40,
         cacheDays INT NOT NULL DEFAULT 180,
         scrapeDoToken VARCHAR(100),
@@ -979,10 +979,10 @@ async function ensureTables() {
       }
     }
     
-    // 插入默认 SPF 配置
+    // 插入默认 SPF 配置 (0.85 积分/次 API 调用)
     await db.execute(sql`
       INSERT IGNORE INTO spf_config (id, searchCost, detailCost, maxConcurrent, cacheDays, maxPages, batchDelay, enabled, defaultMinAge, defaultMaxAge)
-      VALUES (1, 0.3, 0.3, 40, 180, 25, 200, TRUE, 50, 79)
+      VALUES (1, 0.85, 0.85, 40, 180, 25, 200, TRUE, 50, 79)
     `);
     console.log("[Database] Default SPF config inserted");
     

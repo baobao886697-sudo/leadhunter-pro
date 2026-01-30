@@ -185,9 +185,9 @@ export default function SpfSearch() {
   const names = namesInput.trim().split("\n").filter(n => n.trim());
   const locations = locationsInput.trim().split("\n").filter(l => l.trim());
   
-  // SPF 费率
-  const searchCost = spfConfig?.searchCost || 0.3;
-  const detailCost = spfConfig?.detailCost || 0.3;
+  // SPF 费率 (0.85 积分/次 API 调用)
+  const searchCost = spfConfig?.searchCost || 0.85;
+  const detailCost = spfConfig?.detailCost || 0.85;
   
   // 预估消耗计算
   const estimatedSearches = mode === "nameOnly" 

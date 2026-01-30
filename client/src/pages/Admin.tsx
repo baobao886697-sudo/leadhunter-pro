@@ -1533,8 +1533,8 @@ export default function Admin() {
                       'SPF_DETAIL_CREDITS': '详情页消耗（积分/条）',
                     };
                     const defaults: Record<string, string> = {
-                      'SPF_SEARCH_CREDITS': '0.4',
-                      'SPF_DETAIL_CREDITS': '0.4',
+                      'SPF_SEARCH_CREDITS': '0.85',
+                      'SPF_DETAIL_CREDITS': '0.85',
                     };
                     return (
                       <div key={key} className="space-y-2">
@@ -1587,8 +1587,8 @@ export default function Admin() {
                     };
                     const defaults: Record<string, string> = {
                       'SPF_SCRAPE_TOKEN': '***已配置***',
-                      'SPF_MAX_CONCURRENT': '30',
-                      'SPF_CACHE_DAYS': '30',
+                      'SPF_MAX_CONCURRENT': '15',
+                      'SPF_CACHE_DAYS': '180',
                     };
                     return (
                       <div key={key} className="space-y-2">

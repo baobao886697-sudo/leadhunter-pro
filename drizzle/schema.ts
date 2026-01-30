@@ -640,8 +640,8 @@ export type InsertAgentApplication = typeof agentApplications.$inferInsert;
 // SPF 配置表
 export const spfConfig = mysqlTable("spf_config", {
   id: int("id").autoincrement().primaryKey(),
-  searchCost: decimal("searchCost", { precision: 10, scale: 2 }).default("0.3").notNull(), // 每搜索页消耗积分
-  detailCost: decimal("detailCost", { precision: 10, scale: 2 }).default("0.3").notNull(), // 每详情页消耗积分
+  searchCost: decimal("searchCost", { precision: 10, scale: 2 }).default("0.85").notNull(), // 每搜索页消耗积分 (0.85 积分/次 API 调用)
+  detailCost: decimal("detailCost", { precision: 10, scale: 2 }).default("0.85").notNull(), // 每详情页消耗积分 (0.85 积分/次 API 调用)
   maxConcurrent: int("maxConcurrent").default(40).notNull(), // 最大并发数
   cacheDays: int("cacheDays").default(180).notNull(), // 缓存天数
   scrapeDoToken: varchar("scrapeDoToken", { length: 100 }), // Scrape.do API Token
