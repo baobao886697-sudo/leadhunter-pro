@@ -160,35 +160,38 @@ class VirtualThread<T, R> {
 
   async start(onResult: (result: PoolResult<R>) => void): Promise<void> {
     this.isRunning = true;
-    const promises: Promise<void>[] = [];
+    
+    // 修复: 使用 Map 跟踪 Promise 完成状态，避免原有的 Promise.race 检测 bug
+    const activePromises = new Map<number, Promise<void>>();
+    let promiseId = 0;
 
-    while ((this.taskQueue.length > 0 || promises.length > 0) && !this.shouldStop) {
+    while ((this.taskQueue.length > 0 || activePromises.size > 0) && !this.shouldStop) {
       // 启动新任务
       while (this.taskQueue.length > 0 && this.semaphore.available() > 0 && !this.shouldStop) {
         const task = this.taskQueue.shift()!;
-        const promise = this.executeTask(task, onResult);
-        promises.push(promise);
+        const currentId = promiseId++;
+        
+        // 创建 Promise 并在完成时自动从 Map 中移除
+        const promise = this.executeTask(task, onResult).finally(() => {
+          activePromises.delete(currentId);
+        });
+        
+        activePromises.set(currentId, promise);
         
         // 请求间隔
         await this.delay(TPS_POOL_CONFIG.REQUEST_DELAY_MS);
       }
 
       // 等待至少一个任务完成
-      if (promises.length > 0) {
-        await Promise.race(promises);
-        // 移除已完成的 promises
-        for (let i = promises.length - 1; i >= 0; i--) {
-          const p = promises[i];
-          const status = await Promise.race([p.then(() => 'resolved'), Promise.resolve('pending')]);
-          if (status === 'resolved') {
-            promises.splice(i, 1);
-          }
-        }
+      if (activePromises.size > 0) {
+        await Promise.race(Array.from(activePromises.values()));
       }
     }
 
     // 等待所有剩余任务完成
-    await Promise.all(promises);
+    if (activePromises.size > 0) {
+      await Promise.all(Array.from(activePromises.values()));
+    }
     this.isRunning = false;
   }
 
