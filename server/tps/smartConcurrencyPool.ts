@@ -41,7 +41,7 @@ export const TPS_POOL_CONFIG = {
   MAX_ERROR_RATE: 0.1,               // 最大错误率 (10%)
   
   // 重试配置
-  MAX_RETRIES: 2,                    // 最大重试次数
+  MAX_RETRIES: 1,                    // 最大重试次数
   RETRY_DELAY_MS: 1000,              // 重试延迟 (毫秒)
 };
 

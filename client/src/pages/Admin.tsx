@@ -1118,17 +1118,15 @@ export default function Admin() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {['TPS_SCRAPE_TOKEN', 'TPS_MAX_CONCURRENT', 'TPS_CACHE_DAYS'].map((key) => {
+                  {['TPS_SCRAPE_TOKEN', 'TPS_CACHE_DAYS'].map((key) => {
                     const config = configs.find((c: any) => c.key === key);
                     const labels: Record<string, string> = {
                       'TPS_SCRAPE_TOKEN': 'Scrape.do API Token',
-                      'TPS_MAX_CONCURRENT': '最大并发数',
                       'TPS_CACHE_DAYS': '缓存天数',
                     };
                     const defaults: Record<string, string> = {
                       'TPS_SCRAPE_TOKEN': '***已配置***',
-                      'TPS_MAX_CONCURRENT': '40',
-                      'TPS_CACHE_DAYS': '30',
+                      'TPS_CACHE_DAYS': '180',
                     };
                     return (
                       <div key={key} className="space-y-2">
@@ -1145,6 +1143,59 @@ export default function Admin() {
                         </div>
                         <Input
                           value={key === 'TPS_SCRAPE_TOKEN' && config?.value ? '***已配置***' : (config?.value || defaults[key])}
+                          readOnly
+                          className="bg-slate-800 border-slate-700 text-white font-mono"
+                          placeholder={defaults[key]}
+                        />
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* 高级配置 - 线程池和并发控制 */}
+              <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/50 border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-purple-400" />
+                    高级配置
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    线程池和并发控制（修改后最多 5 分钟生效）
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {['TPS_MAX_THREADS', 'TPS_MAX_CONCURRENCY_PER_THREAD', 'TPS_GLOBAL_MAX_CONCURRENCY', 'TPS_TIMEOUT_MS', 'TPS_MAX_RETRIES'].map((key) => {
+                    const config = configs.find((c: any) => c.key === key);
+                    const labels: Record<string, string> = {
+                      'TPS_MAX_THREADS': '线程池数',
+                      'TPS_MAX_CONCURRENCY_PER_THREAD': '每线程并发数',
+                      'TPS_GLOBAL_MAX_CONCURRENCY': '全局最大并发',
+                      'TPS_TIMEOUT_MS': '请求超时 (毫秒)',
+                      'TPS_MAX_RETRIES': '最大重试次数',
+                    };
+                    const defaults: Record<string, string> = {
+                      'TPS_MAX_THREADS': '4',
+                      'TPS_MAX_CONCURRENCY_PER_THREAD': '10',
+                      'TPS_GLOBAL_MAX_CONCURRENCY': '40',
+                      'TPS_TIMEOUT_MS': '5000',
+                      'TPS_MAX_RETRIES': '1',
+                    };
+                    return (
+                      <div key={key} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-slate-300">{labels[key] || key}</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingConfig({ key, value: config?.value || defaults[key], description: config?.description || undefined })}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={config?.value || defaults[key]}
                           readOnly
                           className="bg-slate-800 border-slate-700 text-white font-mono"
                           placeholder={defaults[key]}
@@ -1338,6 +1389,59 @@ export default function Admin() {
                         </div>
                         <Input
                           value={key === 'ANYWHO_SCRAPE_TOKEN' && config?.value ? '***已配置***' : (config?.value || defaults[key])}
+                          readOnly
+                          className="bg-slate-800 border-slate-700 text-white font-mono"
+                          placeholder={defaults[key]}
+                        />
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* 高级配置 - 线程池和并发控制 */}
+              <Card className="bg-gradient-to-br from-slate-900/80 to-slate-800/50 border-slate-700/50">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-purple-400" />
+                    高级配置
+                  </CardTitle>
+                  <CardDescription className="text-slate-400">
+                    线程池和并发控制（修改后最多 5 分钟生效）
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {['TPS_MAX_THREADS', 'TPS_MAX_CONCURRENCY_PER_THREAD', 'TPS_GLOBAL_MAX_CONCURRENCY', 'TPS_TIMEOUT_MS', 'TPS_MAX_RETRIES'].map((key) => {
+                    const config = configs.find((c: any) => c.key === key);
+                    const labels: Record<string, string> = {
+                      'TPS_MAX_THREADS': '线程池数',
+                      'TPS_MAX_CONCURRENCY_PER_THREAD': '每线程并发数',
+                      'TPS_GLOBAL_MAX_CONCURRENCY': '全局最大并发',
+                      'TPS_TIMEOUT_MS': '请求超时 (毫秒)',
+                      'TPS_MAX_RETRIES': '最大重试次数',
+                    };
+                    const defaults: Record<string, string> = {
+                      'TPS_MAX_THREADS': '4',
+                      'TPS_MAX_CONCURRENCY_PER_THREAD': '10',
+                      'TPS_GLOBAL_MAX_CONCURRENCY': '40',
+                      'TPS_TIMEOUT_MS': '5000',
+                      'TPS_MAX_RETRIES': '1',
+                    };
+                    return (
+                      <div key={key} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-slate-300">{labels[key] || key}</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingConfig({ key, value: config?.value || defaults[key], description: config?.description || undefined })}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={config?.value || defaults[key]}
                           readOnly
                           className="bg-slate-800 border-slate-700 text-white font-mono"
                           placeholder={defaults[key]}

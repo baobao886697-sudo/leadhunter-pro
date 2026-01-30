@@ -18,6 +18,7 @@ import {
   PoolResult,
   PoolStats,
 } from './smartConcurrencyPool';
+import { getTpsRuntimeConfig } from './runtimeConfig';
 import {
   TpsDetailResult,
   TpsSearchResult,
@@ -59,8 +60,9 @@ export interface SmartPoolFetchResult {
 // Scrape.do API 请求函数
 // ============================================================================
 
-const SCRAPE_TIMEOUT_MS = 5000;
-const SCRAPE_MAX_RETRIES = 1;
+// 默认配置（会被运行时配置覆盖）
+let SCRAPE_TIMEOUT_MS = 5000;
+let SCRAPE_MAX_RETRIES = 1;
 
 async function fetchWithScrapedo(url: string, token: string): Promise<string> {
   const encodedUrl = encodeURIComponent(url);
@@ -115,6 +117,11 @@ export async function fetchDetailsWithSmartPool(
   setCachedDetails: (items: Array<{ link: string; data: TpsDetailResult }>) => Promise<void>,
   creditTracker: TpsRealtimeCreditTracker
 ): Promise<SmartPoolFetchResult> {
+  // 从数据库加载运行时配置
+  const runtimeConfig = await getTpsRuntimeConfig();
+  SCRAPE_TIMEOUT_MS = runtimeConfig.timeoutMs;
+  SCRAPE_MAX_RETRIES = runtimeConfig.maxRetries;
+  
   const results: Array<{ task: DetailTaskWithIndex; details: TpsDetailResult[] }> = [];
   let detailPageRequests = 0;
   let filteredOut = 0;
