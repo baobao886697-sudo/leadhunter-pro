@@ -142,8 +142,6 @@ export async function executeSpfSearchWithThreadPool(
     const pool = await initThreadPool();
     
     // ==================== 阶段一：逐个搜索（实时扣费） ====================
-    logMessage(`───────────────────────────────────────────────────`);
-    logMessage(`📋 阶段一：搜索阶段`);
     
     // 收集所有详情任务
     const allDetailTasks: DetailTask[] = [];
@@ -226,12 +224,11 @@ export async function executeSpfSearchWithThreadPool(
       logs,
     });
     
-    logMessage(`📊 搜索完成: ${totalSearchPages} 页, ${allDetailTasks.length} 条待获取详情`);
+    // 搜索完成，静默处理
     
     // ==================== 阶段二：获取详情（实时扣费，无缓存读取） ====================
     if (allDetailTasks.length > 0 && !stoppedDueToCredits) {
-      logMessage(`───────────────────────────────────────────────────`);
-      logMessage(`📋 阶段二：详情获取`);
+      // 阶段二：详情获取
       
       // 去重详情链接
       const uniqueLinks = Array.from(new Set(allDetailTasks.map(t => t.detailLink)));
@@ -245,7 +242,7 @@ export async function executeSpfSearchWithThreadPool(
         tasksByLink.get(link)!.push(task);
       }
       
-      logMessage(`🔗 ${uniqueLinks.length} 个唯一详情链接`);
+      // 唯一详情链接数量，静默处理
       
       // 检查可以负担多少条详情
       const affordCheck = await creditTracker.canAffordDetailBatch(uniqueLinks.length);
@@ -290,7 +287,7 @@ export async function executeSpfSearchWithThreadPool(
       const fetchedResults: Array<{ task: DetailTask; details: SpfDetailResult }> = [];
       
       if (tasksToFetch.length > 0) {
-        logMessage(`📤 获取 ${tasksToFetch.length} 条详情...`);
+        // 获取详情，静默处理
         
         const detailResults = await pool.submitDetailTasks(tasksToFetch);
         
@@ -378,7 +375,7 @@ export async function executeSpfSearchWithThreadPool(
         await setCachedDetails(cacheToSave);
       }
       
-      logMessage(`📊 详情完成: ${totalDetailPages} 页, ${totalResults} 条有效结果`);
+      // 详情完成，静默处理
     }
     
     // 更新最终进度

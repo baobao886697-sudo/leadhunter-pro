@@ -1011,7 +1011,6 @@ export async function searchOnly(
   try {
     // 1. 构建搜索 URL
     const searchUrl = buildSearchUrl(name, location);
-    onProgress(`搜索: ${searchUrl}`);
     
     // 2. 获取第一页
     const searchHtml = await fetchWithScrapedo(searchUrl, token);
@@ -1032,7 +1031,7 @@ export async function searchOnly(
                          !searchHtml.includes('li class="toc l-i mb-5"');
     
     if (isDetailPage) {
-      onProgress(`检测到直接返回详情页`);
+      // 检测到直接返回详情页，静默处理
       const detailResult = parseDetailPage(searchHtml, searchUrl);
       if (detailResult) {
         // 检查是否已故
@@ -1066,10 +1065,10 @@ export async function searchOnly(
     while (currentPageNum <= maxPages) {
       // 解析当前页的搜索结果
       const pageResults = parseSearchPageFull(currentPageHtml);
-      onProgress(`第 ${currentPageNum}/${maxPages} 页: ${pageResults.length} 个结果`);
+      // 静默处理分页结果
       
       if (pageResults.length === 0) {
-        onProgress(`第 ${currentPageNum} 页无结果，停止分页`);
+        // 无结果，停止分页
         break;
       }
       
@@ -1092,7 +1091,7 @@ export async function searchOnly(
       // 检查是否有下一页
       const nextPageUrl = extractNextPageUrl(currentPageHtml);
       if (!nextPageUrl) {
-        onProgress(`已到达最后一页，共 ${currentPageNum} 页`);
+        // 已到达最后一页
         break;
       }
       

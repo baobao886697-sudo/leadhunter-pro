@@ -577,8 +577,6 @@ async function executeSpfSearchRealtimeDeduction(
   
   try {
     // ==================== 阶段一：逐个搜索（实时扣费） ====================
-    addLog(`───────────────────────────────────────────────────`);
-    addLog(`📋 阶段一：搜索阶段`);
     
     // 收集所有详情任务
     const allDetailTasks: DetailTask[] = [];
@@ -659,12 +657,11 @@ async function executeSpfSearchRealtimeDeduction(
       });
     }
     
-    addLog(`📊 搜索完成: ${totalSearchPages} 页, ${allDetailTasks.length} 条待获取详情`);
+    // 搜索完成，静默处理
     
     // ==================== 阶段二：获取详情（实时扣费，无缓存读取） ====================
     if (allDetailTasks.length > 0 && !stoppedDueToCredits) {
-      addLog(`───────────────────────────────────────────────────`);
-      addLog(`📋 阶段二：详情获取`);
+      // 阶段二：详情获取
       
       // 去重详情链接
       const uniqueLinks = Array.from(new Set(allDetailTasks.map(t => t.detailLink)));
@@ -678,7 +675,7 @@ async function executeSpfSearchRealtimeDeduction(
         tasksByLink.get(link)!.push(task);
       }
       
-      addLog(`🔗 ${uniqueLinks.length} 个唯一详情链接`);
+      // 唯一详情链接数量，静默处理
       
       // 检查可以负担多少条详情
       const affordCheck = await creditTracker.canAffordDetailBatch(uniqueLinks.length);
@@ -704,7 +701,7 @@ async function executeSpfSearchRealtimeDeduction(
       
       // 获取详情（不使用缓存读取）
       if (detailTasksToFetch.length > 0) {
-        addLog(`📤 获取 ${detailTasksToFetch.length} 条详情...`);
+        // 获取详情，静默处理
         
         const detailResult = await fetchDetailsInBatch(
           detailTasksToFetch,
@@ -767,7 +764,7 @@ async function executeSpfSearchRealtimeDeduction(
         }
       }
       
-      addLog(`📊 详情完成: ${totalDetailPages} 页, ${totalResults} 条有效结果`);
+      // 详情完成，静默处理
     }
     
     // 更新最终进度
