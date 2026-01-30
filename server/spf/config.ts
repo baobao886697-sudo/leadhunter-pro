@@ -72,11 +72,11 @@ export const SPF_SEARCH_CONFIG = {
  * 并发配置：2线程 × 8并发 = 16总并发
  */
 export const SCRAPEDO_CONFIG = {
-  /** 请求超时（毫秒）- 60秒，地点搜索响应较慢 */
-  TIMEOUT_MS: 60000,
+  /** 请求超时（毫秒） */
+  TIMEOUT_MS: 5000,
   
   /** 最大重试次数 */
-  MAX_RETRIES: 3,
+  MAX_RETRIES: 1,
   
   /** 重试延迟基数（毫秒） */
   RETRY_DELAY_BASE: 3000,

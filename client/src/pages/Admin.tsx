@@ -1634,8 +1634,8 @@ export default function Admin() {
                     };
                     const defaults: Record<string, string> = {
                       'SPF_GLOBAL_CONCURRENCY': '16',
-                      'SPF_TIMEOUT_MS': '60000',
-                      'SPF_MAX_RETRIES': '3',
+                      'SPF_TIMEOUT_MS': '5000',
+                      'SPF_MAX_RETRIES': '1',
                     };
                     const hints: Record<string, string> = {
                       'SPF_GLOBAL_CONCURRENCY': '建议范围: 1-50',
