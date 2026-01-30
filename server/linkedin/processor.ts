@@ -448,27 +448,9 @@ export async function executeSearchV3(
 
   try {
     currentStep++;
-    addLog('═══════════════════════════════════════════════════', 'info', 'init', '');
-    addLog(`🔍 开始 LinkedIn 搜索`, 'success', 'init', '🚀');
-    addLog(`任务编号: #${task.taskId.slice(0, 8)}`, 'info', 'init', '📋');
-    addLog('──────────────────────────────', 'info', 'init', '');
-    addLog(`📋 搜索配置:`, 'info', 'init', '');
-    addLog(`   • 姓名关键词: ${searchName}`, 'info', 'init', '');
-    addLog(`   • 职位: ${searchTitle}`, 'info', 'init', '');
-    addLog(`   • 地区: ${searchState}`, 'info', 'init', '');
-    addLog(`   • 请求数量: ${requestedCount} 条`, 'info', 'init', '');
-    if (ageMin && ageMax) {
-      addLog(`   • 年龄筛选: ${ageMin} - ${ageMax} 岁`, 'info', 'init', '');
-    }
-    addLog(`   • 电话验证: ${enableVerification ? '✅ 已启用' : '❌ 已禁用'}`, 'info', 'init', '');
-    addLog(`   • 搜索模式: ${mode === 'fuzzy' ? '模糊搜索' : '精准搜索'}`, 'info', 'init', '');
-    addLog('──────────────────────────────', 'info', 'init', '');
-    addLog(`💰 费用说明:`, 'info', 'init', '');
-    addLog(`   • 当前余额: ${creditTracker.getCurrentBalance()} 积分`, 'info', 'init', '');
-    addLog(`   • 搜索费: ${currentSearchCredits} 积分`, 'info', 'init', '');
-    addLog(`   • 数据费: ${currentPhoneCreditsPerPerson} 积分/条`, 'info', 'init', '');
-    addLog(`   💡 实时扣费模式：用多少，扣多少，扣完即停`, 'info', 'init', '');
-    addLog('═══════════════════════════════════════════════════', 'info', 'init', '');
+    // 简洁日志：任务启动
+    addLog(`🚀 LinkedIn 搜索任务启动`, 'success', 'init', '');
+    addLog(`📋 搜索: ${searchName} @ ${searchTitle} @ ${searchState} | ${requestedCount} 条`, 'info', 'init', '');
     await updateProgress('初始化搜索任务', 'searching', 'init', 10);
 
     // ==================== 扣除搜索费 ====================
@@ -478,11 +460,10 @@ export async function executeSearchV3(
       throw new Error(`搜索费扣除失败: ${searchFeeResult.message}`);
     }
     stats.creditsUsed = currentSearchCredits;
-    addLog(`💰 搜索费: ${currentSearchCredits} 积分 | 余额: ${searchFeeResult.newBalance} 积分`, 'success', 'init', '✅');
+    addLog(`💰 搜索费: ${currentSearchCredits} 积分 | 余额: ${searchFeeResult.newBalance} 积分`, 'success', 'init', '');
     await updateProgress('搜索费已扣除', undefined, undefined, 15);
 
     currentStep++;
-    addLog('──────────────────────────────', 'info', 'search', '');
     // 根据模式动态生成缓存键前缀
     // 精准搜索也支持短期缓存（1天），模糊搜索支持长期缓存（180天）
     const cacheKey = `search:${mode}:${searchHash}`;
@@ -507,21 +488,13 @@ export async function executeSearchV3(
       
       const fulfillmentRate = cachedSearchData.data.length / cachedSearchData.totalAvailable;
       
-      addLog(`📊 检查缓存: ${searchName} + ${searchTitle} + ${searchState} + ${requestedCount}`, 'info', 'search', '');
-      addLog(`   缓存数据量: ${cachedSearchData.data.length} 条`, 'info', 'search', '');
-      addLog(`   LinkedIn 数据库估计: ${cachedSearchData.totalAvailable} 条`, 'info', 'search', '');
-      addLog(`   数据充足率: ${Math.round(fulfillmentRate * 100)}%`, 'info', 'search', '');
-      
       if (fulfillmentRate >= CACHE_FULFILLMENT_THRESHOLD) {
-        addLog(`✨ 缓存命中！数据充足率 ${Math.round(fulfillmentRate * 100)}% >= 80%`, 'success', 'search', '✨');
+        addLog(`✨ 缓存命中 | ${cachedSearchData.data.length} 条数据`, 'success', 'search', '');
         const shuffledCache = shuffleArray([...cachedSearchData.data]);
         searchResults = shuffledCache.slice(0, Math.min(requestedCount, shuffledCache.length));
         stats.apifyReturned = searchResults.length;
-        addLog(`🎲 已随机提取 ${searchResults.length} 条记录`, 'info', 'search', '');
-        addLog(`⏭️ 跳过 LinkedIn API 调用，节省时间和成本`, 'info', 'search', '');
       } else {
-        addLog(`⚠️ 缓存数据不足！充足率 ${Math.round(fulfillmentRate * 100)}% < 80%`, 'warning', 'search', '⚠️');
-        addLog(`🔄 需要重新调用 LinkedIn API 获取最新数据...`, 'info', 'search', '');
+        addLog(`🔍 缓存不足，调用 API...`, 'info', 'search', '');
         // Fall through to API call
       }
     }
@@ -529,9 +502,7 @@ export async function executeSearchV3(
     if (searchResults.length === 0) {
       if (mode === 'fuzzy') {
         stats.apifyApiCalls++;
-        addLog(`🔍 正在调用 LinkedIn Leads Finder (Apify)...`, 'info', 'search', '');
-        addLog(`⏳ LinkedIn 数据获取中，请耐心等待...`, 'info', 'search', '');
-        addLog(`   (通常需要 1-3 分钟，取决于数据量)`, 'info', 'search', '');
+        addLog(`🔍 调用 LinkedIn API...`, 'info', 'search', '');
         await updateProgress('调用 LinkedIn API', 'searching', 'search', 30);
         
         const apiStartTime = Date.now();
@@ -544,8 +515,7 @@ export async function executeSearchV3(
 
         searchResults = apifyResult.people;
         stats.apifyReturned = searchResults.length;
-        addLog(`✅ LinkedIn 返回 ${searchResults.length} 条数据`, 'success', 'search', '✅');
-        addLog(`⏱️ API 响应时间: ${formatDuration(apiDuration)}`, 'info', 'search', '');
+        addLog(`✅ 返回 ${searchResults.length} 条数据`, 'success', 'search', '');
 
         const newCacheData: SearchCacheData = {
           data: searchResults,
@@ -555,9 +525,8 @@ export async function executeSearchV3(
           createdAt: new Date().toISOString()
         };
         await setCache(cacheKey, newCacheData, 'search', 180);
-        addLog(`💾 已更新缓存 (180天有效)`, 'info', 'search', '');
       } else {
-        addLog(`🎯 正在执行精准搜索 (Bright Data + PDL)...`, 'info', 'search', '');
+        addLog(`🎯 调用精准搜索 API...`, 'info', 'search', '');
         await updateProgress('调用精准搜索 API', 'searching', 'search', 30);
 
         const apiStartTime = Date.now();
@@ -565,8 +534,7 @@ export async function executeSearchV3(
         const apiDuration = Date.now() - apiStartTime;
 
         stats.apifyReturned = searchResults.length;
-        addLog(`✅ 精准搜索返回 ${searchResults.length} 条数据`, 'success', 'search', '✅');
-        addLog(`⏱️ API 响应时间: ${formatDuration(apiDuration)}`, 'info', 'search', '');
+        addLog(`✅ 返回 ${searchResults.length} 条数据`, 'success', 'search', '');
         
         // 精准搜索也保存缓存，但有效期较短（1天），节省API成本
         if (searchResults.length > 0) {
@@ -577,8 +545,7 @@ export async function executeSearchV3(
             searchParams: { name: searchName, title: searchTitle, state: searchState, limit: requestedCount },
             createdAt: new Date().toISOString()
           };
-          await setCache(cacheKey, exactCacheData, 'search', 1); // 1天有效期
-          addLog(`💾 已保存精准搜索缓存 (1天有效)`, 'info', 'search', '');
+          await setCache(cacheKey, exactCacheData, 'search', 1);
         }
       }
     }
@@ -586,17 +553,8 @@ export async function executeSearchV3(
     await updateProgress('处理搜索结果', undefined, 'search', 50);
 
     if (searchResults.length === 0) {
-      addLog(`⚠️ 未找到匹配的结果`, 'warning', 'complete', '⚠️');
-      addLog(`   请尝试调整搜索条件后重试`, 'info', 'complete', '');
-      
-      // ==================== 实时扣费：无结果时已扣除搜索费 ====================
       const breakdown = creditTracker.getCostBreakdown();
-      addLog('──────────────────────────────', 'info', 'complete', '');
-      addLog(`💰 费用明细:`, 'info', 'complete', '');
-      addLog(`   • 搜索费: ${breakdown.searchFee} 积分`, 'info', 'complete', '');
-      addLog(`   • 数据费: 0 积分 (无结果)`, 'info', 'complete', '');
-      addLog(`   • 总消耗: ${breakdown.totalCost} 积分`, 'info', 'complete', '');
-      addLog(`   • 当前余额: ${creditTracker.getCurrentBalance()} 积分`, 'info', 'complete', '');
+      addLog(`⚠️ 无结果 | 消耗: ${breakdown.totalCost} 积分 | 余额: ${creditTracker.getCurrentBalance()} 积分`, 'warning', 'complete', '');
       
       stats.creditsUsed = breakdown.totalCost;
       progress.status = 'completed';
@@ -610,28 +568,16 @@ export async function executeSearchV3(
     const { canAfford, affordableCount } = await creditTracker.getAffordableCount(searchResults.length);
     const actualCount = Math.min(searchResults.length, requestedCount, affordableCount);
     
-    addLog('──────────────────────────────', 'info', 'process', '');
-    addLog(`📊 数据量计算:`, 'info', 'process', '');
-    addLog(`   用户请求: ${requestedCount} 条`, 'info', 'process', '');
-    addLog(`   实际返回: ${searchResults.length} 条`, 'info', 'process', '');
-    addLog(`   积分可负担: ${affordableCount} 条`, 'info', 'process', '');
-    addLog(`   将处理: ${actualCount} 条`, 'info', 'process', '');
-    
     if (actualCount < Math.min(searchResults.length, requestedCount)) {
-      addLog(`⚠️ 积分不足，将只处理 ${actualCount} 条数据`, 'warning', 'process', '⚠️');
+      addLog(`⚠️ 积分不足，将处理 ${actualCount} 条`, 'warning', 'process', '');
     }
     
-    addLog('──────────────────────────────', 'info', 'process', '');
+    addLog(`📊 开始处理 ${actualCount} 条数据...`, 'info', 'process', '');
     
     const shuffledResults = shuffleArray(searchResults);
-    addLog(`🔀 已打乱数据顺序，采用随机提取策略`, 'info', 'process', '');
-    addLog(`📊 开始逐条处理数据，实时扣费...`, 'info', 'process', '');
-    addLog('──────────────────────────────', 'info', 'process', '');
 
     const toProcess = shuffledResults.slice(0, actualCount);
     const CONCURRENT_BATCH_SIZE = 16;
-    
-    addLog(`🚀 启用并发处理模式，并发数: ${CONCURRENT_BATCH_SIZE}`, 'info', 'process', '');
     
     const recordsWithPhone: typeof toProcess = [];
     const recordsWithoutPhone: typeof toProcess = [];
@@ -654,7 +600,7 @@ export async function executeSearchV3(
       }
     }
     
-    addLog(`📊 数据分类: ${recordsWithPhone.length} 条有电话, ${recordsWithoutPhone.length} 条无电话`, 'info', 'process', '');
+
     
     let processedCount = 0;
     let insufficientCredits = false;
@@ -663,7 +609,6 @@ export async function executeSearchV3(
       // 检查积分是否足够
       if (!creditTracker.canContinue()) {
         insufficientCredits = true;
-        addLog(`⚠️ 积分不足，停止处理`, 'warning', 'process', '⚠️');
         break;
       }
       
@@ -671,7 +616,6 @@ export async function executeSearchV3(
       const deductResult = await creditTracker.deductDataRecord();
       if (!deductResult.success) {
         insufficientCredits = true;
-        addLog(`⚠️ 积分不足，停止处理`, 'warning', 'process', '⚠️');
         break;
       }
       
@@ -716,21 +660,16 @@ export async function executeSearchV3(
       }
     }
     
-    if (recordsWithoutPhone.length > 0 && processedCount > 0) {
-      addLog(`✅ 已处理 ${processedCount} 条无电话记录 | 消耗: ${creditTracker.getTotalDeducted()} 积分`, 'info', 'process', '');
-    }
+
     
     let taskStopped = false;
     const currentTaskCheck = await getSearchTask(task.taskId);
     if (currentTaskCheck?.status === 'stopped') {
-      addLog(`⏹️ 任务已被用户停止`, 'warning', 'complete', '⏹️');
       progress.status = 'stopped';
       taskStopped = true;
     }
     
     if (!taskStopped && !insufficientCredits && recordsWithPhone.length > 0) {
-      addLog(`🔄 开始并发验证 ${recordsWithPhone.length} 条有电话记录...`, 'info', 'verify', '');
-      addLog('──────────────────────────────', 'info', 'process', '');
       
       const totalBatches = Math.ceil(recordsWithPhone.length / CONCURRENT_BATCH_SIZE);
       
@@ -738,14 +677,12 @@ export async function executeSearchV3(
         // 检查积分是否足够继续
         if (!creditTracker.canContinue()) {
           insufficientCredits = true;
-          addLog(`⚠️ 积分不足，停止处理`, 'warning', 'process', '⚠️');
           progress.status = 'insufficient_credits';
           break;
         }
         
         const currentTask = await getSearchTask(task.taskId);
         if (currentTask?.status === 'stopped') {
-          addLog(`⏹️ 任务已被用户停止`, 'warning', 'complete', '⏹️');
           progress.status = 'stopped';
           break;
         }
@@ -758,7 +695,6 @@ export async function executeSearchV3(
         const { canAfford: batchCanAfford, affordableCount: batchAffordable } = await creditTracker.getAffordableCount(batch.length);
         if (!batchCanAfford) {
           insufficientCredits = true;
-          addLog(`⚠️ 积分不足，停止处理`, 'warning', 'process', '⚠️');
           progress.status = 'insufficient_credits';
           break;
         }
@@ -766,14 +702,12 @@ export async function executeSearchV3(
         // 如果只能负担部分，截取批次
         if (batchAffordable < batch.length) {
           batch = batch.slice(0, batchAffordable);
-          addLog(`⚠️ 积分仅够处理 ${batchAffordable} 条`, 'warning', 'process', '⚠️');
         }
         
         // 批量扣除数据费
         const batchDeductResult = await creditTracker.deductDataRecords(batch.length);
         if (!batchDeductResult.success) {
           insufficientCredits = true;
-          addLog(`⚠️ 积分扣除失败，停止处理`, 'warning', 'process', '⚠️');
           progress.status = 'insufficient_credits';
           break;
         }
@@ -781,7 +715,6 @@ export async function executeSearchV3(
         stats.creditsUsed = creditTracker.getTotalDeducted();
         
         const batchStartTime = Date.now();
-        addLog(`📦 批次 ${batchIndex + 1}/${totalBatches}: 并发处理 ${batch.length} 条记录...`, 'info', 'process', '');
         
         let apiCreditsExhausted = false;
         
@@ -914,30 +847,18 @@ export async function executeSearchV3(
         const verified = batchResults.filter(r => r.resultData.phoneStatus === 'verified').length;
         const excluded = batchResults.filter(r => r.excluded).length;
         
-        addLog(`   ✅ 批次完成: ${verified} 验证通过, ${excluded} 被排除, 耗时 ${formatDuration(batchDuration)}`, 'success', 'process', '');
+        // 简洁进度日志：每5个批次输出一次
+        if ((batchIndex + 1) % 5 === 0 || batchIndex === totalBatches - 1) {
+          addLog(`📊 处理中: ${processedCount}/${actualCount} 条 | 消耗: ${creditTracker.getTotalDeducted()} 积分`, 'info', 'process', '');
+        }
         await updateProgress(`已处理 ${processedCount}/${actualCount}`, 'processing', 'process', progressPercent);
         
         if (apiCreditsExhausted) {
-          addLog('', 'info', 'process', '');
-          addLog('═══════════════════════════════════════════════════', 'error', 'process', '');
-          addLog('⚠️ 系统 API 积分已耗尽，搜索提前结束', 'error', 'process', '');
-          addLog('═══════════════════════════════════════════════════', 'error', 'process', '');
-          addLog('📌 已验证的数据已保存，您可以导出已完成的结果', 'warning', 'process', '');
-          addLog('📞 请联系管理员处理 API 积分问题', 'warning', 'process', '');
-          addLog('', 'info', 'process', '');
-          
-          // ==================== 实时扣费：已扣除的积分不退还 ====================
-          const unprocessedCount = actualCount - processedCount;
+          addLog(`⚠️ API积分耗尽 | 已消耗: ${creditTracker.getTotalDeducted()} 积分`, 'error', 'process', '');
           stats.creditsUsed = creditTracker.getTotalDeducted();
-          stats.unprocessedCount = unprocessedCount;
-          addLog(`💰 已消耗: ${stats.creditsUsed} 积分 | 未处理: ${unprocessedCount} 条`, 'info', 'process', '');
-          
+          stats.unprocessedCount = actualCount - processedCount;
           progress.status = 'stopped';
           break;
-        }
-        
-        if ((batchIndex + 1) % 5 === 0 && (batchIndex + 1) < totalBatches) {
-          addLog('──────────────────────────────', 'info', 'process', '');
         }
       }
     }
@@ -950,68 +871,22 @@ export async function executeSearchV3(
       stats.verifySuccessRate = Math.round((stats.resultsVerified / stats.resultsWithPhone) * 100);
     }
 
-    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
-    
     const finalStatus = progress.status === 'stopped' ? 'stopped' : 
                          progress.status === 'insufficient_credits' ? 'insufficient_credits' : 'completed';
-    
-    if (finalStatus === 'stopped') {
-      addLog(`⏹️ 搜索已停止`, 'warning', 'complete', '⏹️');
-    } else if (finalStatus === 'insufficient_credits') {
-      addLog(`⚠️ 积分不足，搜索提前结束`, 'warning', 'complete', '⚠️');
-    } else {
-      addLog(`🎉 任务完成!`, 'success', 'complete', '');
-    }
-    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
-    
-    addLog('──────────────────────────────', 'info', 'complete', '');
-    addLog(`📊 搜索结果摘要:`, 'info', 'complete', '');
-    addLog(`   • LinkedIn 返回: ${stats.apifyReturned} 条`, 'info', 'complete', '');
-    addLog(`   • 处理记录: ${stats.recordsProcessed} 条`, 'info', 'complete', '');
-    addLog(`   • 有效结果: ${stats.totalResults} 条`, 'info', 'complete', '');
-    addLog(`   ├─ 有电话: ${stats.resultsWithPhone} 条`, 'info', 'complete', '');
-    addLog(`   ├─ 有邮箱: ${stats.resultsWithEmail} 条`, 'info', 'complete', '');
-    addLog(`   └─ 验证通过: ${stats.resultsVerified} 条`, 'info', 'complete', '');
-    
-    if (stats.excludedNoPhone > 0 || stats.excludedNoContact > 0 || stats.excludedAgeFilter > 0 || stats.excludedError > 0) {
-      addLog('──────────────────────────────', 'info', 'complete', '');
-      addLog(`🚫 排除统计:`, 'info', 'complete', '');
-      if (stats.excludedNoPhone > 0) addLog(`   无电话号码: ${stats.excludedNoPhone}`, 'info', 'complete', '');
-      if (stats.excludedNoContact > 0) addLog(`   无联系方式: ${stats.excludedNoContact}`, 'info', 'complete', '');
-      if (stats.excludedAgeFilter > 0) addLog(`   年龄不符: ${stats.excludedAgeFilter}`, 'info', 'complete', '');
-      if (stats.excludedError > 0) addLog(`   处理失败: ${stats.excludedError}`, 'info', 'complete', '');
-    }
     
     // ==================== 实时扣费：最终费用明细 ====================
     const breakdown = creditTracker.getCostBreakdown();
     stats.creditsUsed = breakdown.totalCost;
     stats.creditsFinal = breakdown.totalCost;
     
-    addLog('──────────────────────────────', 'info', 'complete', '');
-    addLog(`💰 费用明细 (实时扣费):`, 'info', 'complete', '');
-    addLog(`   • 搜索费: ${breakdown.searchFee} 积分`, 'info', 'complete', '');
-    addLog(`   • 数据费: ${breakdown.dataRecords} 条 × ${currentPhoneCreditsPerPerson} = ${breakdown.dataFee} 积分`, 'info', 'complete', '');
-    addLog(`   • 总消耗: ${breakdown.totalCost} 积分`, 'info', 'complete', '');
-    addLog(`   • 当前余额: ${creditTracker.getCurrentBalance()} 积分`, 'info', 'complete', '');
-    
-    addLog(`⏱️ 总耗时: ${formatDuration(stats.totalDuration)}`, 'info', 'complete', '');
-    if (stats.resultsWithPhone > 0) {
-      addLog(`📈 验证成功率: ${stats.verifySuccessRate}%`, 'info', 'complete', '');
+    // 简洁最终结果日志：一行汇总
+    if (finalStatus === 'stopped') {
+      addLog(`⏹️ 已停止 | 结果: ${stats.totalResults} 条 | 有电话: ${stats.resultsWithPhone} | 消耗: ${breakdown.totalCost} 积分 | 余额: ${creditTracker.getCurrentBalance()} 积分`, 'warning', 'complete', '');
+    } else if (finalStatus === 'insufficient_credits') {
+      addLog(`⚠️ 积分不足 | 结果: ${stats.totalResults} 条 | 有电话: ${stats.resultsWithPhone} | 消耗: ${breakdown.totalCost} 积分 | 余额: ${creditTracker.getCurrentBalance()} 积分`, 'warning', 'complete', '');
+    } else {
+      addLog(`✅ 完成 | 结果: ${stats.totalResults} 条 | 有电话: ${stats.resultsWithPhone} | 消耗: ${breakdown.totalCost} 积分 | 余额: ${creditTracker.getCurrentBalance()} 积分`, 'success', 'complete', '');
     }
-    
-    // 费用效率分析
-    addLog(`📈 费用效率:`, 'info', 'complete', '');
-    if (stats.totalResults > 0 && stats.creditsUsed > 0) {
-      const costPerResult = stats.creditsUsed / stats.totalResults;
-      addLog(`   • 每条结果成本: ${costPerResult.toFixed(2)} 积分`, 'info', 'complete', '');
-    }
-    if (stats.totalResults > 0 && stats.creditsUsed > 0) {
-      addLog(`   • 数据效率: ${(stats.totalResults / stats.creditsUsed).toFixed(2)} 条/积分`, 'info', 'complete', '');
-    }
-    
-    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
-    addLog(`💡 提示: 相同姓名/地点的后续搜索将命中缓存，节省更多积分`, 'info', 'complete', '');
-    addLog('═══════════════════════════════════════════════════', 'info', 'complete', '');
 
     const statsLog: SearchLogEntry = {
       timestamp: formatTimestamp(),
@@ -1038,16 +913,11 @@ export async function executeSearchV3(
 
   } catch (error: any) {
     progress.status = 'failed';
-    addLog(`❌ 搜索任务失败: ${error.message}`, 'error', 'complete', '❌');
     
     // ==================== 实时扣费：失败时已扣除的积分不退还 ====================
     const failBreakdown = creditTracker.getCostBreakdown();
     stats.creditsUsed = failBreakdown.totalCost;
-    addLog(`💰 失败结算 (实时扣费):`, 'info', 'complete', '');
-    addLog(`   • 搜索费: ${failBreakdown.searchFee} 积分`, 'info', 'complete', '');
-    addLog(`   • 数据费: ${failBreakdown.dataFee} 积分`, 'info', 'complete', '');
-    addLog(`   • 已消耗: ${failBreakdown.totalCost} 积分`, 'info', 'complete', '');
-    addLog(`   • 当前余额: ${creditTracker.getCurrentBalance()} 积分`, 'info', 'complete', '');
+    addLog(`❌ 失败: ${error.message} | 消耗: ${failBreakdown.totalCost} 积分 | 余额: ${creditTracker.getCurrentBalance()} 积分`, 'error', 'complete', '');
     
     const statsLog: SearchLogEntry = {
       timestamp: formatTimestamp(),
