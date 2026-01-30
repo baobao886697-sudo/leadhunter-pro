@@ -362,7 +362,7 @@ export class SpfSmartConcurrencyPool<T, R> {
     // 并行启动所有线程
     await Promise.all(this.threads.map(thread => thread.start(onResult)));
 
-    console.log(`[SPF Pool] 执行完成: 成功 ${this.stats.completedTasks}, 失败 ${this.stats.failedTasks}, 错误率 ${(this.stats.errorRate * 100).toFixed(1)}%`);
+    // 不输出技术统计信息到控制台
 
     return results;
   }

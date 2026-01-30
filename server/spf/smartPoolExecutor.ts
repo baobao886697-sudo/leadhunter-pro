@@ -262,8 +262,7 @@ export async function fetchDetailsWithSpfSmartPool(
   onProgress(`📊 详情页请求: ${detailPageRequests} 页`);
   onProgress(`📊 有效结果: ${results.reduce((sum, r) => sum + r.details.length, 0)} 条`);
   onProgress(`📊 过滤排除: ${filteredOut} 条`);
-  onProgress(`📊 错误率: ${(poolStats.errorRate * 100).toFixed(1)}%`);
-  onProgress(`📊 平均响应: ${poolStats.avgResponseTime.toFixed(0)}ms`);
+  // 不再显示技术性的错误率和平均响应时间
   
   return {
     results,
