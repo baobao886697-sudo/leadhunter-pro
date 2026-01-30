@@ -111,15 +111,9 @@ export async function executeSpfSearchWithThreadPool(
   const creditTracker = await createRealtimeCreditTracker(userId, taskId, searchCost, detailCost);
   const initialBalance = creditTracker.getCurrentBalance();
   
-  // 记录任务信息
-  logMessage(`═══════════════════════════════════════════════════`);
+  // 记录任务信息（简洁专业版）
   logMessage(`🚀 SPF 搜索任务启动`);
-  logMessage(`═══════════════════════════════════════════════════`);
-  logMessage(`📋 任务 ID: ${taskId}`);
-  logMessage(`📋 搜索模式: ${input.mode === 'nameOnly' ? '仅姓名' : '姓名+地点'}`);
   logMessage(`📋 搜索组合: ${subTasks.length} 个任务`);
-  logMessage(`💰 当前余额: ${initialBalance.toFixed(1)} 积分`);
-  logMessage(`💰 计费标准: 搜索页 ${searchCost} 积分/页, 详情页 ${detailCost} 积分/页`);
   
   // 显示过滤条件
   const filters = input.filters || {};
@@ -396,30 +390,16 @@ export async function executeSpfSearchWithThreadPool(
       logs,
     });
     
-    // ==================== 费用明细（简洁专业版） ====================
+    // ==================== 任务完成日志（简洁专业版） ====================
     const breakdown = creditTracker.getCostBreakdown();
     const currentBalance = creditTracker.getCurrentBalance();
     
-    logMessage(`═══════════════════════════════════════════════════`);
     if (stoppedDueToCredits) {
       logMessage(`⚠️ 任务因积分不足提前结束`);
     } else {
-      logMessage(`🎉 任务完成`);
+      logMessage(`✅ 任务完成`);
     }
-    logMessage(`═══════════════════════════════════════════════════`);
-    logMessage(`💰 费用明细`);
-    logMessage(`───────────────────────────────────────────────────`);
-    logMessage(`📋 搜索页: ${breakdown.searchPages} 页 × ${searchCost} = ${breakdown.searchCost.toFixed(1)} 积分`);
-    logMessage(`📋 详情页: ${breakdown.detailPages} 页 × ${detailCost} = ${breakdown.detailCost.toFixed(1)} 积分`);
-    logMessage(`───────────────────────────────────────────────────`);
-    logMessage(`📊 本次消耗: ${breakdown.totalCost.toFixed(1)} 积分`);
-    logMessage(`📊 剩余余额: ${currentBalance.toFixed(1)} 积分`);
-    logMessage(`📊 获取结果: ${totalResults} 条`);
-    if (totalResults > 0) {
-      const costPerResult = breakdown.totalCost / totalResults;
-      logMessage(`📊 每条成本: ${costPerResult.toFixed(2)} 积分`);
-    }
-    logMessage(`═══════════════════════════════════════════════════`);
+    logMessage(`📊 结果: ${totalResults} 条 | 消耗: ${breakdown.totalCost.toFixed(1)} 积分 | 余额: ${currentBalance.toFixed(1)} 积分`);
     
     // 记录 API 日志
     await logApi({
@@ -452,13 +432,10 @@ export async function executeSpfSearchWithThreadPool(
     });
     
   } catch (error: any) {
-    logMessage(`❌ 搜索任务失败: ${error.message}`);
+    logMessage(`❌ 任务失败: ${error.message}`);
     
     // 获取已消耗的费用
     const breakdown = creditTracker.getCostBreakdown();
-    
-    logMessage(`💰 已消耗: ${breakdown.totalCost.toFixed(1)} 积分`);
-    logMessage(`📊 剩余余额: ${creditTracker.getCurrentBalance().toFixed(1)} 积分`);
     
     await failTask(error.message, logs);
     

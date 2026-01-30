@@ -543,15 +543,9 @@ async function executeSpfSearchRealtimeDeduction(
   const creditTracker = await createRealtimeCreditTracker(userId, taskId, searchCost, detailCost);
   const initialBalance = creditTracker.getCurrentBalance();
   
-  // 启动日志
-  addLog(`═══════════════════════════════════════════════════`);
+  // 启动日志（简洁专业版）
   addLog(`🚀 SPF 搜索任务启动`);
-  addLog(`═══════════════════════════════════════════════════`);
-  addLog(`📋 任务 ID: ${taskId}`);
-  addLog(`📋 搜索模式: ${input.mode === 'nameOnly' ? '仅姓名' : '姓名+地点'}`);
   addLog(`📋 搜索组合: ${subTasks.length} 个任务`);
-  addLog(`💰 当前余额: ${initialBalance.toFixed(1)} 积分`);
-  addLog(`💰 计费标准: 搜索页 ${searchCost} 积分/页, 详情页 ${detailCost} 积分/页`);
   
   // 显示过滤条件
   const filters = input.filters || {};
@@ -785,30 +779,16 @@ async function executeSpfSearchRealtimeDeduction(
       logs,
     });
     
-    // ==================== 费用明细（简洁专业版） ====================
+    // ==================== 任务完成日志（简洁专业版） ====================
     const breakdown = creditTracker.getCostBreakdown();
     const currentBalance = creditTracker.getCurrentBalance();
     
-    addLog(`═══════════════════════════════════════════════════`);
     if (stoppedDueToCredits) {
       addLog(`⚠️ 任务因积分不足提前结束`);
     } else {
-      addLog(`🎉 任务完成`);
+      addLog(`✅ 任务完成`);
     }
-    addLog(`═══════════════════════════════════════════════════`);
-    addLog(`💰 费用明细`);
-    addLog(`───────────────────────────────────────────────────`);
-    addLog(`📋 搜索页: ${breakdown.searchPages} 页 × ${searchCost} = ${breakdown.searchCost.toFixed(1)} 积分`);
-    addLog(`📋 详情页: ${breakdown.detailPages} 页 × ${detailCost} = ${breakdown.detailCost.toFixed(1)} 积分`);
-    addLog(`───────────────────────────────────────────────────`);
-    addLog(`📊 本次消耗: ${breakdown.totalCost.toFixed(1)} 积分`);
-    addLog(`📊 剩余余额: ${currentBalance.toFixed(1)} 积分`);
-    addLog(`📊 获取结果: ${totalResults} 条`);
-    if (totalResults > 0) {
-      const costPerResult = breakdown.totalCost / totalResults;
-      addLog(`📊 每条成本: ${costPerResult.toFixed(2)} 积分`);
-    }
-    addLog(`═══════════════════════════════════════════════════`);
+    addLog(`📊 结果: ${totalResults} 条 | 消耗: ${breakdown.totalCost.toFixed(1)} 积分 | 余额: ${currentBalance.toFixed(1)} 积分`);
     
     // 记录 API 日志
     await logApi({
@@ -841,13 +821,10 @@ async function executeSpfSearchRealtimeDeduction(
     });
     
   } catch (error: any) {
-    addLog(`❌ 搜索任务失败: ${error.message}`);
+    addLog(`❌ 任务失败: ${error.message}`);
     
     // 获取已消耗的费用
     const breakdown = creditTracker.getCostBreakdown();
-    
-    addLog(`💰 已消耗: ${breakdown.totalCost.toFixed(1)} 积分`);
-    addLog(`📊 剩余余额: ${creditTracker.getCurrentBalance().toFixed(1)} 积分`);
     
     await failSpfSearchTask(taskDbId, error.message, logs);
     
