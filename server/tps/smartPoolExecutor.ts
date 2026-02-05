@@ -28,6 +28,7 @@ import {
   shouldIncludeResult,
 } from './scraper';
 import { TpsRealtimeCreditTracker } from './realtimeCredits';
+import { fetchWithScrapeClient } from './scrapeClient';
 
 // ============================================================================
 // 类型定义
@@ -57,44 +58,25 @@ export interface SmartPoolFetchResult {
 }
 
 // ============================================================================
-// Scrape.do API 请求函数
+// Scrape.do API 请求配置
 // ============================================================================
 
 // 默认配置（会被运行时配置覆盖）
 let SCRAPE_TIMEOUT_MS = 5000;
 let SCRAPE_MAX_RETRIES = 1;
 
+/**
+ * 使用共享的 scrapeClient 获取页面
+ * 
+ * 详情获取阶段使用此函数，并发由智能并发池控制
+ */
 async function fetchWithScrapedo(url: string, token: string): Promise<string> {
-  const encodedUrl = encodeURIComponent(url);
-  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&super=true&geoCode=us&timeout=${SCRAPE_TIMEOUT_MS}`;
-  
-  for (let attempt = 0; attempt <= SCRAPE_MAX_RETRIES; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 2000);
-      
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      return await response.text();
-    } catch (error: any) {
-      if (attempt === SCRAPE_MAX_RETRIES) {
-        throw error;
-      }
-      // 重试前等待
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-  
-  throw new Error('请求失败');
+  return await fetchWithScrapeClient(url, token, {
+    timeoutMs: SCRAPE_TIMEOUT_MS,
+    maxRetries: SCRAPE_MAX_RETRIES,
+    retryDelayMs: 1000,  // 重试前等待 1 秒
+    enableLogging: false,  // 详情阶段不输出日志（避免日志过多）
+  });
 }
 
 // ============================================================================
