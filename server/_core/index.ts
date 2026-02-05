@@ -536,9 +536,11 @@ async function ensureTables() {
       console.log("[Database] tps_search_tasks.errorMessage modify error:", e.message);
     }
     
-    // 21. TPS 搜索结果表
+    // 21. TPS 搜索结果表 - 先删除旧表再重建以确保字段一致
+    await db.execute(sql`DROP TABLE IF EXISTS tps_search_results`);
+    console.log("[Database] Dropped old tps_search_results table");
     await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS tps_search_results (
+      CREATE TABLE tps_search_results (
         id INT AUTO_INCREMENT PRIMARY KEY,
         taskId INT NOT NULL,
         subTaskIndex INT NOT NULL DEFAULT 0,
@@ -556,46 +558,18 @@ async function ensureTables() {
         isPrimary BOOLEAN DEFAULT FALSE,
         propertyValue INT DEFAULT 0,
         yearBuilt INT,
+        company VARCHAR(200),
+        jobTitle VARCHAR(200),
+        email VARCHAR(500),
+        spouse VARCHAR(200),
         detailLink VARCHAR(500),
+        fromCache BOOLEAN DEFAULT FALSE,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
         INDEX idx_taskId (taskId)
       )
     `);
     console.log("[Database] TPS search results table ready");
-    
-    // 添加缺失的字段到 tps_search_results 表（MySQL 兼容语法）
-    const resultsColumnsToAdd = [
-      { name: 'searchName', definition: 'VARCHAR(200)' },
-      { name: 'searchLocation', definition: 'VARCHAR(200)' },
-      { name: 'location', definition: 'VARCHAR(200)' },
-      { name: 'phone', definition: 'VARCHAR(50)' },
-      { name: 'phoneType', definition: 'VARCHAR(50)' },
-      { name: 'carrier', definition: 'VARCHAR(100)' },
-      { name: 'reportYear', definition: 'INT' },
-      { name: 'isPrimary', definition: 'BOOLEAN DEFAULT FALSE' },
-      { name: 'yearBuilt', definition: 'INT' },
-      { name: 'fromCache', definition: 'BOOLEAN DEFAULT FALSE' },
-      { name: 'company', definition: 'VARCHAR(200)' },
-      { name: 'jobTitle', definition: 'VARCHAR(200)' },
-      { name: 'email', definition: 'VARCHAR(500)' },
-      { name: 'spouse', definition: 'VARCHAR(200)' },
-    ];
-    
-    console.log("[Database] Starting tps_search_results columns migration...");
-    for (const col of resultsColumnsToAdd) {
-      try {
-        await db.execute(sql.raw(`ALTER TABLE tps_search_results ADD COLUMN ${col.name} ${col.definition}`));
-        console.log(`[Database] Added column ${col.name} to tps_search_results`);
-      } catch (e: any) {
-        // 忽略字段已存在的错误 (MySQL error code 1060: Duplicate column name)
-        if (e.message?.includes('Duplicate column name') || e.code === 'ER_DUP_FIELDNAME') {
-          // 列已存在，静默跳过
-        } else {
-          console.warn(`[Database] Column ${col.name} migration note:`, e.message?.substring(0, 100));
-        }
-      }
-    }
-    console.log("[Database] TPS search results columns sync completed");
+    // 表已重建，无需额外的 ALTER TABLE 操作
     
     // ========== Anywho 相关表 ==========
     
