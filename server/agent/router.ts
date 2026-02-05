@@ -55,7 +55,11 @@ interface AgentContext {
 
 async function verifyAgentToken(token: string): Promise<AgentContext['agentUser']> {
   try {
-    if (!AGENT_JWT_SECRET) {\n      console.error(\"[SECURITY] AGENT_JWT_SECRET is not configured\");\n      return null;\n    }\n    const decoded = jwt.verify(token, AGENT_JWT_SECRET) as any;
+    if (!AGENT_JWT_SECRET) {
+      console.error("[SECURITY] AGENT_JWT_SECRET is not configured");
+      return null;
+    }
+    const decoded = jwt.verify(token, AGENT_JWT_SECRET) as any;
     if (!decoded.userId || !decoded.isAgent) {
       return null;
     }
