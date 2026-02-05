@@ -528,6 +528,14 @@ async function ensureTables() {
     }
     console.log("[Database] TPS search tasks columns sync completed");
     
+    // 修改 errorMessage 列长度以支持更长的错误信息
+    try {
+      await db.execute(sql`ALTER TABLE tps_search_tasks MODIFY COLUMN errorMessage MEDIUMTEXT`);
+      console.log("[Database] Modified tps_search_tasks.errorMessage to MEDIUMTEXT");
+    } catch (e: any) {
+      console.log("[Database] tps_search_tasks.errorMessage modify error:", e.message);
+    }
+    
     // 21. TPS 搜索结果表
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS tps_search_results (
@@ -770,6 +778,40 @@ async function ensureTables() {
       )
     `);
     console.log("[Database] Agent commissions table ready");
+    
+    // 迁移: 添加 agent_commissions 表缺少的列
+    try {
+      await db.execute(sql`ALTER TABLE agent_commissions ADD COLUMN commissionLevel INT NOT NULL DEFAULT 1 AFTER orderAmount`);
+      console.log("[Database] Added commissionLevel column to agent_commissions");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.log("[Database] commissionLevel column already exists or error:", e.message);
+      }
+    }
+    try {
+      await db.execute(sql`ALTER TABLE agent_commissions ADD COLUMN bonusType VARCHAR(50) AFTER commissionAmount`);
+      console.log("[Database] Added bonusType column to agent_commissions");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.log("[Database] bonusType column already exists or error:", e.message);
+      }
+    }
+    try {
+      await db.execute(sql`ALTER TABLE agent_commissions ADD COLUMN bonusAmount DECIMAL(10,2) DEFAULT 0 AFTER bonusType`);
+      console.log("[Database] Added bonusAmount column to agent_commissions");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.log("[Database] bonusAmount column already exists or error:", e.message);
+      }
+    }
+    try {
+      await db.execute(sql`ALTER TABLE agent_commissions ADD COLUMN settledAt TIMESTAMP NULL AFTER status`);
+      console.log("[Database] Added settledAt column to agent_commissions");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.log("[Database] settledAt column already exists or error:", e.message);
+      }
+    }
     
     // 代理提现申请表
     await db.execute(sql`
