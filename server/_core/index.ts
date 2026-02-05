@@ -557,6 +557,8 @@ async function ensureTables() {
     
     // 添加缺失的字段到 tps_search_results 表（MySQL 兼容语法）
     const resultsColumnsToAdd = [
+      { name: 'searchName', definition: 'VARCHAR(200)' },
+      { name: 'searchLocation', definition: 'VARCHAR(200)' },
       { name: 'location', definition: 'VARCHAR(200)' },
       { name: 'phone', definition: 'VARCHAR(50)' },
       { name: 'phoneType', definition: 'VARCHAR(50)' },

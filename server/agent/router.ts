@@ -55,7 +55,7 @@ interface AgentContext {
 
 async function verifyAgentToken(token: string): Promise<AgentContext['agentUser']> {
   try {
-    const decoded = jwt.verify(token, AGENT_JWT_SECRET) as any;
+    if (!AGENT_JWT_SECRET) {\n      console.error(\"[SECURITY] AGENT_JWT_SECRET is not configured\");\n      return null;\n    }\n    const decoded = jwt.verify(token, AGENT_JWT_SECRET) as any;
     if (!decoded.userId || !decoded.isAgent) {
       return null;
     }
@@ -232,7 +232,7 @@ async function processAgentApplication(
       user = await getUserByEmail(application.email);
       
       // TODO: 发送邮件通知用户临时密码
-      console.log(`[Agent] Created new user for agent: ${application.email}, temp password: ${tempPassword}`);
+      console.log(`[Agent] Created new user for agent: ${application.email}`);
     }
     
     if (user) {
@@ -314,7 +314,7 @@ async function verifyAgentLogin(email: string, password: string) {
   }
   
   // 生成JWT token
-  const token = jwt.sign(
+  if (!AGENT_JWT_SECRET) {\n    throw new Error(\"系统配置错误：JWT密钥未设置\");\n  }\n  const token = jwt.sign(
     { 
       userId: user.id, 
       email: user.email,
