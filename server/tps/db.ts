@@ -305,6 +305,7 @@ export async function saveTpsSearchResults(
     company?: string;       // 可选，公司
     jobTitle?: string;      // 可选，职位
     email?: string;         // 可选，邮箱地址
+    primaryEmail?: string;  // 可选，主邮箱
     spouse?: string;        // 可选，配偶姓名
     detailLink?: string;    // 可选，从 scraper.ts 传入
     fromCache?: boolean;    // 可选，标记是否来自缓存
@@ -339,6 +340,7 @@ export async function saveTpsSearchResults(
     company: truncate(r.company, 200),
     jobTitle: truncate(r.jobTitle, 200),
     email: truncate(r.email, 500),
+    primaryEmail: truncate(r.primaryEmail, 200),
     spouse: truncate(r.spouse, 200),
     detailLink: truncate(r.detailLink, 500),
     fromCache: r.fromCache ?? false,

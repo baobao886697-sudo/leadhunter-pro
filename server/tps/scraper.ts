@@ -129,6 +129,7 @@ export interface TpsDetailResult {
   company?: string;      // 公司
   jobTitle?: string;     // 职位
   email?: string;        // 邮箱地址（多个用逗号分隔）
+  primaryEmail?: string;  // 主邮箱（第一个邮箱，通常是最相关的）
   spouse?: string;       // 配偶姓名（无配偶则为空）
   detailLink?: string;
   fromCache?: boolean;  // 标记是否来自缓存
@@ -479,7 +480,9 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
   
   // 提取邮箱地址 (Email Addresses 区块)
   // 邮箱以纯文本形式显示在 div 中，使用正则表达式提取
+  // TruePeopleSearch 按相关性排序邮箱，第一个邮箱通常是最相关/最新的
   let email: string | undefined;
+  let primaryEmail: string | undefined;
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const allEmails = html.match(emailRegex) || [];
   // 过滤掉网站相关邮箱
@@ -489,8 +492,12 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
     !e.toLowerCase().includes('scrape')
   );
   if (personalEmails.length > 0) {
-    // 去重并用逗号分隔
-    email = [...new Set(personalEmails)].join(', ');
+    // 去重并保持原始顺序（第一个是最相关的）
+    const uniqueEmails = [...new Set(personalEmails)];
+    // 主邮箱是第一个邮箱
+    primaryEmail = uniqueEmails[0];
+    // 所有邮箱用逗号分隔
+    email = uniqueEmails.join(', ');
   }
   
   // 提取配偶信息 (Possible Relatives 区块)
@@ -578,6 +585,7 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
       company,
       jobTitle,
       email,
+      primaryEmail,
       spouse,
       detailLink: searchResult.detailLink,
     });
@@ -637,6 +645,7 @@ export function parseDetailPage(html: string, searchResult: TpsSearchResult): Tp
       company,
       jobTitle,
       email,
+      primaryEmail,
       spouse,
       detailLink: searchResult.detailLink,
     });

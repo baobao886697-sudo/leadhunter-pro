@@ -563,6 +563,7 @@ async function ensureTables() {
         company VARCHAR(200),
         jobTitle VARCHAR(200),
         email VARCHAR(500),
+        primaryEmail VARCHAR(200),
         spouse VARCHAR(200),
         detailLink VARCHAR(500),
         fromCache BOOLEAN DEFAULT FALSE,
@@ -588,6 +589,7 @@ async function ensureTables() {
       { name: 'company', definition: 'VARCHAR(200)' },
       { name: 'jobTitle', definition: 'VARCHAR(200)' },
       { name: 'email', definition: 'VARCHAR(500)' },
+      { name: 'primaryEmail', definition: 'VARCHAR(200)' },
       { name: 'spouse', definition: 'VARCHAR(200)' },
     ];
     
@@ -612,7 +614,7 @@ async function ensureTables() {
         'phone VARCHAR(50)', 'phoneType VARCHAR(50)', 'carrier VARCHAR(100)',
         'reportYear INT', 'isPrimary BOOLEAN DEFAULT FALSE', 'propertyValue INT DEFAULT 0',
         'yearBuilt INT', 'company VARCHAR(200)', 'jobTitle VARCHAR(200)',
-        'email VARCHAR(500)', 'spouse VARCHAR(200)', 'fromCache BOOLEAN DEFAULT FALSE'
+        'email VARCHAR(500)', 'primaryEmail VARCHAR(200)', 'spouse VARCHAR(200)', 'fromCache BOOLEAN DEFAULT FALSE'
       ];
       for (const colDef of columnsToAdd) {
         const colName = colDef.split(' ')[0];
