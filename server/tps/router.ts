@@ -356,23 +356,17 @@ export const tpsRouter = router({
         return { firstName: parts[0], lastName: parts[parts.length - 1] };
       };
       
-      // CSV 表头
+      // CSV 表头 - 精简版，删除重复冗余列
       const headers = [
         "姓名",
-        "名",
-        "姓",
         "年龄",
-        "城市",
-        "州",
-        "完整地址",
+        "地址",
         "电话",
         "电话类型",
         "运营商",
         "房产价值",
         "公司",
         "职位",
-        "搜索姓名",
-        "搜索地点",
         "详情链接",
         "数据来源",
         "获取时间",
@@ -380,14 +374,9 @@ export const tpsRouter = router({
       
       // CSV 数据行
       const rows = results.data.map((r: any) => {
-        const { firstName, lastName } = parseName(r.name || "");
         return [
           r.name || "",
-          firstName,
-          lastName,
           r.age?.toString() || "",
-          r.city || "",
-          r.state || "",
           r.location || (r.city && r.state ? `${r.city}, ${r.state}` : ""),
           formatPhone(r.phone || ""),
           r.phoneType || "",
@@ -395,8 +384,6 @@ export const tpsRouter = router({
           r.propertyValue?.toString() || "",
           r.company || "",
           r.jobTitle || "",
-          r.searchName || "",
-          r.searchLocation || "",
           r.detailLink ? `https://www.truepeoplesearch.com${r.detailLink}` : "",
           "TruePeopleSearch",
           new Date().toISOString().split("T")[0],
