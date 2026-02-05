@@ -358,7 +358,40 @@ export const spfRouter = router({
         });
       }
       
-      const results = await getAllSpfSearchResults(task.id);
+      const allResults = await getAllSpfSearchResults(task.id);
+      
+      // 应用任务的过滤条件
+      const filters = task.filters as {
+        excludeTMobile?: boolean;
+        excludeComcast?: boolean;
+        excludeLandline?: boolean;
+        excludeWireless?: boolean;
+      } | null;
+      
+      const results = allResults.filter((r: any) => {
+        // 电话类型过滤
+        if (r.phoneType) {
+          if (filters?.excludeLandline && r.phoneType === 'Landline') {
+            return false;
+          }
+          if (filters?.excludeWireless && r.phoneType === 'Wireless') {
+            return false;
+          }
+        }
+        
+        // 运营商过滤
+        if (r.carrier) {
+          const carrierLower = r.carrier.toLowerCase();
+          if (filters?.excludeTMobile && carrierLower.includes('t-mobile')) {
+            return false;
+          }
+          if (filters?.excludeComcast && (carrierLower.includes('comcast') || carrierLower.includes('spectrum'))) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
       
       if (results.length === 0) {
         throw new TRPCError({
