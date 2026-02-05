@@ -581,29 +581,17 @@ async function ensureTables() {
       { name: 'spouse', definition: 'VARCHAR(200)' },
     ];
     
+    console.log("[Database] Starting tps_search_results columns migration...");
     for (const col of resultsColumnsToAdd) {
       try {
-        // 先检查列是否存在
-        const checkResult = await db.execute(sql.raw(`
-          SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
-          WHERE TABLE_SCHEMA = DATABASE() 
-          AND TABLE_NAME = 'tps_search_results' 
-          AND COLUMN_NAME = '${col.name}'
-        `));
-        const exists = (checkResult as any)[0]?.[0]?.cnt > 0;
-        
-        if (!exists) {
-          await db.execute(sql.raw(`ALTER TABLE tps_search_results ADD COLUMN ${col.name} ${col.definition}`));
-          console.log(`[Database] Added column ${col.name} to tps_search_results`);
-        } else {
-          console.log(`[Database] Column ${col.name} already exists in tps_search_results`);
-        }
+        await db.execute(sql.raw(`ALTER TABLE tps_search_results ADD COLUMN ${col.name} ${col.definition}`));
+        console.log(`[Database] Added column ${col.name} to tps_search_results`);
       } catch (e: any) {
-        // 忽略字段已存在的错误 (MySQL error code 1060)
-        if (e.message?.includes('Duplicate column name')) {
-          console.log(`[Database] Column ${col.name} already exists in tps_search_results`);
+        // 忽略字段已存在的错误 (MySQL error code 1060: Duplicate column name)
+        if (e.message?.includes('Duplicate column name') || e.code === 'ER_DUP_FIELDNAME') {
+          // 列已存在，静默跳过
         } else {
-          console.error(`[Database] Failed to add column ${col.name}:`, e.message);
+          console.warn(`[Database] Column ${col.name} migration note:`, e.message?.substring(0, 100));
         }
       }
     }
