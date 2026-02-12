@@ -28,9 +28,9 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { NotificationCenter } from "./NotificationCenter";
 
-const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean; isTopRecommend?: boolean }> = [
+const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean; isTopRecommend?: boolean; isMaintenance?: boolean }> = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/dashboard" },
-  { icon: Linkedin, label: "LinkedIn", path: "/search", isRainbow: true },
+  { icon: Linkedin, label: "LinkedIn", path: "/search", isMaintenance: true },
   { icon: Users, label: "TruePeopleSearch", path: "/tps", isRainbow: true, isTopRecommend: true },
   { icon: UserSearch, label: "PeopleSearchNow", path: "/people-search-now", isNew: true },
   { icon: SearchCheck, label: "SearchPeopleFree", path: "/spf/search", isRainbow: true },
@@ -277,6 +277,11 @@ function DashboardLayoutContent({
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-yellow-500/20 via-pink-500/20 to-purple-500/20 text-yellow-300 border border-yellow-500/30">
                             推荐
                           </span>
+                        </span>
+                      )}
+                      {item.isMaintenance && (
+                        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                          维护中
                         </span>
                       )}
                     </SidebarMenuButton>

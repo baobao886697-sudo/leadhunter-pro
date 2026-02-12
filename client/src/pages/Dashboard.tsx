@@ -309,12 +309,7 @@ export default function Dashboard() {
                   <p className="text-sm text-slate-400">全平台搜索任务</p>
                 </div>
               </div>
-              <Link href="/history">
-                <Button variant="ghost" size="sm" className="gap-1 text-slate-400 hover:text-purple-400 hover:bg-purple-500/10">
-                  查看全部
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+
             </div>
             
             {statsLoading ? (
