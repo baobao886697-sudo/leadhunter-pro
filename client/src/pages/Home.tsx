@@ -12,7 +12,7 @@ import {
   Database, Globe, TrendingUp, Users, Building2, Linkedin, Twitter, 
   Facebook, Mail, MapPin, BarChart3, Lock, Clock, Award, Star,
   ChevronRight, Play, Layers, Network, Cpu, Eye, EyeOff, ChevronDown,
-  AlertTriangle, Loader2, UserSearch, User
+  AlertTriangle, Loader2, UserSearch, User, SearchCheck
 } from "lucide-react";
 
 // 生成设备指纹（保持原有逻辑）
@@ -57,11 +57,11 @@ function AnimatedCounter({ end, duration = 2000, suffix = "" }: { end: number; d
 
 // 数据源卡片
 const DATA_SOURCES = [
-  { icon: Linkedin, name: "LinkedIn", records: "6.5亿+", color: "from-blue-500 to-blue-600", available: true },
   { icon: UserSearch, name: "TruePeopleSearch", records: "3亿+", color: "from-teal-500 to-cyan-600", available: true, isNew: true },
+  { icon: SearchCheck, name: "SearchPeopleFree", records: "2亿+", color: "from-purple-500 to-violet-600", available: true, isNew: true },
+  { icon: Phone, name: "Anywho", records: "1.5亿+", color: "from-amber-500 to-orange-600", available: true, isNew: true },
+  { icon: Linkedin, name: "LinkedIn", records: "6.5亿+", color: "from-blue-500 to-blue-600", available: true },
   { icon: Building2, name: "企业工商", records: "2亿+", color: "from-emerald-500 to-green-600", available: false },
-  { icon: Twitter, name: "Twitter/X", records: "5亿+", color: "from-slate-600 to-slate-700", available: false },
-  { icon: Facebook, name: "Facebook", records: "3亿+", color: "from-blue-600 to-indigo-600", available: false },
 ];
 
 // 核心功能
@@ -81,7 +81,7 @@ const CORE_FEATURES = [
   {
     icon: Layers,
     title: "多平台数据整合",
-    description: "整合LinkedIn、企业工商、社交媒体等多平台数据，构建完整的商业人脉图谱，一站式获取全方位信息。",
+    description: "整合 TruePeopleSearch、SearchPeopleFree、Anywho 等多平台数据，一站式获取电话、地址、邮箱等全方位联系人信息。",
     gradient: "from-orange-500 to-red-500",
   },
   {

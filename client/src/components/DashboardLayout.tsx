@@ -288,22 +288,22 @@ function DashboardLayoutContent({
             {/* 产品介绍 */}
             {!isCollapsed && (
               <div className="mx-3 mt-4 p-3 rounded-lg bg-gradient-to-br from-cyan-500/5 to-blue-500/5 border border-cyan-500/10 group-data-[collapsible=icon]:hidden">
-                <div className="text-xs font-medium text-cyan-400 mb-2">精准获客 · 拒绝无效数据</div>
+                <div className="text-xs font-medium text-cyan-400 mb-2">精准获客 · 多源数据融合</div>
                 <p className="text-[11px] text-gray-400 leading-relaxed">
-                  DataReach Pro 整合全球多平台数据，为您提供经过多重验证的高质量商业联系人信息。
+                  DataReach Pro 整合美国多平台人口与商业数据，提供高质量联系人信息。
                 </p>
                 <div className="mt-2 space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                    <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
-                    <span>年龄精准筛选 - 锁定决策层</span>
+                    <span className="w-1 h-1 rounded-full bg-teal-400"></span>
+                    <span>TPS · 3亿+ 美国人口记录</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                    <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
-                    <span>电话双重验证 - 确保可达</span>
+                    <span className="w-1 h-1 rounded-full bg-purple-400"></span>
+                    <span>SPF · 深度人口数据 + 婚姻/就业</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                    <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
-                    <span>邮箱有效确认 - 提升触达率</span>
+                    <span className="w-1 h-1 rounded-full bg-amber-400"></span>
+                    <span>Anywho · AT&T 官方电话数据</span>
                   </div>
                 </div>
                 <div className="mt-3 pt-2 border-t border-gray-700/50">
@@ -356,8 +356,8 @@ function DashboardLayoutContent({
                   onClick={() => setLocation('/dashboard')}
                   className="cursor-pointer"
                 >
-                  <User className="mr-2 h-4 w-4" />
-                  <span>个人中心</span>
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  <span>我的仪表盘</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setLocation('/recharge')}

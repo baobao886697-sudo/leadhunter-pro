@@ -24,6 +24,8 @@ import { spfRouter } from "./spf/router";
 import { linkedinRouter } from "./linkedin/router";
 import { agentRouter, adminAgentRouter } from "./agent/router";
 import { sendPasswordResetEmail } from "./services/email";
+import { getDb } from "./db";
+import { tpsSearchTasks, anywhoSearchTasks, spfSearchTasks, searchTasks } from "../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { sdk } from "./_core/sdk";
 import { validateAdminCredentials, generateAdminToken, verifyAdminToken, getAdminTokenFromHeader } from "./_core/adminAuth";
@@ -113,6 +115,7 @@ import {
   exportUserCreditLogs,
   getCreditAnomalies,
 } from "./db";
+import { eq, desc, sql } from "drizzle-orm";
 // Apollo 相关处理器已移除
 // [已迁移到 linkedin 模块] 保留原导入以便回滚
 // import { previewSearch, executeSearchV3, getSearchCreditsConfig } from "./services/searchProcessorV3";
@@ -251,8 +254,8 @@ export const appRouter = router({
           userId: user.id,
           action: input.force ? '强制登录' : '用户登录',
           details: `设备ID: ${deviceId}`,
-          ipAddress,
-          userAgent
+          ipAddress: ipAddress ?? undefined,
+          userAgent: userAgent ?? undefined
         });
 
         // 创建会话
@@ -350,6 +353,120 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return getCreditTransactions(ctx.user.id, input.limit);
       }),
+
+    // 仪表盘全平台聚合统计（TPS + SPF + Anywho + LinkedIn）
+    dashboardStats: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) {
+        return { totalTasks: 0, totalResults: 0, recentTasks: [] };
+      }
+      const userId = ctx.user.id;
+      try {
+        // 并行查询四张任务表的统计数据
+        const [linkedinStats, tpsStats, spfStats, anywhoStats] = await Promise.all([
+          db.select({
+            count: sql<number>`count(*)`,
+            results: sql<number>`COALESCE(SUM(actualCount), 0)`,
+          }).from(searchTasks).where(eq(searchTasks.userId, userId)),
+          db.select({
+            count: sql<number>`count(*)`,
+            results: sql<number>`COALESCE(SUM(totalResults), 0)`,
+          }).from(tpsSearchTasks).where(eq(tpsSearchTasks.userId, userId)),
+          db.select({
+            count: sql<number>`count(*)`,
+            results: sql<number>`COALESCE(SUM(totalResults), 0)`,
+          }).from(spfSearchTasks).where(eq(spfSearchTasks.userId, userId)),
+          db.select({
+            count: sql<number>`count(*)`,
+            results: sql<number>`COALESCE(SUM(totalResults), 0)`,
+          }).from(anywhoSearchTasks).where(eq(anywhoSearchTasks.userId, userId)),
+        ]);
+
+        const totalTasks = Number(linkedinStats[0]?.count || 0) + Number(tpsStats[0]?.count || 0) + Number(spfStats[0]?.count || 0) + Number(anywhoStats[0]?.count || 0);
+        const totalResults = Number(linkedinStats[0]?.results || 0) + Number(tpsStats[0]?.results || 0) + Number(spfStats[0]?.results || 0) + Number(anywhoStats[0]?.results || 0);
+
+        // 查询最近5个任务（从四张表中取最新的）
+        const [linkedinRecent, tpsRecent, spfRecent, anywhoRecent] = await Promise.all([
+          db.select({
+            taskId: searchTasks.taskId,
+            status: searchTasks.status,
+            createdAt: searchTasks.createdAt,
+            resultCount: searchTasks.actualCount,
+            params: searchTasks.params,
+          }).from(searchTasks).where(eq(searchTasks.userId, userId)).orderBy(desc(searchTasks.createdAt)).limit(5),
+          db.select({
+            taskId: tpsSearchTasks.taskId,
+            status: tpsSearchTasks.status,
+            createdAt: tpsSearchTasks.createdAt,
+            resultCount: tpsSearchTasks.totalResults,
+            names: tpsSearchTasks.names,
+          }).from(tpsSearchTasks).where(eq(tpsSearchTasks.userId, userId)).orderBy(desc(tpsSearchTasks.createdAt)).limit(5),
+          db.select({
+            taskId: spfSearchTasks.taskId,
+            status: spfSearchTasks.status,
+            createdAt: spfSearchTasks.createdAt,
+            resultCount: spfSearchTasks.totalResults,
+            names: spfSearchTasks.names,
+          }).from(spfSearchTasks).where(eq(spfSearchTasks.userId, userId)).orderBy(desc(spfSearchTasks.createdAt)).limit(5),
+          db.select({
+            taskId: anywhoSearchTasks.taskId,
+            status: anywhoSearchTasks.status,
+            createdAt: anywhoSearchTasks.createdAt,
+            resultCount: anywhoSearchTasks.totalResults,
+            names: anywhoSearchTasks.names,
+          }).from(anywhoSearchTasks).where(eq(anywhoSearchTasks.userId, userId)).orderBy(desc(anywhoSearchTasks.createdAt)).limit(5),
+        ]);
+
+        // 合并并按时间排序，取最近5个
+        const allRecent = [
+          ...linkedinRecent.map(t => ({
+            taskId: t.taskId,
+            source: 'linkedin' as const,
+            status: t.status,
+            createdAt: t.createdAt,
+            resultCount: t.resultCount || 0,
+            displayName: (() => { const p = t.params as any; return p?.name || '未知'; })(),
+            displayDetail: (() => { const p = t.params as any; return p?.title || p?.state || ''; })(),
+          })),
+          ...tpsRecent.map(t => ({
+            taskId: t.taskId,
+            source: 'tps' as const,
+            status: t.status,
+            createdAt: t.createdAt,
+            resultCount: t.resultCount || 0,
+            displayName: (t.names as string[])?.slice(0, 2).join(', ') || '未知',
+            displayDetail: `${(t.names as string[])?.length || 0} 个姓名`,
+          })),
+          ...spfRecent.map(t => ({
+            taskId: t.taskId,
+            source: 'spf' as const,
+            status: t.status,
+            createdAt: t.createdAt,
+            resultCount: t.resultCount || 0,
+            displayName: (t.names as string[])?.slice(0, 2).join(', ') || '未知',
+            displayDetail: `${(t.names as string[])?.length || 0} 个姓名`,
+          })),
+          ...anywhoRecent.map(t => ({
+            taskId: t.taskId,
+            source: 'anywho' as const,
+            status: t.status,
+            createdAt: t.createdAt,
+            resultCount: t.resultCount || 0,
+            displayName: (t.names as string[])?.slice(0, 2).join(', ') || '未知',
+            displayDetail: `${(t.names as string[])?.length || 0} 个姓名`,
+          })),
+        ].sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dateB - dateA;
+        }).slice(0, 5);
+
+        return { totalTasks, totalResults, recentTasks: allRecent };
+      } catch (error) {
+        console.error('[Dashboard] Stats query error:', error);
+        return { totalTasks: 0, totalResults: 0, recentTasks: [] };
+      }
+    }),
   }),
 
   // ============ 搜索路由 ============
@@ -755,8 +872,8 @@ export const appRouter = router({
           userId: ctx.user.id,
           action: '创建充值订单',
           details: `订单号: ${order.orderId}, 充值${input.credits}积分${bonusInfo}, 实际获得${totalCredits}积分, 金额${order.amount}USDT`,
-          ipAddress: ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket?.remoteAddress || null,
-          userAgent: ctx.req.headers["user-agent"] || null
+          ipAddress: (ctx.req.headers["x-forwarded-for"] as string || ctx.req.socket?.remoteAddress) ?? undefined,
+          userAgent: ctx.req.headers["user-agent"] ?? undefined
         });
 
         return {
