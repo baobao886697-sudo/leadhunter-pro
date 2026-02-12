@@ -3,13 +3,15 @@
  * 统一七彩鍯金风格
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
 import {
@@ -37,6 +39,8 @@ import {
   Target,
   Zap,
   Users,
+  Filter,
+  X,
 } from "lucide-react";
 
 
@@ -117,6 +121,8 @@ export default function History() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const pageSize = 10;
 
   const { data: tasksData, isLoading } = trpc.search.tasks.useQuery(
@@ -125,8 +131,39 @@ export default function History() {
   );
 
   const tasks = tasksData?.tasks || [];
-  const totalPages = Math.ceil((tasksData?.total || 0) / pageSize);
-  const paginatedTasks = tasks.slice((page - 1) * pageSize, page * pageSize);
+
+  // 纯前端筛选 - 不影响原始数据
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task: any) => {
+      // 状态筛选
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+      // 关键词搜索（搜索条件中的姓名、职位、地区）
+      if (searchKeyword.trim()) {
+        const keyword = searchKeyword.trim().toLowerCase();
+        const params = task.params as SearchParams || {};
+        const name = (params.name || "").toLowerCase();
+        const title = (params.title || "").toLowerCase();
+        const state = (params.state || "").toLowerCase();
+        if (!name.includes(keyword) && !title.includes(keyword) && !state.includes(keyword)) return false;
+      }
+      return true;
+    });
+  }, [tasks, statusFilter, searchKeyword]);
+
+  const totalPages = Math.ceil(filteredTasks.length / pageSize);
+  const paginatedTasks = filteredTasks.slice((page - 1) * pageSize, page * pageSize);
+
+  // 筛选变化时重置页码
+  const handleFilterChange = (newStatus: string) => {
+    setStatusFilter(newStatus);
+    setPage(1);
+  };
+  const handleSearchChange = (value: string) => {
+    setSearchKeyword(value);
+    setPage(1);
+  };
+
+  const hasActiveFilter = statusFilter !== "all" || searchKeyword.trim() !== "";
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -234,7 +271,7 @@ export default function History() {
                 <div>
                   <p className="text-sm text-muted-foreground">总任务数</p>
                   <p className="text-2xl font-bold rainbow-text mt-1">
-                    {tasksData?.total || 0}
+                    {tasks.length}
                   </p>
                 </div>
                 <Target className="h-8 w-8 text-blue-400" />
@@ -285,10 +322,60 @@ export default function History() {
         {/* 任务列表 */}
         <Card className="rainbow-border bg-gradient-to-br from-slate-900/80 to-slate-800/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HistoryIcon className="h-5 w-5 text-blue-400" />
-              <span className="rainbow-text">任务列表</span>
-            </CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <HistoryIcon className="h-5 w-5 text-blue-400" />
+                <span className="rainbow-text">任务列表</span>
+                {hasActiveFilter && (
+                  <Badge variant="outline" className="ml-2 text-xs text-blue-400 border-blue-500/30">
+                    {filteredTasks.length} 条结果
+                  </Badge>
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="搜索姓名、职位、地区..."
+                    value={searchKeyword}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSearchChange(e.target.value)}
+                    className="pl-8 w-48 bg-slate-800/50 border-slate-700 text-sm placeholder:text-slate-500 focus:border-blue-500/50"
+                  />
+                  {searchKeyword && (
+                    <button
+                      onClick={() => handleSearchChange("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <Select value={statusFilter} onValueChange={handleFilterChange}>
+                  <SelectTrigger className="w-28 bg-slate-800/50 border-slate-700 text-sm">
+                    <Filter className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all">全部状态</SelectItem>
+                    <SelectItem value="completed">已完成</SelectItem>
+                    <SelectItem value="running">运行中</SelectItem>
+                    <SelectItem value="failed">失败</SelectItem>
+                    <SelectItem value="stopped">已停止</SelectItem>
+                    <SelectItem value="pending">等待中</SelectItem>
+                  </SelectContent>
+                </Select>
+                {hasActiveFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setStatusFilter("all"); setSearchKeyword(""); setPage(1); }}
+                    className="text-slate-400 hover:text-white text-xs px-2"
+                  >
+                    清除筛选
+                  </Button>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -377,7 +464,7 @@ export default function History() {
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <p className="text-sm text-muted-foreground">
-                      第 {page} 页，共 {totalPages} 页
+                      第 {page} 页，共 {totalPages} 页（{filteredTasks.length} 条记录）
                     </p>
                     <div className="flex items-center gap-2">
                       <Button
@@ -404,6 +491,24 @@ export default function History() {
                   </div>
                 )}
               </>
+            ) : hasActiveFilter ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mx-auto mb-4">
+                  <Filter className="h-8 w-8 text-slate-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-white">未找到匹配的任务</h3>
+                <p className="text-slate-400 mt-2 text-sm">
+                  请尝试调整筛选条件或清除筛选
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setStatusFilter("all"); setSearchKeyword(""); setPage(1); }}
+                  className="mt-4 border-slate-700 hover:bg-slate-800"
+                >
+                  清除筛选
+                </Button>
+              </div>
             ) : (
               <div className="text-center py-16">
                 <div className="w-20 h-20 rounded-2xl bg-slate-800/50 flex items-center justify-center mx-auto mb-4 rainbow-glow">
