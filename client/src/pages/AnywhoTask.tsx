@@ -233,7 +233,7 @@ export default function AnywhoTask() {
       link.href = url;
       link.download = data.filename;
       link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      URL.revokeObjectURL(url);
       toast.success("导出成功");
     },
     onError: (error: any) => {
@@ -559,7 +559,7 @@ export default function AnywhoTask() {
                       <TableCell className="font-medium">{result.name || '-'}</TableCell>
                       <TableCell>{result.age || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {result.currentAddress || '-'}
+                        {result.address || '-'}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         {result.phone || '-'}

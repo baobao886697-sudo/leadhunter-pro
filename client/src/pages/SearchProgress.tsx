@@ -206,7 +206,7 @@ export default function SearchProgress() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      URL.revokeObjectURL(url);
       toast.success("导出成功");
       setShowExportDialog(false);
     },

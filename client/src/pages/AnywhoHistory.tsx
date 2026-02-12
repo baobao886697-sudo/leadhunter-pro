@@ -128,7 +128,7 @@ export default function AnywhoHistory() {
       link.href = url;
       link.download = data.filename;
       link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      URL.revokeObjectURL(url);
       toast.success("导出成功");
     },
     onError: (error: any) => {
