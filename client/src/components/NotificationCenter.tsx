@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Popover, 
   PopoverContent, 
@@ -167,7 +166,7 @@ export function NotificationCenter() {
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-[420px] p-0 bg-slate-900 border-slate-700"
+        className="w-[420px] p-0 bg-slate-900 border-slate-700 max-h-[70vh] flex flex-col"
         align="end"
       >
         {/* 头部 */}
@@ -194,7 +193,7 @@ export function NotificationCenter() {
           )}
         </div>
 
-        <ScrollArea className="max-h-[70vh] overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin" style={{ scrollbarWidth: 'thin', scrollbarColor: '#475569 transparent' }}>
           {/* 公告区域 */}
           {announcements && announcements.length > 0 && (
             <div className="p-3 border-b border-slate-700 bg-orange-500/5">
@@ -319,7 +318,7 @@ export function NotificationCenter() {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );
