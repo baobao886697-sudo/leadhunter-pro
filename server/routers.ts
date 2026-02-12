@@ -1126,6 +1126,41 @@ export const appRouter = router({
           { amount: input.amount, reason: input.reason, newBalance: result.newBalance }
         );
 
+        // 自动发送积分变动通知给用户
+        try {
+          const absAmount = Math.abs(input.amount).toLocaleString();
+          const newBalanceFormatted = (result.newBalance ?? 0).toLocaleString();
+          const reasonText = input.reason ? `\n调整原因：${input.reason}` : '';
+          
+          if (input.amount > 0) {
+            // 增加积分通知
+            await sendMessageToUser({
+              userId: input.userId,
+              title: '积分到账通知',
+              content: `您好！您的账户已成功充入 ${absAmount} 积分。\n\n` +
+                `充入积分：+${absAmount} 积分\n` +
+                `当前余额：${newBalanceFormatted} 积分${reasonText}\n\n` +
+                `积分已实时到账，您可以立即使用。如有疑问，请联系客服。`,
+              type: 'system',
+              createdBy: 'admin'
+            });
+          } else {
+            // 扣除积分通知
+            await sendMessageToUser({
+              userId: input.userId,
+              title: '积分变动通知',
+              content: `您好，您的账户积分已发生变动。\n\n` +
+                `变动积分：-${absAmount} 积分\n` +
+                `当前余额：${newBalanceFormatted} 积分${reasonText}\n\n` +
+                `如对此次调整有疑问，请联系客服了解详情。`,
+              type: 'system',
+              createdBy: 'admin'
+            });
+          }
+        } catch (error) {
+          console.error("[通知] 积分变动通知发送失败:", error);
+        }
+
         return { success: true, newBalance: result.newBalance };
       }),
 

@@ -418,7 +418,7 @@ export async function confirmRechargeOrder(orderId: string, txId: string, receiv
   const order = await getRechargeOrder(orderId);
   if (!order || order.status !== "pending") return false;
   await db.update(rechargeOrders).set({ status: "paid", txId, receivedAmount, paidAt: new Date() }).where(eq(rechargeOrders.orderId, orderId));
-  await addCredits(order.userId, order.credits, "recharge", `充值订单 ${orderId}`, orderId);
+  const creditResult = await addCredits(order.userId, order.credits, "recharge", `充值订单 ${orderId}`, orderId);
   
   // 计算并创建代理佣金
   try {
@@ -428,6 +428,29 @@ export async function confirmRechargeOrder(orderId: string, txId: string, receiv
   } catch (error) {
     console.error("[代理佣金] 计算失败:", error);
     // 佣金计算失败不影响订单确认
+  }
+  
+  // 自动发送充值到账通知给用户
+  try {
+    const newBalance = creditResult.newBalance ?? 0;
+    const creditsFormatted = order.credits.toLocaleString();
+    const balanceFormatted = newBalance.toLocaleString();
+    const amountStr = order.amount;
+    
+    await sendMessageToUser({
+      userId: order.userId,
+      title: '充值到账通知',
+      content: `您好！您的充值订单已确认到账。\n\n` +
+        `充值金额：${amountStr} USDT\n` +
+        `获得积分：${creditsFormatted} 积分\n` +
+        `当前余额：${balanceFormatted} 积分\n` +
+        `订单编号：${orderId}\n\n` +
+        `积分已实时到账，您可以立即使用。感谢您对 DataReach Pro 的支持与信赖！`,
+      type: 'system',
+      createdBy: 'system'
+    });
+  } catch (error) {
+    console.error("[通知] 充值到账通知发送失败:", error);
   }
   
   return true;
@@ -485,7 +508,29 @@ export async function resolveMismatchOrder(orderId: string, actualCredits: numbe
   const order = await getRechargeOrder(orderId);
   if (!order || order.status !== "mismatch") return false;
   await db.update(rechargeOrders).set({ status: "paid", credits: actualCredits, adminNote, paidAt: new Date() }).where(eq(rechargeOrders.orderId, orderId));
-  await addCredits(order.userId, actualCredits, "recharge", `充值订单 ${orderId} (金额调整)`, orderId);
+  const creditResult = await addCredits(order.userId, actualCredits, "recharge", `充值订单 ${orderId} (金额调整)`, orderId);
+  
+  // 自动发送充值到账通知
+  try {
+    const newBalance = creditResult.newBalance ?? 0;
+    const creditsFormatted = actualCredits.toLocaleString();
+    const balanceFormatted = newBalance.toLocaleString();
+    
+    await sendMessageToUser({
+      userId: order.userId,
+      title: '充值到账通知',
+      content: `您好！您的充值订单已确认到账。\n\n` +
+        `获得积分：${creditsFormatted} 积分\n` +
+        `当前余额：${balanceFormatted} 积分\n` +
+        `订单编号：${orderId}\n\n` +
+        `积分已实时到账，您可以立即使用。感谢您对 DataReach Pro 的支持与信赖！`,
+      type: 'system',
+      createdBy: 'system'
+    });
+  } catch (error) {
+    console.error("[通知] 充值到账通知发送失败:", error);
+  }
+  
   return true;
 }
 
