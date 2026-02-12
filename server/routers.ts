@@ -93,6 +93,9 @@ import {
   markMessageAsRead,
   markAllMessagesAsRead,
   getUnreadMessageCount,
+  getAdminMessages,
+  deleteMessage,
+  deleteMessages,
   logUserActivity,
   getUserActivityLogs,
   logError,
@@ -1811,6 +1814,56 @@ export const appRouter = router({
           'users',
           undefined,
           { count, title: input.title }
+        );
+        return { success: true, count };
+      }),
+
+    // ============ 消息管理 ============
+
+    // 获取所有已发送消息列表
+    getMessages: adminProcedure
+      .input(z.object({
+        page: z.number().optional(),
+        limit: z.number().optional(),
+        search: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return getAdminMessages(
+          input?.page || 1,
+          input?.limit || 20,
+          input?.search
+        );
+      }),
+
+    // 删除单条消息
+    deleteMessage: adminProcedure
+      .input(z.object({ messageId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const success = await deleteMessage(input.messageId);
+        if (!success) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "删除失败" });
+        }
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'delete_message',
+          'message',
+          input.messageId.toString(),
+          {}
+        );
+        return { success: true };
+      }),
+
+    // 批量删除消息
+    deleteMessages: adminProcedure
+      .input(z.object({ messageIds: z.array(z.number()) }))
+      .mutation(async ({ input, ctx }) => {
+        const count = await deleteMessages(input.messageIds);
+        await logAdmin(
+          (ctx as any).adminUser?.username || 'admin',
+          'delete_messages',
+          'messages',
+          undefined,
+          { count, ids: input.messageIds }
         );
         return { success: true, count };
       }),

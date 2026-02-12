@@ -1,4 +1,4 @@
-import { sql, eq, desc, and, gte, lte, like, or, isNull, ne, asc, count } from "drizzle-orm";
+import { sql, eq, desc, and, gte, lte, like, or, isNull, ne, asc, count, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   users, InsertUser, User,
@@ -1270,6 +1270,74 @@ export async function getUnreadMessageCount(userId: number): Promise<number> {
     .from(userMessages)
     .where(and(eq(userMessages.userId, userId), eq(userMessages.isRead, false)));
   return result[0]?.count || 0;
+}
+
+// ============ 管理员消息管理 ============
+
+// 管理员获取所有已发送消息列表
+export async function getAdminMessages(page: number = 1, limit: number = 20, search?: string): Promise<{
+  messages: (UserMessage & { userEmail?: string })[];
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) return { messages: [], total: 0 };
+  
+  const offset = (page - 1) * limit;
+  
+  const conditions = search ? [
+    or(
+      like(userMessages.title, `%${search}%`),
+      like(userMessages.content, `%${search}%`)
+    )
+  ] : [];
+  
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  
+  const [messagesResult, countResult] = await Promise.all([
+    db.select({
+      id: userMessages.id,
+      userId: userMessages.userId,
+      title: userMessages.title,
+      content: userMessages.content,
+      type: userMessages.type,
+      isRead: userMessages.isRead,
+      createdBy: userMessages.createdBy,
+      createdAt: userMessages.createdAt,
+      userEmail: users.email,
+    })
+      .from(userMessages)
+      .leftJoin(users, eq(userMessages.userId, users.id))
+      .where(whereClause)
+      .orderBy(desc(userMessages.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db.select({ count: sql<number>`count(*)` })
+      .from(userMessages)
+      .where(whereClause)
+  ]);
+  
+  return {
+    messages: messagesResult as any,
+    total: countResult[0]?.count || 0
+  };
+}
+
+// 管理员删除单条消息
+export async function deleteMessage(messageId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(userMessages).where(eq(userMessages.id, messageId));
+  return true;
+}
+
+// 管理员批量删除消息
+export async function deleteMessages(messageIds: number[]): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  await db.delete(userMessages).where(inArray(userMessages.id, messageIds));
+  return messageIds.length;
 }
 
 // ============ 用户活动日志 ============

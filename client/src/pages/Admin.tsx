@@ -23,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserDetailDialog } from "@/components/admin/UserDetailDialog";
 import { AnnouncementManager } from "@/components/admin/AnnouncementManager";
+import { MessageManager } from "@/components/admin/MessageManager";
 import { SystemMonitor } from "@/components/admin/SystemMonitor";
 import { OrderDetailDialog } from "@/components/admin/OrderDetailDialog";
 import { BulkMessageDialog } from "@/components/admin/BulkMessageDialog";
@@ -272,6 +273,7 @@ export default function Admin() {
             { id: "wallet", label: "钱包监控", icon: Wallet },
             { id: "feedbacks", label: "用户反馈", icon: MessageSquare },
             { id: "announcements", label: "公告管理", icon: Megaphone },
+            { id: "messages", label: "消息管理", icon: Mail },
             { id: "monitor", label: "系统监控", icon: BarChart3 },
             { id: "logs", label: "系统日志", icon: FileText },
             { id: "tps", label: "TPS 配置", icon: UserSearch },
@@ -894,6 +896,11 @@ export default function Admin() {
         {/* ============ 公告管理 ============ */}
         {activeTab === "announcements" && (
           <AnnouncementManager />
+        )}
+
+        {/* ============ 消息管理 ============ */}
+        {activeTab === "messages" && (
+          <MessageManager />
         )}
 
         {/* ============ 系统监控 ============ */}
