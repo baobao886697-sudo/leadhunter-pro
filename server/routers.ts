@@ -358,6 +358,43 @@ export const appRouter = router({
         return getCreditTransactions(ctx.user.id, input.limit);
       }),
 
+    // 修改密码（已登录用户）
+    changePassword: protectedProcedure
+      .input(
+        z.object({
+          currentPassword: z.string().min(1, "请输入当前密码"),
+          newPassword: z.string().min(8, "新密码至少8位"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // 获取用户信息
+        const user = await getUserById(ctx.user.id);
+        if (!user || !user.passwordHash) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        }
+
+        // 验证当前密码
+        const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+        if (!valid) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "当前密码错误" });
+        }
+
+        // 新密码不能与旧密码相同
+        const sameAsOld = await bcrypt.compare(input.newPassword, user.passwordHash);
+        if (sameAsOld) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "新密码不能与当前密码相同" });
+        }
+
+        // 加密新密码并更新
+        const newPasswordHash = await bcrypt.hash(input.newPassword, 12);
+        const success = await adminResetPassword(ctx.user.id, newPasswordHash);
+        if (!success) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "密码修改失败，请稍后重试" });
+        }
+
+        return { success: true, message: "密码修改成功" };
+      }),
+
     // 仪表盘全平台聚合统计（TPS + SPF + Anywho + LinkedIn）
     dashboardStats: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();

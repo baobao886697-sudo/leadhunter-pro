@@ -40,6 +40,7 @@ import AgentCenter from "./pages/AgentCenter";
 import AgentApply from "./pages/AgentApply";
 import AgentPortal from "./pages/AgentPortal";
 import AgentLogin from "./pages/AgentLogin";
+import Settings from "./pages/Settings";
 
 function Router() {
   return (
@@ -81,6 +82,7 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/contact" component={Contact} />
       <Route path="/admin/login" component={AdminLogin} />
+      <Route path="/settings" component={Settings} />
       <Route path="/admin" component={Admin} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

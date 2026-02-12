@@ -378,6 +378,13 @@ function DashboardLayoutContent({
                   <History className="mr-2 h-4 w-4" />
                   <span>搜索记录</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLocation('/settings')}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>账户设置</span>
+                </DropdownMenuItem>
                 <div className="border-t my-1" />
                 <DropdownMenuItem
                   onClick={logout}
