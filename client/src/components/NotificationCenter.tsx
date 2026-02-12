@@ -153,15 +153,13 @@ export function NotificationCenter() {
         <Button
           variant="ghost"
           size="sm"
-          className="relative text-slate-400 hover:text-white"
+          className={`relative text-slate-400 hover:text-white ${unreadCount > 0 ? 'animate-bell-shake' : ''}`}
         >
-          <Bell className="h-5 w-5" />
+          <Bell className={`h-5 w-5 ${unreadCount > 0 ? 'text-orange-400' : ''}`} />
           {unreadCount > 0 && (
             <>
-              {/* 红色闪烁脉冲动画背景 */}
-              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 animate-ping opacity-75" />
-              {/* 红色数字标记 */}
-              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold shadow-lg shadow-red-500/50">
+              {/* 红色发光脉冲数字标记 */}
+              <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold animate-badge-pulse">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             </>
@@ -196,7 +194,7 @@ export function NotificationCenter() {
           )}
         </div>
 
-        <ScrollArea className="max-h-[520px]">
+        <ScrollArea className="max-h-[70vh] overflow-y-auto">
           {/* 公告区域 */}
           {announcements && announcements.length > 0 && (
             <div className="p-3 border-b border-slate-700 bg-orange-500/5">
