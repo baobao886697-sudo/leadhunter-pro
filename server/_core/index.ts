@@ -795,6 +795,16 @@ async function ensureTables() {
     }
     console.log("[Database] Users agent columns sync completed");
     
+    // 添加用户在线状态字段
+    try {
+      await db.execute(sql`ALTER TABLE users ADD COLUMN lastActiveAt TIMESTAMP NULL DEFAULT NULL`);
+      console.log("[Database] Added lastActiveAt column to users");
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate column')) {
+        console.warn("[Database] Failed to add lastActiveAt column:", e.message);
+      }
+    }
+    
     // 代理佣金记录表
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS agent_commissions (
