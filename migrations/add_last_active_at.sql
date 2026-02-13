@@ -1,0 +1,2 @@
+-- 添加用户在线状态字段
+ALTER TABLE users ADD COLUMN lastActiveAt TIMESTAMP NULL DEFAULT NULL;

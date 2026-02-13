@@ -27,6 +27,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { NotificationCenter } from "./NotificationCenter";
+import { trpc } from "@/lib/trpc";
 
 const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean; isNew?: boolean; isRainbow?: boolean; isTopRecommend?: boolean; isMaintenance?: boolean }> = [
   { icon: LayoutDashboard, label: "仪表盘", path: "/dashboard" },
@@ -124,6 +125,17 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+
+  // 心跳上报：每60秒更新最后活跃时间
+  const heartbeatMutation = trpc.user.heartbeat.useMutation();
+  useEffect(() => {
+    // 页面加载时立即发送一次心跳
+    heartbeatMutation.mutate();
+    const interval = setInterval(() => {
+      heartbeatMutation.mutate();
+    }, 60000); // 60秒
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isCollapsed) {

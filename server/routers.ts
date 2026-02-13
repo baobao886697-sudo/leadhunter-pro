@@ -38,6 +38,7 @@ import {
   resetPassword,
   updateUserLastSignIn,
   updateUserDevice,
+  updateUserLastActive,
   getAllUsers,
   updateUserStatus,
   updateUserRole,
@@ -343,6 +344,12 @@ export const appRouter = router({
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
       };
+    }),
+
+    // 心跳上报（更新最后活跃时间）
+    heartbeat: protectedProcedure.mutation(async ({ ctx }) => {
+      await updateUserLastActive(ctx.user.id);
+      return { success: true };
     }),
 
     // 获取积分余额

@@ -535,6 +535,7 @@ export default function Admin() {
                       <TableHead className="text-slate-400">积分</TableHead>
                       <TableHead className="text-slate-400">上级代理</TableHead>
                       <TableHead className="text-slate-400">状态</TableHead>
+                      <TableHead className="text-slate-400">在线</TableHead>
                       <TableHead className="text-slate-400">注册时间</TableHead>
                       <TableHead className="text-slate-400">操作</TableHead>
                     </TableRow>
@@ -569,6 +570,41 @@ export default function Admin() {
                           ) : (
                             <Badge className="bg-red-500/20 text-red-400 border-red-500/30">禁用</Badge>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const lastActive = u.lastActiveAt ? new Date(u.lastActiveAt) : null;
+                            const now = new Date();
+                            const isOnline = lastActive && (now.getTime() - lastActive.getTime()) < 5 * 60 * 1000;
+                            if (isOnline) {
+                              return (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                                  </span>
+                                  <span className="text-green-400 text-xs">在线</span>
+                                </div>
+                              );
+                            }
+                            if (lastActive) {
+                              const diffMs = now.getTime() - lastActive.getTime();
+                              const diffMin = Math.floor(diffMs / 60000);
+                              const diffHour = Math.floor(diffMs / 3600000);
+                              const diffDay = Math.floor(diffMs / 86400000);
+                              let timeAgo = '';
+                              if (diffMin < 60) timeAgo = `${diffMin}分钟前`;
+                              else if (diffHour < 24) timeAgo = `${diffHour}小时前`;
+                              else timeAgo = `${diffDay}天前`;
+                              return (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex rounded-full h-2.5 w-2.5 bg-slate-500" />
+                                  <span className="text-slate-500 text-xs">{timeAgo}</span>
+                                </div>
+                              );
+                            }
+                            return <span className="text-slate-600 text-xs">从未登录</span>;
+                          })()}
                         </TableCell>
                         <TableCell className="text-slate-500 text-sm">
                           {new Date(u.createdAt).toLocaleDateString()}

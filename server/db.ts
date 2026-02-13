@@ -98,7 +98,14 @@ export async function updateUserLastSignIn(userId: number): Promise<void> {
 export async function updateUserDevice(userId: number, deviceId: string): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.update(users).set({ currentDeviceId: deviceId, currentDeviceLoginAt: new Date(), lastSignedIn: new Date() }).where(eq(users.id, userId));
+  await db.update(users).set({ currentDeviceId: deviceId, currentDeviceLoginAt: new Date(), lastSignedIn: new Date(), lastActiveAt: new Date() }).where(eq(users.id, userId));
+}
+
+// 更新用户最后活跃时间（心跳）
+export async function updateUserLastActive(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastActiveAt: new Date() }).where(eq(users.id, userId));
 }
 
 export async function checkUserDevice(userId: number, deviceId: string): Promise<boolean> {

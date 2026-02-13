@@ -31,6 +31,8 @@ export const users = mysqlTable("users", {
   agentAppliedAt: timestamp("agentAppliedAt"),          // 申请成为代理时间
   agentApprovedAt: timestamp("agentApprovedAt"),        // 审核通过时间
   agentWalletAddress: varchar("agentWalletAddress", { length: 100 }), // 代理收款地址
+  // 在线状态
+  lastActiveAt: timestamp("lastActiveAt"),
   // 时间戳
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
