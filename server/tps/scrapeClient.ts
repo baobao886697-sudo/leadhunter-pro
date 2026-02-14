@@ -19,7 +19,7 @@
 // ============================================================================
 
 export interface ScrapeOptions {
-  /** 请求超时时间（毫秒），默认 5000 */
+  /** 请求超时时间（毫秒），默认 20000 */
   timeoutMs?: number;
   /** 最大重试次数（超时/网络错误），默认 1 */
   maxRetries?: number;
@@ -71,7 +71,7 @@ export class ScrapeServerError extends Error {
 // ============================================================================
 
 const DEFAULT_OPTIONS: Required<ScrapeOptions> = {
-  timeoutMs: 5000,
+  timeoutMs: 20000,
   maxRetries: 1,
   retryDelayMs: 0,
   enableLogging: false,
@@ -136,8 +136,8 @@ export async function fetchWithScrapeClient(
   for (let attempt = 0; attempt < totalMaxAttempts; attempt++) {
     try {
       const controller = new AbortController();
-      // 客户端超时比 API 超时多 2 秒，确保能收到 API 的超时响应
-      const clientTimeoutMs = timeoutMs + 2000;
+      // 客户端超时比 API 超时多 5 秒，确保能收到 API 的超时响应
+      const clientTimeoutMs = timeoutMs + 5000;
       const timeoutId = setTimeout(() => controller.abort(), clientTimeoutMs);
       
       const response = await fetch(apiUrl, {
