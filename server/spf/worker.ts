@@ -137,7 +137,7 @@ const SCRAPE_MAX_RETRIES = SCRAPEDO_CONFIG.MAX_RETRIES;
  */
 async function fetchWithScrapedo(url: string, token: string, semaphore: WorkerSemaphore): Promise<string> {
   const encodedUrl = encodeURIComponent(url);
-  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&super=true&geoCode=us`;
+  const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&super=true&geoCode=us&timeout=${SCRAPE_TIMEOUT_MS}`;
   
   let lastError: Error | null = null;
   

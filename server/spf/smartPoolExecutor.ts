@@ -86,7 +86,7 @@ export interface SmartPoolFetchResult {
 // Scrape.do API 请求函数
 // ============================================================================
 
-const SCRAPE_TIMEOUT_MS = 10000;
+const SCRAPE_TIMEOUT_MS = 20000;
 const SCRAPE_MAX_RETRIES = 2;
 
 async function fetchWithScrapedo(url: string, token: string): Promise<string> {
@@ -96,7 +96,7 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
   for (let attempt = 0; attempt <= SCRAPE_MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 2000);
+      const timeoutId = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS + 5000);
       
       const response = await fetch(apiUrl, {
         method: 'GET',
