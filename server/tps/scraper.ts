@@ -61,7 +61,7 @@ export function getGlobalConcurrencyStatus() {
 import { fetchWithScrapeClient, ScrapeRateLimitError, ScrapeServerError } from './scrapeClient';
 
 // 超时配置
-const SCRAPE_TIMEOUT_MS = 5000;  // 5 秒超时
+const SCRAPE_TIMEOUT_MS = 20000;  // 20 秒超时，与详情阶段一致
 const SCRAPE_MAX_RETRIES = 1;    // 超时/网络错误最多重试 1 次
 
 /**
