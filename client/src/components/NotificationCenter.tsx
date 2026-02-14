@@ -50,6 +50,15 @@ export function NotificationCenter() {
     const unsub2 = subscribe("task_completed", (msg: WsMessage) => {
       refetchUnread();
       refetchMessages();
+      // 任务完成时触发桌面弹窗通知（即使用户切换了标签页也能看到）
+      const sourceLabel = msg.source?.toUpperCase() || "搜索";
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("DataReach 任务完成", {
+          body: `${sourceLabel} 搜索任务已完成，共找到 ${msg.data?.totalResults || 0} 条结果`,
+          icon: "/favicon.ico",
+        });
+      }
+      toast.success(`${sourceLabel} 搜索任务已完成`, { duration: 5000 });
     });
     return () => { unsub1(); unsub2(); };
   }, [subscribe, refetchUnread, refetchMessages]);

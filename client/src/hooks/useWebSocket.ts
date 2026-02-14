@@ -177,6 +177,11 @@ export function useWebSocket() {
         setIsConnected(true);
         reconnectAttemptRef.current = 0; // 重置重连计数
         startHeartbeat();
+
+        // 请求浏览器通知权限（仅在用户未做过选择时弹出授权框，只会弹一次）
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
       };
 
       ws.onmessage = (event: MessageEvent) => {
