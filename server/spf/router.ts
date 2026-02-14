@@ -33,6 +33,7 @@ import {
 } from "./scraper";
 import { executeSpfSearchWithThreadPool, shouldUseThreadPool } from "./threadPoolExecutor";
 import { THREAD_POOL_CONFIG } from "./config";
+import { emitTaskProgress, emitTaskCompleted, emitTaskFailed, emitCreditsUpdate } from "../_core/wsEmitter";
 import {
   getSpfConfig,
   createSpfSearchTask,
@@ -578,6 +579,7 @@ async function executeSpfSearchRealtimeDeduction(
     totalSubTasks: subTasks.length,
     logs,
   });
+  emitTaskProgress(userId, taskId, "spf", { status: "running", totalSubTasks: subTasks.length, logs });
   
   // 统计
   let totalSearchPages = 0;
@@ -676,6 +678,8 @@ async function executeSpfSearchRealtimeDeduction(
         searchPageRequests: totalSearchPages,
         logs,
       });
+      emitTaskProgress(userId, taskId, "spf", { progress: searchProgress, completedSubTasks: completedSearches, totalSubTasks: subTasks.length, logs });
+      emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getCostBreakdown().totalCost, source: "spf", taskId });
     }
     
     // 搜索完成，静默处理
@@ -796,6 +800,8 @@ async function executeSpfSearchRealtimeDeduction(
       detailPageRequests: totalDetailPages,
       logs,
     });
+    emitTaskProgress(userId, taskId, "spf", { progress: 100, totalResults, logs });
+    emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getCostBreakdown().totalCost, source: "spf", taskId });
     
     // ==================== 任务完成日志（简洁专业版） ====================
     const breakdown = creditTracker.getCostBreakdown();
@@ -828,6 +834,7 @@ async function executeSpfSearchRealtimeDeduction(
       creditsUsed: breakdown.totalCost,
       logs,
     });
+    emitTaskCompleted(userId, taskId, "spf", { totalResults, creditsUsed: breakdown.totalCost, status: stoppedDueToCredits ? "insufficient_credits" : "completed" });
     
     // 记录用户活动日志
     await logUserActivity({
@@ -845,6 +852,7 @@ async function executeSpfSearchRealtimeDeduction(
     const breakdown = creditTracker.getCostBreakdown();
     
     await failSpfSearchTask(taskDbId, error.message, logs);
+    emitTaskFailed(userId, taskId, "spf", { error: error.message, creditsUsed: breakdown.totalCost });
     
     await logApi({
       userId,

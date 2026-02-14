@@ -3,7 +3,7 @@
  * 整合实时日志终端功能
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -22,6 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { useWebSocketContext } from "@/contexts/WebSocketContext";
+import type { WsMessage } from "@/hooks/useWebSocket";
 import {
   ArrowLeft,
   Search,
@@ -162,6 +164,9 @@ export default function AnywhoTask() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [prevLogCount, setPrevLogCount] = useState(0);
   
+  // WebSocket 实时推送
+  const { subscribe, isConnected } = useWebSocketContext();
+  
   // 获取任务状态
   const { data: task, refetch: refetchTask } = trpc.anywho.getTaskStatus.useQuery(
     { taskId: taskId! },
@@ -182,6 +187,36 @@ export default function AnywhoTask() {
     { taskId: taskId!, page, pageSize },
     { enabled: !!taskId && task?.status === "completed" }
   );
+  
+  // WebSocket 实时订阅：收到推送时立即刷新数据
+  useEffect(() => {
+    if (!taskId) return;
+    
+    const unsub1 = subscribe("task_progress", (msg: WsMessage) => {
+      if (msg.taskId === taskId && msg.source === "anywho") {
+        refetchTask();
+      }
+    });
+    const unsub2 = subscribe("task_completed", (msg: WsMessage) => {
+      if (msg.taskId === taskId && msg.source === "anywho") {
+        refetchTask();
+        refetchResults();
+        toast.success(`✅ Anywho 搜索任务已完成！共找到 ${msg.data?.totalResults || 0} 条结果`, {
+          duration: 8000,
+        });
+      }
+    });
+    const unsub3 = subscribe("task_failed", (msg: WsMessage) => {
+      if (msg.taskId === taskId && msg.source === "anywho") {
+        refetchTask();
+        toast.error(`❌ Anywho 搜索任务失败: ${msg.data?.error || "未知错误"}`, {
+          duration: 8000,
+        });
+      }
+    });
+    
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [taskId, subscribe, refetchTask, refetchResults]);
   
   // 自动滚动到最新日志
   useEffect(() => {

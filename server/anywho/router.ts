@@ -49,6 +49,7 @@ import {
   formatAnywhoeCostBreakdown,
   CostBreakdown,
 } from "./realtimeCredits";
+import { emitTaskProgress, emitTaskCompleted, emitTaskFailed, emitCreditsUpdate } from "../_core/wsEmitter";
 
 // 并发配置
 const TOTAL_CONCURRENCY = ANYWHO_CONFIG.TOTAL_CONCURRENCY;
@@ -206,6 +207,7 @@ export const anywhoRouter = router({
           { timestamp: new Date().toISOString(), message: `💰 实时扣费模式，当前余额 ${userCredits.toFixed(1)} 积分` },
         ],
       });
+      emitTaskProgress(userId, task.taskId, "anywho", { status: "running", totalSubTasks: subTasks.length });
       
       // 记录用户活动
       await logUserActivity({
@@ -603,6 +605,8 @@ async function executeAnywhoSearchRealtime(
           completedSubTasks,
           searchPageRequests: creditTracker.getCostBreakdown().searchPages,
         });
+        emitTaskProgress(userId, taskId, "anywho", { progress, completedSubTasks, totalSubTasks: subTasks.length });
+        emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getCostBreakdown().totalCost, source: "anywho", taskId });
         
         // 如果因积分不足停止，跳出循环
         if (stoppedDueToCredits) {
@@ -780,6 +784,8 @@ async function executeAnywhoSearchRealtime(
             progress,
             detailPageRequests: creditTracker.getCostBreakdown().detailPages,
           });
+          emitTaskProgress(userId, taskId, "anywho", { progress });
+          emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getCostBreakdown().totalCost, source: "anywho", taskId });
           if (current) {
             await addLog(`✅ [${completed}/${total}] ${current.name} - 已获取`);
           }
@@ -873,6 +879,7 @@ async function executeAnywhoSearchRealtime(
         cacheHits: 0,
       });
     }
+    emitTaskCompleted(userId, taskId, "anywho", { totalResults, creditsUsed: breakdown.totalCost, status: stoppedDueToCredits ? "insufficient_credits" : "completed" });
     
     // ==================== 完成日志 ====================
     await addLog(`═══════════════════════════════════════════════════`);
@@ -905,6 +912,7 @@ async function executeAnywhoSearchRealtime(
     const breakdown = creditTracker.getCostBreakdown();
     
     await failAnywhoSearchTask(taskId, error.message || "未知错误");
+    emitTaskFailed(userId, taskId, "anywho", { error: error.message || "未知错误", creditsUsed: breakdown.totalCost });
     await addLog(`❌ 搜索任务失败: ${error.message}`);
     await addLog(`💰 已消耗: ${breakdown.totalCost.toFixed(1)} 积分`);
     await addLog(`💰 当前余额: ${creditTracker.getCurrentBalance().toFixed(1)} 积分`);

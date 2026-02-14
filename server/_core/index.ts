@@ -11,6 +11,7 @@ import { startUsdtMonitor } from "../services/usdtMonitor";
 // Apollo Webhook 已移除，使用 Apify 同步获取数据
 import { startOrderExpirationChecker } from "../services/orderExpiration";
 import { startCommissionSettlement } from "../services/commissionSettlement";
+import { wsManager } from "./wsManager";
 import { getDbSync } from "../db";
 import { sql } from "drizzle-orm";
 
@@ -1144,6 +1145,9 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  // 初始化WebSocket实时推送服务
+  wsManager.init(server);
 
   const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
   server.listen(port, host, () => {

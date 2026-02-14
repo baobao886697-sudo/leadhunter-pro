@@ -3,7 +3,7 @@
  * 统一七彩鍯金风格
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { useWebSocketContext } from "@/contexts/WebSocketContext";
 import { Link } from "wouter";
 import {
   Table,
@@ -125,10 +126,19 @@ export default function History() {
   const [statusFilter, setStatusFilter] = useState("all");
   const pageSize = 10;
 
-  const { data: tasksData, isLoading } = trpc.search.tasks.useQuery(
+  const { subscribe } = useWebSocketContext();
+  const { data: tasksData, isLoading, refetch: refetchTasks } = trpc.search.tasks.useQuery(
     { limit: 50 },
     { enabled: !!user }
   );
+  
+  // WebSocket 实时更新：任务状态变化时自动刷新列表
+  useEffect(() => {
+    const unsub1 = subscribe("task_completed", () => refetchTasks());
+    const unsub2 = subscribe("task_failed", () => refetchTasks());
+    const unsub3 = subscribe("task_progress", () => refetchTasks());
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [subscribe, refetchTasks]);
 
   const tasks = tasksData?.tasks || [];
 

@@ -60,6 +60,7 @@ import {
   recordTaskComplete,
   recordTaskProgress,
 } from "./concurrencyMonitor";
+import { emitTaskProgress, emitTaskCompleted, emitTaskFailed, emitCreditsUpdate } from "../_core/wsEmitter";
 
 // 统一队列并发配置 (v5.0 智能动态并发池)
 const TOTAL_CONCURRENCY = TPS_POOL_CONFIG.GLOBAL_MAX_CONCURRENCY;  // 40 总并发 (4×10)
@@ -513,6 +514,7 @@ async function executeTpsSearchRealtimeDeduction(
     totalSubTasks: subTasks.length,
     logs,
   });
+  emitTaskProgress(userId, taskId, "tps", { status: "running", totalSubTasks: subTasks.length, logs });
   
   // 统计
   let totalSearchPages = 0;
@@ -615,6 +617,8 @@ async function executeTpsSearchRealtimeDeduction(
         creditsUsed: creditTracker.getTotalDeducted(),
         logs,
       });
+      emitTaskProgress(userId, taskId, "tps", { progress: searchProgress, completedSubTasks: completedSearches, totalSubTasks: subTasks.length, creditsUsed: creditTracker.getTotalDeducted(), logs });
+      emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getTotalDeducted(), source: "tps", taskId });
     };
     
     // 并发执行搜索
@@ -708,6 +712,8 @@ async function executeTpsSearchRealtimeDeduction(
       creditsUsed: creditTracker.getTotalDeducted(),
       logs,
     });
+    emitTaskProgress(userId, taskId, "tps", { progress: 100, totalResults, creditsUsed: creditTracker.getTotalDeducted(), logs });
+    emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getTotalDeducted(), source: "tps", taskId });
     
     // 记录 API 日志
     await logApi({
@@ -764,6 +770,7 @@ async function executeTpsSearchRealtimeDeduction(
         logs,
       });
     }
+    emitTaskCompleted(userId, taskId, "tps", { totalResults, creditsUsed: creditTracker.getTotalDeducted(), status: stoppedDueToCredits ? "insufficient_credits" : "completed" });
 
     // 记录用户活动日志
     await logUserActivity({
@@ -781,6 +788,7 @@ async function executeTpsSearchRealtimeDeduction(
     const costBreakdown = creditTracker.getCostBreakdown();
     
     await failTpsSearchTask(taskDbId, error.message, logs);
+    emitTaskFailed(userId, taskId, "tps", { error: error.message, creditsUsed: creditTracker.getTotalDeducted() });
     
     await logApi({
       userId,

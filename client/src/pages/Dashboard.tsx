@@ -1,7 +1,10 @@
+import { useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { useWebSocketContext } from "@/contexts/WebSocketContext";
+import type { WsMessage } from "@/hooks/useWebSocket";
 import { Link } from "wouter";
 import { Search, Coins, History, TrendingUp, Users, Phone, Clock, ArrowRight, Zap, Database, Shield, Sparkles, Linkedin, UserSearch, SearchCheck, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +20,8 @@ const SOURCE_CONFIG: Record<string, { label: string; color: string; path: string
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
-  const { data: profile, isLoading: profileLoading } = trpc.user.profile.useQuery(undefined, {
+  const { subscribe } = useWebSocketContext();
+  const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = trpc.user.profile.useQuery(undefined, {
     enabled: !!user,
   });
   
@@ -27,9 +31,24 @@ export default function Dashboard() {
   const creditsPerUsdt = rechargeConfig?.creditsPerUsdt || 100;
 
   // 全平台聚合统计（TPS + SPF + Anywho + LinkedIn）
-  const { data: dashboardStats, isLoading: statsLoading } = trpc.user.dashboardStats.useQuery(undefined, {
+  const { data: dashboardStats, isLoading: statsLoading, refetch: refetchStats } = trpc.user.dashboardStats.useQuery(undefined, {
     enabled: !!user,
   });
+  
+  // WebSocket 实时更新：积分变化和任务完成时自动刷新仪表盘
+  useEffect(() => {
+    const unsub1 = subscribe("credits_update", () => {
+      refetchProfile();
+    });
+    const unsub2 = subscribe("task_completed", () => {
+      refetchProfile();
+      refetchStats();
+    });
+    const unsub3 = subscribe("task_failed", () => {
+      refetchStats();
+    });
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [subscribe, refetchProfile, refetchStats]);
 
   if (loading || !user) {
     return (

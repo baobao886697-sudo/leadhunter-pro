@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/popover";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useWebSocketContext } from "@/contexts/WebSocketContext";
+import type { WsMessage } from "@/hooks/useWebSocket";
 import { 
   Bell, Check, CheckCheck, Megaphone, MessageSquare,
   Info, AlertTriangle, Gift, X, ChevronDown, ChevronUp, Pin
@@ -17,11 +19,12 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [expandedAnnouncements, setExpandedAnnouncements] = useState<Set<number>>(new Set());
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
+  const { subscribe } = useWebSocketContext();
 
   // 获取未读消息数量
   const { data: unreadData, refetch: refetchUnread } = trpc.notification.getUnreadCount.useQuery(
     undefined,
-    { refetchInterval: 30000 } // 每30秒刷新一次
+    { refetchInterval: 30000 } // 保留轮询作为兆底
   );
 
   // 获取消息列表
@@ -29,6 +32,27 @@ export function NotificationCenter() {
     { limit: 20 },
     { enabled: open }
   );
+  
+  // WebSocket 实时推送：收到新通知时立即刷新
+  useEffect(() => {
+    const unsub1 = subscribe("notification", (msg: WsMessage) => {
+      refetchUnread();
+      refetchMessages();
+      // 显示浏览器通知（如果用户允许）
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification(msg.data?.title || "DataReach 新消息", {
+          body: msg.data?.content || "您有一条新消息",
+          icon: "/favicon.ico",
+        });
+      }
+      toast.info(msg.data?.title || "您有一条新消息", { duration: 5000 });
+    });
+    const unsub2 = subscribe("task_completed", (msg: WsMessage) => {
+      refetchUnread();
+      refetchMessages();
+    });
+    return () => { unsub1(); unsub2(); };
+  }, [subscribe, refetchUnread, refetchMessages]);
 
   // 获取公告
   const { data: announcements } = trpc.notification.getAnnouncements.useQuery();
