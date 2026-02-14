@@ -58,21 +58,21 @@ export function getGlobalConcurrencyStatus() {
 
 // ==================== Scrape.do API ====================
 
-import { fetchWithScrapeClient } from './scrapeClient';
+import { fetchWithScrapeClient, ScrapeRateLimitError, ScrapeServerError } from './scrapeClient';
 
 // 超时配置
 const SCRAPE_TIMEOUT_MS = 5000;  // 5 秒超时
-const SCRAPE_MAX_RETRIES = 1;    // 最多重试 1 次
+const SCRAPE_MAX_RETRIES = 1;    // 超时/网络错误最多重试 1 次
 
 /**
  * 使用 Scrape.do API 获取页面（带全局信号量控制）
  * 
  * 搜索阶段使用此函数，确保全局并发不超过限制
  * 
- * 优化策略：
- * - 首次请求：5 秒超时
- * - 超时后自动重试一次（5 秒超时）
- * - 提升整体响应速度，避免慢请求阻塞
+ * v2.0 容错升级:
+ * - 502 错误: 指数退避重试 (2s → 4s → 6s)，最多 3 次
+ * - 429 错误: 即时重试 2 次（间隔 1s），仍失败则抛出 ScrapeRateLimitError
+ * - 超时/网络错误: 保持原有重试逻辑
  */
 async function fetchWithScrapedo(url: string, token: string): Promise<string> {
   // 获取全局并发许可
@@ -85,6 +85,12 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
       maxRetries: SCRAPE_MAX_RETRIES,
       retryDelayMs: 0,
       enableLogging: true,
+      // 502 容错升级: 指数退避 2s → 4s → 6s
+      maxRetries502: 3,
+      retryBaseDelay502Ms: 2000,
+      // 429 即时重试: 2 次，间隔 1s
+      maxRetries429: 2,
+      retryDelay429Ms: 1000,
     });
   } finally {
     // 确保释放全局并发许可
@@ -773,10 +779,18 @@ export async function searchOnly(
       
       onProgress?.(`并发获取剩余 ${remainingUrls.length} 页...`);
       
-      // 并发获取所有剩余页
+      // 并发获取所有剩余页，收集需要延后重试的页面
+      const retryUrls: string[] = [];  // 429/502 延后重试队列
+      
       const pagePromises = remainingUrls.map(url => 
         fetchWithScrapedo(url, token).catch(err => {
-          onProgress?.(`页面获取失败: ${err.message}`);
+          // 检测 429/502 错误，加入延后重试队列
+          if (err instanceof ScrapeRateLimitError || err instanceof ScrapeServerError) {
+            retryUrls.push(url);
+            onProgress?.(`⚓ 页面获取失败 (${err instanceof ScrapeRateLimitError ? '429限流' : '502服务器错误'})，已排入队尾稍后重试...`);
+          } else {
+            onProgress?.(`页面获取失败: ${err.message}`);
+          }
           return null; // 错误时返回 null
         })
       );
@@ -792,6 +806,39 @@ export async function searchOnly(
           totalSkippedDeceased += filterResult.stats.skippedDeceased;
           allResults.push(...filterResult.filtered);
         }
+      }
+      
+      // ==================== 搜索阶段延后重试 ====================
+      // 借鉴 EXE 版 2+2 延后重试机制：主批次完成后统一重试失败的页面
+      if (retryUrls.length > 0) {
+        onProgress?.(`🔄 开始延后重试 ${retryUrls.length} 个失败页面...`);
+        
+        // 等待 2 秒后开始重试，给服务器恢复时间
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const retryPromises = retryUrls.map(url =>
+          fetchWithScrapedo(url, token).catch(err => {
+            onProgress?.(`❌ 延后重试仍失败: ${err.message}`);
+            return null;
+          })
+        );
+        
+        const retryHtmls = await Promise.all(retryPromises);
+        searchPageRequests += retryUrls.length;
+        
+        let retrySuccess = 0;
+        for (const html of retryHtmls) {
+          if (html) {
+            retrySuccess++;
+            const pageResults = parseSearchPage(html);
+            const filterResult = preFilterByAge(pageResults, filters);
+            filteredOut += pageResults.length - filterResult.filtered.length;
+            totalSkippedDeceased += filterResult.stats.skippedDeceased;
+            allResults.push(...filterResult.filtered);
+          }
+        }
+        
+        onProgress?.(`🔄 延后重试完成: ${retrySuccess}/${retryUrls.length} 成功`);
       }
     }
 

@@ -6,6 +6,12 @@
  * 使用场景:
  * - scraper.ts: 搜索阶段（配合全局信号量使用）
  * - smartPoolExecutor.ts: 详情获取阶段（配合智能并发池使用）
+ * 
+ * v2.0 容错升级:
+ * - 区分 429/502 错误类型，分别处理
+ * - 502 错误: 指数退避重试 (2s → 4s → 6s)，最多重试 3 次
+ * - 429 错误: 即时重试后抛出特殊错误，由上层延后重试队列处理
+ * - 超时/网络错误: 保持原有重试逻辑
  */
 
 // ============================================================================
@@ -15,12 +21,49 @@
 export interface ScrapeOptions {
   /** 请求超时时间（毫秒），默认 5000 */
   timeoutMs?: number;
-  /** 最大重试次数，默认 1 */
+  /** 最大重试次数（超时/网络错误），默认 1 */
   maxRetries?: number;
-  /** 重试前等待时间（毫秒），默认 0 */
+  /** 重试前等待时间（毫秒，超时/网络错误用），默认 0 */
   retryDelayMs?: number;
   /** 是否输出日志，默认 false */
   enableLogging?: boolean;
+  /** 502 最大重试次数，默认 3 */
+  maxRetries502?: number;
+  /** 502 基础重试延迟（毫秒），默认 2000 (2s → 4s → 6s) */
+  retryBaseDelay502Ms?: number;
+  /** 429 即时重试次数，默认 2 */
+  maxRetries429?: number;
+  /** 429 即时重试延迟（毫秒），默认 1000 */
+  retryDelay429Ms?: number;
+}
+
+// ============================================================================
+// 自定义错误类型
+// ============================================================================
+
+/**
+ * 429 限流错误 - 即时重试已用尽，需要延后重试
+ * 上层代码通过 instanceof ScrapeRateLimitError 来识别
+ */
+export class ScrapeRateLimitError extends Error {
+  public readonly statusCode = 429;
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScrapeRateLimitError';
+  }
+}
+
+/**
+ * 502 服务器错误 - 所有重试已用尽
+ * 上层代码通过 instanceof ScrapeServerError 来识别
+ */
+export class ScrapeServerError extends Error {
+  public readonly statusCode: number;
+  constructor(message: string, statusCode: number = 502) {
+    super(message);
+    this.name = 'ScrapeServerError';
+    this.statusCode = statusCode;
+  }
 }
 
 // ============================================================================
@@ -32,6 +75,10 @@ const DEFAULT_OPTIONS: Required<ScrapeOptions> = {
   maxRetries: 1,
   retryDelayMs: 0,
   enableLogging: false,
+  maxRetries502: 3,
+  retryBaseDelay502Ms: 2000,
+  maxRetries429: 2,
+  retryDelay429Ms: 1000,
 };
 
 // ============================================================================
@@ -43,13 +90,18 @@ const DEFAULT_OPTIONS: Required<ScrapeOptions> = {
  * 
  * 特性:
  * - 可配置超时和重试
- * - 超时或网络错误时自动重试
+ * - 502 错误: 指数退避重试 (2s → 4s → 6s)，最多 3 次
+ * - 429 错误: 即时重试 2 次（间隔 1s），仍失败则抛出 ScrapeRateLimitError
+ * - 超时或网络错误: 保持原有重试逻辑
  * - 不包含并发控制（由调用方管理）
  * 
  * @param url 目标 URL
  * @param token Scrape.do API token
  * @param options 可选配置
  * @returns 页面 HTML 内容
+ * @throws ScrapeRateLimitError 当 429 即时重试用尽时
+ * @throws ScrapeServerError 当 502 重试用尽时
+ * @throws Error 其他错误
  */
 export async function fetchWithScrapeClient(
   url: string,
@@ -57,14 +109,31 @@ export async function fetchWithScrapeClient(
   options?: ScrapeOptions
 ): Promise<string> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const { timeoutMs, maxRetries, retryDelayMs, enableLogging } = opts;
+  const {
+    timeoutMs,
+    maxRetries,
+    retryDelayMs,
+    enableLogging,
+    maxRetries502,
+    retryBaseDelay502Ms,
+    maxRetries429,
+    retryDelay429Ms,
+  } = opts;
   
   const encodedUrl = encodeURIComponent(url);
   const apiUrl = `https://api.scrape.do/?token=${token}&url=${encodedUrl}&super=true&geoCode=us&timeout=${timeoutMs}`;
   
   let lastError: Error | null = null;
   
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  // 总尝试次数 = 首次 + 最大重试次数（取所有重试策略中的最大值）
+  const totalMaxAttempts = 1 + Math.max(maxRetries, maxRetries502, maxRetries429);
+  
+  // 各错误类型的已重试计数
+  let retryCount502 = 0;
+  let retryCount429 = 0;
+  let retryCountGeneral = 0;
+  
+  for (let attempt = 0; attempt < totalMaxAttempts; attempt++) {
     try {
       const controller = new AbortController();
       // 客户端超时比 API 超时多 2 秒，确保能收到 API 的超时响应
@@ -82,25 +151,64 @@ export async function fetchWithScrapeClient(
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        throw new Error(`Scrape.do API 请求失败: ${response.status} ${response.statusText}`);
+        const statusCode = response.status;
+        
+        // ==================== 502/503/504 服务器错误处理 ====================
+        if (statusCode >= 500) {
+          if (retryCount502 < maxRetries502) {
+            retryCount502++;
+            // 指数退避: 2s → 4s → 6s (基础延迟 × 重试次数)
+            const delay502 = retryBaseDelay502Ms * retryCount502;
+            if (enableLogging) {
+              console.log(`[ScrapeClient] HTTP ${statusCode} 服务器错误，第 ${retryCount502}/${maxRetries502} 次重试，等待 ${delay502}ms...`);
+            }
+            await new Promise(resolve => setTimeout(resolve, delay502));
+            continue;
+          }
+          // 502 重试用尽
+          throw new ScrapeServerError(
+            `Scrape.do API 服务器错误: HTTP ${statusCode}，已重试 ${maxRetries502} 次仍失败`,
+            statusCode
+          );
+        }
+        
+        // ==================== 429 限流错误处理 ====================
+        if (statusCode === 429) {
+          if (retryCount429 < maxRetries429) {
+            retryCount429++;
+            if (enableLogging) {
+              console.log(`[ScrapeClient] HTTP 429 限流，第 ${retryCount429}/${maxRetries429} 次即时重试，等待 ${retryDelay429Ms}ms...`);
+            }
+            await new Promise(resolve => setTimeout(resolve, retryDelay429Ms));
+            continue;
+          }
+          // 429 即时重试用尽，抛出特殊错误，由上层延后重试队列处理
+          throw new ScrapeRateLimitError(
+            `Scrape.do API 限流: HTTP 429，已即时重试 ${maxRetries429} 次仍被限流`
+          );
+        }
+        
+        // ==================== 其他 HTTP 错误 ====================
+        throw new Error(`Scrape.do API 请求失败: ${statusCode} ${response.statusText}`);
       }
       
       return await response.text();
     } catch (error: any) {
       lastError = error;
       
-      // 如果是最后一次尝试，不再重试
-      if (attempt >= maxRetries) {
-        break;
+      // 如果是我们自定义的错误类型，直接向上抛出，不再重试
+      if (error instanceof ScrapeRateLimitError || error instanceof ScrapeServerError) {
+        throw error;
       }
       
-      // 超时或网络错误时重试
+      // 超时或网络错误时重试（保持原有逻辑）
       const isTimeout = error.name === 'AbortError' || error.message?.includes('timeout');
       const isNetworkError = error.message?.includes('fetch') || error.message?.includes('network');
       
-      if (isTimeout || isNetworkError) {
+      if ((isTimeout || isNetworkError) && retryCountGeneral < maxRetries) {
+        retryCountGeneral++;
         if (enableLogging) {
-          console.log(`[ScrapeClient] 请求超时/失败，正在重试 (${attempt + 1}/${maxRetries})...`);
+          console.log(`[ScrapeClient] 请求超时/网络错误，第 ${retryCountGeneral}/${maxRetries} 次重试...`);
         }
         
         // 重试前等待
@@ -111,7 +219,7 @@ export async function fetchWithScrapeClient(
         continue;
       }
       
-      // 其他错误直接抛出
+      // 其他错误或重试用尽，直接抛出
       throw error;
     }
   }
