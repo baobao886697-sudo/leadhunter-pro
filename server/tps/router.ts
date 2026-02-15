@@ -64,9 +64,9 @@ import {
 } from "./concurrencyMonitor";
 import { emitTaskProgress, emitTaskCompleted, emitTaskFailed, emitCreditsUpdate } from "../_core/wsEmitter";
 
-// 统一队列并发配置 (v5.0 智能动态并发池)
-const TOTAL_CONCURRENCY = TPS_POOL_CONFIG.GLOBAL_MAX_CONCURRENCY;  // 40 总并发 (4×10)
-const SEARCH_CONCURRENCY = TPS_POOL_CONFIG.MAX_THREADS;  // 4 搜索并发
+// 统一队列并发配置 (v7.3: 搜索和详情分离配置)
+const TOTAL_CONCURRENCY = TPS_POOL_CONFIG.GLOBAL_MAX_CONCURRENCY;  // 8 详情总并发 (2×4)
+const SEARCH_CONCURRENCY = 3;  // 搜索并发：固定3个名字同时搜索（不再依赖详情池配置）
 
 // 输入验证 schema
 const tpsFiltersSchema = z.object({

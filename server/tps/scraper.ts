@@ -48,9 +48,9 @@ export const activeUserTracker = new ActiveUserTracker();
  * - 单用户: 享受 PER_USER_SOFT_CAP (40) 的完整并发
  * - 多用户: 按 GLOBAL_HARD_CAP / activeUsers 公平分配，但不低于 MIN_GUARANTEE
  */
-const GLOBAL_HARD_CAP = 30;           // 全局硬顶：所有用户总并发不超过30（v7.1: 从60降至30，避免详情阶段502）
-const PER_USER_SOFT_CAP = 20;         // 单用户软顶：独占时最多20并发（v7.1: 从40降至20）
-const PER_USER_MIN_GUARANTEE = 8;     // 最低保障：每个用户至少8并发
+const GLOBAL_HARD_CAP = 15;           // 全局硬顶：所有用户总并发不超过15（v7.3: 从30降至15，详情页对scrape.do压力远大于搜索页）
+const PER_USER_SOFT_CAP = 10;         // 单用户软顶：独占时最多10并发（v7.3: 从20降至10）
+const PER_USER_MIN_GUARANTEE = 5;     // 最低保障：每个用户至少5并发（v7.3: 从8降至5）
 
 class ElasticGlobalSemaphore {
   private currentGlobalCount: number = 0;

@@ -24,23 +24,23 @@ import { ScrapeRateLimitError, ScrapeServerError } from './scrapeClient';
 // ============================================================================
 
 export const TPS_POOL_CONFIG = {
-  // 线程配置 (v7.1: 降低并发，配合全局信号量30硬顶)
-  MAX_THREADS: 3,                    // 最大虚拟线程数 (v7.1: 4→3)
-  MAX_CONCURRENCY_PER_THREAD: 7,     // 每线程最大并发数 (v7.1: 10→7)
-  GLOBAL_MAX_CONCURRENCY: 21,        // 全局最大并发 (3 × 7 = 21, v7.1: 40→21)
+  // 线程配置 (v7.3: 激进降低并发，彻底消除详情阶段502)
+  MAX_THREADS: 2,                    // 最大虚拟线程数 (v7.3: 3→2)
+  MAX_CONCURRENCY_PER_THREAD: 4,     // 每线程最大并发数 (v7.3: 7→4)
+  GLOBAL_MAX_CONCURRENCY: 8,         // 全局最大并发 (2 × 4 = 8, v7.3: 21→8)
   
   // 任务规模阈值（基于详情页数量）
   SMALL_TASK_THRESHOLD: 50,          // 小任务: ≤50 条详情
   MEDIUM_TASK_THRESHOLD: 150,        // 中任务: 51-150 条详情
   // 大任务: >150 条详情
   
-  // 动态并发配置 (v7.1: 全面降低，避免502)
+  // 动态并发配置 (v7.3: 激进降低，详情页对scrape.do压力大)
   SMALL_TASK_THREADS: 2,             // 小任务线程数
-  SMALL_TASK_CONCURRENCY: 4,         // 小任务每线程并发 (v7.1: 5→4)
-  MEDIUM_TASK_THREADS: 2,            // 中任务线程数 (v7.1: 3→2)
-  MEDIUM_TASK_CONCURRENCY: 5,        // 中任务每线程并发 (v7.1: 8→5)
-  LARGE_TASK_THREADS: 3,             // 大任务线程数 (v7.1: 4→3)
-  LARGE_TASK_CONCURRENCY: 5,         // 大任务每线程并发 (v7.1: 10→5)
+  SMALL_TASK_CONCURRENCY: 3,         // 小任务每线程并发 (v7.3: 4→3)
+  MEDIUM_TASK_THREADS: 2,            // 中任务线程数
+  MEDIUM_TASK_CONCURRENCY: 3,        // 中任务每线程并发 (v7.3: 5→3)
+  LARGE_TASK_THREADS: 2,             // 大任务线程数 (v7.3: 3→2)
+  LARGE_TASK_CONCURRENCY: 4,         // 大任务每线程并发 (v7.3: 5→4)
   
   // 速率限制
   REQUEST_DELAY_MS: 100,             // 请求间隔 (毫秒)
