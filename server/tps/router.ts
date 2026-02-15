@@ -23,9 +23,11 @@ import {
   DetailTask,
   DetailTaskWithIndex,
   TPS_CONFIG,
+  activeUserTracker,
 } from "./scraper";
 import { 
   fetchDetailsWithSmartPool,
+  DetailProgressInfo,
 } from "./smartPoolExecutor";
 import {
   TPS_POOL_CONFIG,
@@ -458,6 +460,10 @@ async function executeTpsSearchRealtimeDeduction(
   input: z.infer<typeof tpsSearchInputSchema>,
   userId: number
 ) {
+  // v7.0: 注册活跃用户，用于全局弹性并发调度
+  activeUserTracker.addUser(userId);
+  console.log(`[TPS] 用户 ${userId} 开始任务，当前活跃用户数: ${activeUserTracker.getActiveUserCount()}`);
+  
   const searchCost = parseFloat(config.searchCost);
   const detailCost = parseFloat(config.detailCost);
   const token = config.scrapeDoToken;
@@ -566,6 +572,7 @@ async function executeTpsSearchRealtimeDeduction(
         token,
         maxPages,
         input.filters || {},
+        userId,
         (msg) => addLog(`[${subTask.index + 1}/${subTasks.length}] ${msg}`)
       );
       
@@ -650,9 +657,38 @@ async function executeTpsSearchRealtimeDeduction(
       addLog(`⚠️ 积分不足，停止搜索`);
     }
     
-    // ==================== 阶段二：智能并发池获取详情（v5.0 实时扣费） ====================
+    // ==================== 阶段二：智能并发池获取详情（v7.0 全局弹性并发 + 实时进度推送） ====================
     if (allDetailTasks.length > 0 && !stoppedDueToCredits) {
-      addLog(`📋 开始获取详情...`);
+      addLog(`\ud83d\udccb 开始获取详情...`);
+      
+      // v7.0: 详情进度回调 — 每完成一批就更新数据库和推送WS
+      let lastDetailProgressPush = 0; // 防止推送过于频繁
+      const onDetailProgress = async (info: DetailProgressInfo) => {
+        const now = Date.now();
+        // 每2秒最多推送一次，或者是最后一条
+        if (now - lastDetailProgressPush < 2000 && info.completedDetails < info.totalDetails) return;
+        lastDetailProgressPush = now;
+        
+        // 详情阶段进度占 30%-95%
+        const detailProgress = 30 + Math.round(info.percent * 0.65);
+        const phase = info.phase === 'retrying' ? '重试中' : '获取详情';
+        
+        await updateTpsSearchTaskProgress(taskDbId, {
+          progress: detailProgress,
+          searchPageRequests: totalSearchPages,
+          creditsUsed: creditTracker.getTotalDeducted(),
+          logs,
+        });
+        emitTaskProgress(userId, taskId, "tps", {
+          progress: detailProgress,
+          phase,
+          completedDetails: info.completedDetails,
+          totalDetails: info.totalDetails,
+          creditsUsed: creditTracker.getTotalDeducted(),
+          logs,
+        });
+        emitCreditsUpdate(userId, { newBalance: creditTracker.getCurrentBalance(), deductedAmount: creditTracker.getTotalDeducted(), source: "tps", taskId });
+      };
       
       // 使用智能并发池获取详情
       const detailResult = await fetchDetailsWithSmartPool(
@@ -661,7 +697,9 @@ async function executeTpsSearchRealtimeDeduction(
         input.filters || {},
         addLog,
         setCachedDetails,
-        creditTracker
+        creditTracker,
+        userId,
+        onDetailProgress
       );
       
       totalDetailPages += detailResult.stats.detailPageRequests;
@@ -772,6 +810,10 @@ async function executeTpsSearchRealtimeDeduction(
     }
     emitTaskCompleted(userId, taskId, "tps", { totalResults, creditsUsed: creditTracker.getTotalDeducted(), status: stoppedDueToCredits ? "insufficient_credits" : "completed" });
 
+    // v7.0: 注销活跃用户
+    activeUserTracker.removeUser(userId);
+    console.log(`[TPS] 用户 ${userId} 任务完成，当前活跃用户数: ${activeUserTracker.getActiveUserCount()}`);
+
     // 记录用户活动日志
     await logUserActivity({
       userId,
@@ -782,13 +824,17 @@ async function executeTpsSearchRealtimeDeduction(
     });
     
   } catch (error: any) {
-    addLog(`❌ 任务失败: ${error.message}`);
+    addLog(`\u274c 任务失败: ${error.message}`);
     
     // 获取已消耗的费用
     const costBreakdown = creditTracker.getCostBreakdown();
     
     await failTpsSearchTask(taskDbId, error.message, logs);
     emitTaskFailed(userId, taskId, "tps", { error: error.message, creditsUsed: creditTracker.getTotalDeducted() });
+    
+    // v7.0: 注销活跃用户
+    activeUserTracker.removeUser(userId);
+    console.log(`[TPS] 用户 ${userId} 任务失败，当前活跃用户数: ${activeUserTracker.getActiveUserCount()}`);
     
     await logApi({
       userId,

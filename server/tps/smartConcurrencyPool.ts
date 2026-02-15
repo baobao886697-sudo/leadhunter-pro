@@ -1,7 +1,7 @@
 /**
  * TPS 智能动态并发池 (Smart Concurrency Pool)
  * 
- * 版本: 6.0 (容错升级版)
+ * 版本: 7.0 (全局弹性并发版)
  * 
  * 核心特性:
  * - 4 虚拟线程 × 10 并发 = 最大 40 并发
@@ -9,10 +9,10 @@
  * - 错误回退机制，保护 API
  * - 负载均衡，任务均匀分配
  * 
- * v6.0 新增:
- * - 429/502 延后重试队列：借鉴 EXE 版 2+2 分阶段重试机制
- * - 主批次完成后，自动对 429/502 失败的任务进行第二阶段重试
- * - 通过 ScrapeRateLimitError / ScrapeServerError 识别可重试错误
+ * v7.0 升级:
+ * - 延后重试从串行改为并行：失败任务重新分配到虚拟线程并行执行
+ * - 彻底消除串行重试导致的长时间阻塞（"卡住"现象）
+ * - HTTP请求的实际并发由外部全局弹性信号量控制
  * 
  * 独立模块: 仅用于 TPS 搜索功能
  */
@@ -51,9 +51,9 @@ export const TPS_POOL_CONFIG = {
   MAX_RETRIES: 1,                    // 即时重试次数（并发池层面）
   RETRY_DELAY_MS: 1000,              // 即时重试延迟 (毫秒)
   
-  // 延后重试配置 (v6.0 新增)
+  // 延后重试配置 (v7.0: 改为并行)
   DELAYED_RETRY_MAX: 2,              // 延后重试最大次数
-  DELAYED_RETRY_DELAY_MS: 2000,      // 延后重试间隔 (毫秒)
+  DELAYED_RETRY_DELAY_MS: 3000,      // 延后重试前等待时间 (毫秒)
 };
 
 // ============================================================================
@@ -240,8 +240,6 @@ class VirtualThread<T, R> {
           lastError = error as Error;
           
           // v6.0: 检测 429/502 错误
-          // 如果是 ScrapeRateLimitError 或 ScrapeServerError，
-          // 即时重试用尽后标记为需要延后重试，而不是标记为最终失败
           const isRetryableError = (
             lastError instanceof ScrapeRateLimitError ||
             lastError instanceof ScrapeServerError
@@ -323,21 +321,18 @@ export class TpsSmartConcurrencyPool<T, R> {
    */
   private evaluateTaskScale(taskCount: number): DynamicConfig {
     if (taskCount <= TPS_POOL_CONFIG.SMALL_TASK_THRESHOLD) {
-      // 小任务: 2×5=10
       return {
         threads: TPS_POOL_CONFIG.SMALL_TASK_THREADS,
         concurrencyPerThread: TPS_POOL_CONFIG.SMALL_TASK_CONCURRENCY,
         totalConcurrency: TPS_POOL_CONFIG.SMALL_TASK_THREADS * TPS_POOL_CONFIG.SMALL_TASK_CONCURRENCY,
       };
     } else if (taskCount <= TPS_POOL_CONFIG.MEDIUM_TASK_THRESHOLD) {
-      // 中任务: 3×8=24
       return {
         threads: TPS_POOL_CONFIG.MEDIUM_TASK_THREADS,
         concurrencyPerThread: TPS_POOL_CONFIG.MEDIUM_TASK_CONCURRENCY,
         totalConcurrency: TPS_POOL_CONFIG.MEDIUM_TASK_THREADS * TPS_POOL_CONFIG.MEDIUM_TASK_CONCURRENCY,
       };
     } else {
-      // 大任务: 4×10=40
       return {
         threads: TPS_POOL_CONFIG.LARGE_TASK_THREADS,
         concurrencyPerThread: TPS_POOL_CONFIG.LARGE_TASK_CONCURRENCY,
@@ -370,16 +365,16 @@ export class TpsSmartConcurrencyPool<T, R> {
   }
 
   /**
-   * 执行所有任务（含延后重试队列）
+   * 执行所有任务（含并行延后重试）
    * 
-   * v6.0 流程:
+   * v7.0 流程:
    * 1. 主批次: 将所有任务分配到虚拟线程并行执行
    * 2. 收集延后重试: 识别 429/502 失败的任务
-   * 3. 延后重试: 等待后重新执行失败任务（最多 2 次）
+   * 3. 并行延后重试: 等待后将失败任务重新分配到虚拟线程并行执行（不再串行！）
    */
   async execute(tasks: PoolTask<T, R>[]): Promise<PoolResult<R>[]> {
     const results: PoolResult<R>[] = [];
-    const delayedRetryTasks: PoolTask<T, R>[] = [];  // v6.0: 延后重试队列
+    const delayedRetryTasks: PoolTask<T, R>[] = [];
     
     // 建立 taskId → task 的映射，用于延后重试时找回原始任务
     const taskMap = new Map<string, PoolTask<T, R>>();
@@ -398,7 +393,6 @@ export class TpsSmartConcurrencyPool<T, R> {
     // 结果回调
     const onResult = (result: PoolResult<R>) => {
       if (result.success) {
-        // 成功的任务直接加入结果
         results.push(result);
         this.stats.completedTasks++;
       } else if (result.error === NEEDS_DELAYED_RETRY) {
@@ -407,9 +401,7 @@ export class TpsSmartConcurrencyPool<T, R> {
         if (originalTask) {
           delayedRetryTasks.push(originalTask);
         }
-        // 注意：不计入 failedTasks，因为还有延后重试的机会
       } else {
-        // 其他错误，标记为最终失败
         results.push(result);
         this.stats.failedTasks++;
       }
@@ -431,56 +423,59 @@ export class TpsSmartConcurrencyPool<T, R> {
     // ==================== 第一阶段：主批次执行 ====================
     await Promise.all(this.threads.map(thread => thread.start(onResult)));
 
-    // ==================== 第二阶段：延后重试 ====================
+    // ==================== 第二阶段：并行延后重试 (v7.0 升级) ====================
     if (delayedRetryTasks.length > 0) {
-      console.log(`[TPS Pool] 🔄 第二阶段延后重试: ${delayedRetryTasks.length} 个任务 (429/502)`);
+      console.log(`[TPS Pool] 🔄 第二阶段并行延后重试: ${delayedRetryTasks.length} 个任务 (429/502)`);
       this.stats.delayedRetryCount = delayedRetryTasks.length;
       
-      // 等待一段时间，给服务器恢复时间
+      // 等待一段时间，给上游服务恢复时间
       await new Promise(resolve => setTimeout(resolve, TPS_POOL_CONFIG.DELAYED_RETRY_DELAY_MS));
       
       let delayedSuccess = 0;
       
-      // 对延后队列中的每个任务，最多再尝试 DELAYED_RETRY_MAX 次
-      for (const task of delayedRetryTasks) {
-        let succeeded = false;
-        
-        for (let retryAttempt = 0; retryAttempt < TPS_POOL_CONFIG.DELAYED_RETRY_MAX; retryAttempt++) {
-          try {
-            const result = await task.execute(task.data);
-            // 延后重试成功
-            results.push({
-              id: task.id,
-              success: true,
-              result,
-            });
-            this.stats.completedTasks++;
-            delayedSuccess++;
-            succeeded = true;
-            break;
-          } catch (error: any) {
-            // 延后重试仍失败
-            if (retryAttempt < TPS_POOL_CONFIG.DELAYED_RETRY_MAX - 1) {
-              // 还有重试机会，等待后继续
-              console.log(`[TPS Pool] 🔄 延后重试第 ${retryAttempt + 1} 次失败 (${task.id})，等待 ${TPS_POOL_CONFIG.DELAYED_RETRY_DELAY_MS}ms 后继续...`);
-              await new Promise(resolve => setTimeout(resolve, TPS_POOL_CONFIG.DELAYED_RETRY_DELAY_MS));
-            }
-          }
-        }
-        
-        if (!succeeded) {
-          // 延后重试也全部失败，标记为最终失败
+      // v7.0: 使用新的虚拟线程池并行执行延后重试，而不是串行逐个重试
+      // 延后重试使用较低的并发度（2线程×5并发=10并发），避免再次压垮上游
+      const retryThreads: VirtualThread<T, R>[] = [];
+      const retryThreadCount = Math.min(2, delayedRetryTasks.length);
+      const retryConcurrencyPerThread = 5;
+      
+      for (let i = 0; i < retryThreadCount; i++) {
+        retryThreads.push(new VirtualThread<T, R>(100 + i, retryConcurrencyPerThread));
+      }
+      
+      // 将延后重试任务均匀分配到重试线程
+      delayedRetryTasks.forEach((task, index) => {
+        const threadIndex = index % retryThreads.length;
+        retryThreads[threadIndex].addTask(task);
+      });
+      
+      // 重试结果回调
+      const onRetryResult = (result: PoolResult<R>) => {
+        if (result.success) {
+          results.push(result);
+          this.stats.completedTasks++;
+          delayedSuccess++;
+        } else {
+          // 延后重试也失败，标记为最终失败
           results.push({
-            id: task.id,
+            id: result.id,
             success: false,
-            error: `延后重试 ${TPS_POOL_CONFIG.DELAYED_RETRY_MAX} 次后仍失败`,
+            error: `延后重试后仍失败: ${result.error}`,
           });
           this.stats.failedTasks++;
         }
-      }
+        
+        // 更新进度
+        if (this.onProgress) {
+          this.onProgress(this.stats);
+        }
+      };
+      
+      // 并行执行所有重试线程
+      await Promise.all(retryThreads.map(thread => thread.start(onRetryResult)));
       
       this.stats.delayedRetrySuccess = delayedSuccess;
-      console.log(`[TPS Pool] 🔄 延后重试完成: ${delayedSuccess}/${delayedRetryTasks.length} 成功`);
+      console.log(`[TPS Pool] 🔄 并行延后重试完成: ${delayedSuccess}/${delayedRetryTasks.length} 成功`);
       
       // 更新进度
       if (this.onProgress) {

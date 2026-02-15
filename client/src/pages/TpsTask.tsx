@@ -184,12 +184,25 @@ export default function TpsTask() {
     { enabled: !!taskId && (task?.status === "completed" || task?.status === "insufficient_credits") }
   );
   
+  // v7.0: 任务阶段状态（通过WS实时更新）
+  const [taskPhase, setTaskPhase] = useState<string>('');
+  const [completedDetails, setCompletedDetails] = useState<number>(0);
+  const [totalDetails, setTotalDetails] = useState<number>(0);
+  
   // WebSocket 实时订阅：收到推送时立即刷新数据
   useEffect(() => {
     if (!taskId) return;
     
     const unsub1 = subscribe("task_progress", (msg: WsMessage) => {
       if (msg.taskId === taskId && msg.source === "tps") {
+        // v7.0: 提取任务阶段信息
+        if (msg.data?.phase) {
+          setTaskPhase(msg.data.phase);
+        }
+        if (msg.data?.completedDetails !== undefined) {
+          setCompletedDetails(msg.data.completedDetails);
+          setTotalDetails(msg.data.totalDetails || 0);
+        }
         refetchTask();
       }
     });
@@ -442,7 +455,9 @@ export default function TpsTask() {
                   <span className="rainbow-text">任务执行日志</span>
                   <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse">
                     <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    运行中
+                    {taskPhase === '获取详情' ? `获取详情中 (${completedDetails}/${totalDetails})` :
+                     taskPhase === '重试中' ? `重试失败任务中...` :
+                     (task?.progress || 0) <= 30 ? '搜索中' : '运行中'}
                   </Badge>
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -484,8 +499,13 @@ export default function TpsTask() {
               {/* 进度条 */}
               <div className="mb-4">
                 <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                  <span>任务进度</span>
-                  <span>{task?.completedSubTasks || 0} / {task?.totalSubTasks || 0} 子任务</span>
+                  <span>任务进度 {taskPhase ? `— ${taskPhase}` : ''}</span>
+                  <span>
+                    {totalDetails > 0 
+                      ? `${completedDetails}/${totalDetails} 详情页`
+                      : `${task?.completedSubTasks || 0} / ${task?.totalSubTasks || 0} 子任务`
+                    }
+                  </span>
                 </div>
                 <Progress value={task?.progress || 0} className="h-2" />
               </div>

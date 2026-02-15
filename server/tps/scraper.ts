@@ -1,55 +1,143 @@
 import * as cheerio from 'cheerio';
 
-// ==================== 全局并发限制 ====================
+// ==================== 全局弹性并发限制 (v7.0) ====================
 
 /**
- * 全局信号量类 - 用于限制系统总并发数
- * 不管有多少用户同时使用，系统总并发不超过设定值
+ * 活跃用户追踪器 - 全局单例
+ * 
+ * 追踪当前有多少个独立用户正在运行TPS任务，
+ * 用于动态计算每个用户的并发配额。
  */
-class GlobalSemaphore {
-  private maxConcurrency: number;
-  private currentCount: number = 0;
-  private waitQueue: Array<() => void> = [];
-  
-  constructor(maxConcurrency: number) {
-    this.maxConcurrency = maxConcurrency;
+class ActiveUserTracker {
+  private activeUsers = new Map<number, number>(); // userId -> taskCount
+
+  addUser(userId: number): void {
+    const count = this.activeUsers.get(userId) || 0;
+    this.activeUsers.set(userId, count + 1);
   }
-  
-  async acquire(): Promise<void> {
-    if (this.currentCount < this.maxConcurrency) {
-      this.currentCount++;
+
+  removeUser(userId: number): void {
+    const count = this.activeUsers.get(userId) || 0;
+    if (count <= 1) {
+      this.activeUsers.delete(userId);
+    } else {
+      this.activeUsers.set(userId, count - 1);
+    }
+  }
+
+  getActiveUserCount(): number {
+    return this.activeUsers.size;
+  }
+
+  getUserTaskCount(userId: number): number {
+    return this.activeUsers.get(userId) || 0;
+  }
+}
+
+export const activeUserTracker = new ActiveUserTracker();
+
+/**
+ * 分层弹性全局信号量 (Elastic Global Semaphore) v7.0
+ * 
+ * 三层控制:
+ * 1. 全局硬顶 (GLOBAL_HARD_CAP): 绝对不可逾越的总并发上限，保护上游服务
+ * 2. 用户软顶 (PER_USER_SOFT_CAP): 单用户独占时的最大并发
+ * 3. 用户最低保障 (PER_USER_MIN_GUARANTEE): 多用户竞争时的最低并发保障
+ * 
+ * 动态分配逻辑:
+ * - 单用户: 享受 PER_USER_SOFT_CAP (40) 的完整并发
+ * - 多用户: 按 GLOBAL_HARD_CAP / activeUsers 公平分配，但不低于 MIN_GUARANTEE
+ */
+const GLOBAL_HARD_CAP = 60;           // 全局硬顶：所有用户总并发不超过60
+const PER_USER_SOFT_CAP = 40;         // 单用户软顶：独占时最多40并发
+const PER_USER_MIN_GUARANTEE = 10;    // 最低保障：每个用户至少10并发
+
+class ElasticGlobalSemaphore {
+  private currentGlobalCount: number = 0;
+  private userCounts = new Map<number, number>(); // userId -> currentCount
+  private waitQueue: Array<{ userId: number; resolve: () => void }> = [];
+
+  /**
+   * 获取指定用户当前的动态并发上限
+   */
+  private getUserLimit(userId: number): number {
+    const activeUsers = activeUserTracker.getActiveUserCount() || 1;
+    const fairShare = Math.floor(GLOBAL_HARD_CAP / activeUsers);
+    return Math.max(PER_USER_MIN_GUARANTEE, Math.min(PER_USER_SOFT_CAP, fairShare));
+  }
+
+  /**
+   * 获取全局并发许可（带用户上下文）
+   */
+  async acquire(userId: number): Promise<void> {
+    const userCount = this.userCounts.get(userId) || 0;
+    const userLimit = this.getUserLimit(userId);
+
+    // 检查：全局未满 且 用户未超限
+    if (this.currentGlobalCount < GLOBAL_HARD_CAP && userCount < userLimit) {
+      this.currentGlobalCount++;
+      this.userCounts.set(userId, userCount + 1);
       return;
     }
-    
-    // 需要等待
+
+    // 需要排队等待
     return new Promise<void>((resolve) => {
-      this.waitQueue.push(() => {
-        this.currentCount++;
-        resolve();
-      });
+      this.waitQueue.push({ userId, resolve });
     });
   }
-  
-  release(): void {
-    this.currentCount--;
-    if (this.waitQueue.length > 0) {
-      const next = this.waitQueue.shift();
-      if (next) next();
+
+  /**
+   * 释放全局并发许可
+   */
+  release(userId: number): void {
+    const userCount = this.userCounts.get(userId) || 0;
+    if (userCount > 0) {
+      this.userCounts.set(userId, userCount - 1);
+      if (userCount - 1 === 0) {
+        this.userCounts.delete(userId);
+      }
+    }
+    this.currentGlobalCount = Math.max(0, this.currentGlobalCount - 1);
+
+    // 尝试唤醒等待队列中的下一个请求
+    this.tryWakeNext();
+  }
+
+  /**
+   * 尝试从等待队列中唤醒符合条件的请求
+   */
+  private tryWakeNext(): void {
+    for (let i = 0; i < this.waitQueue.length; i++) {
+      const waiter = this.waitQueue[i];
+      const userCount = this.userCounts.get(waiter.userId) || 0;
+      const userLimit = this.getUserLimit(waiter.userId);
+
+      if (this.currentGlobalCount < GLOBAL_HARD_CAP && userCount < userLimit) {
+        // 可以唤醒
+        this.waitQueue.splice(i, 1);
+        this.currentGlobalCount++;
+        this.userCounts.set(waiter.userId, userCount + 1);
+        waiter.resolve();
+        return;
+      }
     }
   }
-  
+
   getStatus() {
     return {
-      current: this.currentCount,
-      max: this.maxConcurrency,
+      globalCurrent: this.currentGlobalCount,
+      globalMax: GLOBAL_HARD_CAP,
+      perUserSoftCap: PER_USER_SOFT_CAP,
+      perUserMinGuarantee: PER_USER_MIN_GUARANTEE,
+      activeUsers: activeUserTracker.getActiveUserCount(),
       waiting: this.waitQueue.length,
+      userCounts: Object.fromEntries(this.userCounts),
     };
   }
 }
 
-// 全局信号量实例 - 限制系统总并发为 40（与 TPS_CONFIG.TOTAL_CONCURRENCY 一致）
-const GLOBAL_MAX_CONCURRENCY = 40;
-const globalSemaphore = new GlobalSemaphore(GLOBAL_MAX_CONCURRENCY);
+// 全局弹性信号量实例
+const globalSemaphore = new ElasticGlobalSemaphore();
 
 // 导出获取状态的函数（用于监控）
 export function getGlobalConcurrencyStatus() {
@@ -65,18 +153,19 @@ const SCRAPE_TIMEOUT_MS = 20000;  // 20 秒超时，与详情阶段一致
 const SCRAPE_MAX_RETRIES = 1;    // 超时/网络错误最多重试 1 次
 
 /**
- * 使用 Scrape.do API 获取页面（带全局信号量控制）
+ * 使用 Scrape.do API 获取页面（带全局弹性信号量控制）
  * 
- * 搜索阶段使用此函数，确保全局并发不超过限制
+ * 搜索阶段和详情阶段统一使用此函数，确保全局并发不超过限制
  * 
- * v2.0 容错升级:
+ * v7.0 升级:
+ * - 引入用户上下文，实现分层弹性并发控制
  * - 502 错误: 指数退避重试 (2s → 4s → 6s)，最多 3 次
  * - 429 错误: 即时重试 2 次（间隔 1s），仍失败则抛出 ScrapeRateLimitError
  * - 超时/网络错误: 保持原有重试逻辑
  */
-async function fetchWithScrapedo(url: string, token: string): Promise<string> {
-  // 获取全局并发许可
-  await globalSemaphore.acquire();
+export async function fetchWithScrapedo(url: string, token: string, userId: number): Promise<string> {
+  // 获取全局并发许可（带用户上下文）
+  await globalSemaphore.acquire(userId);
   
   try {
     // 使用共享的 scrapeClient 执行请求
@@ -94,7 +183,7 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
     });
   } finally {
     // 确保释放全局并发许可
-    globalSemaphore.release();
+    globalSemaphore.release(userId);
   }
 }
 
@@ -731,6 +820,8 @@ export interface SearchOnlyResult {
 
 /**
  * [OPTIMIZED] 仅执行搜索，并发获取所有页面
+ * 
+ * v7.0: 增加 userId 参数，传递给全局弹性信号量
  */
 export async function searchOnly(
   name: string,
@@ -738,6 +829,7 @@ export async function searchOnly(
   token: string,
   maxPages: number,
   filters: TpsFilters,
+  userId: number,
   onProgress?: (message: string) => void
 ): Promise<SearchOnlyResult> {
   let searchPageRequests = 0;
@@ -748,7 +840,7 @@ export async function searchOnly(
     const firstPageUrl = buildSearchUrl(name, location, 1);
     onProgress?.(`获取第一页...`);
     
-    const firstPageHtml = await fetchWithScrapedo(firstPageUrl, token);
+    const firstPageHtml = await fetchWithScrapedo(firstPageUrl, token, userId);
     searchPageRequests++;
     
     const { results: firstResults, totalRecords, hasNextPage } = parseSearchPageWithTotal(firstPageHtml);
@@ -783,7 +875,7 @@ export async function searchOnly(
       const retryUrls: string[] = [];  // 429/502 延后重试队列
       
       const pagePromises = remainingUrls.map(url => 
-        fetchWithScrapedo(url, token).catch(err => {
+        fetchWithScrapedo(url, token, userId).catch(err => {
           // 检测 429/502 错误，加入延后重试队列
           if (err instanceof ScrapeRateLimitError || err instanceof ScrapeServerError) {
             retryUrls.push(url);
@@ -817,7 +909,7 @@ export async function searchOnly(
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         const retryPromises = retryUrls.map(url =>
-          fetchWithScrapedo(url, token).catch(err => {
+          fetchWithScrapedo(url, token, userId).catch(err => {
             onProgress?.(`❌ 延后重试仍失败: ${err.message}`);
             return null;
           })
@@ -898,171 +990,77 @@ export async function fetchDetailsInBatch(
   let stoppedDueToCredits = false;
   
   const baseUrl = 'https://www.truepeoplesearch.com';
+  
+  // 去重详情链接
   const uniqueLinks = Array.from(new Set(tasks.map(t => t.searchResult.detailLink)));
-  
-  // 如果有 creditTracker，不使用缓存命中
-  const useCacheHit = !creditTracker;
-  
-  if (useCacheHit) {
-    onProgress(`检查缓存: ${uniqueLinks.length} 个链接...`);
-  } else {
-    onProgress(`获取详情: ${uniqueLinks.length} 个链接（无缓存命中模式）...`);
-  }
-  const cachedMap = await getCachedDetails(uniqueLinks);
-  
-  const tasksToFetch: DetailTaskWithIndex[] = [];
   const tasksByLink = new Map<string, DetailTaskWithIndex[]>();
-  
   for (const task of tasks) {
     const link = task.searchResult.detailLink;
-    if (!tasksByLink.has(link)) {
-      tasksByLink.set(link, []);
-    }
+    if (!tasksByLink.has(link)) tasksByLink.set(link, []);
     tasksByLink.get(link)!.push(task);
   }
   
-  // 根据是否使用缓存命中模式处理
-  if (useCacheHit) {
-    // 传统模式：使用缓存命中
-    for (const [link, linkTasks] of Array.from(tasksByLink.entries())) {
-      const cachedArray = cachedMap.get(link);
-      if (cachedArray && cachedArray.length > 0 && cachedArray.some(c => c.phone && c.phone.length >= 10)) {
-        cacheHits++;
-        const cachedWithFlag = cachedArray.map(r => ({ ...r, fromCache: true }));
-        const filteredCached = cachedWithFlag.filter(r => shouldIncludeResult(r, filters));
-        filteredOut += cachedArray.length - filteredCached.length;
-        if (filteredCached.length > 0) {
-          for (const task of linkTasks) {
-            results.push({ task, details: filteredCached });
-          }
-        }
-      } else {
-        tasksToFetch.push(linkTasks[0]);
-      }
-    }
-  } else {
-    // 实时扣费模式：不使用缓存命中，所有任务都需要获取
-    for (const [link, linkTasks] of Array.from(tasksByLink.entries())) {
-      tasksToFetch.push(linkTasks[0]);
-    }
+  const tasksToFetch: DetailTaskWithIndex[] = [];
+  for (const [link, linkTasks] of Array.from(tasksByLink.entries())) {
+    tasksToFetch.push(linkTasks[0]);
   }
   
-  // 调试日志
-  let tasksWithAge = 0;
-  let tasksWithoutAge = 0;
-  for (const task of tasksToFetch) {
-    if (task.searchResult.age !== undefined) {
-      tasksWithAge++;
-    } else {
-      tasksWithoutAge++;
-    }
-  }
-  
-  if (useCacheHit) {
-    onProgress(`⚡ 缓存命中: ${cacheHits}, 待获取: ${tasksToFetch.length} (有年龄: ${tasksWithAge}, 无年龄: ${tasksWithoutAge})`);
-  } else {
-    onProgress(`📥 待获取: ${tasksToFetch.length} 条（实时扣费模式）`);
-  }
+  onProgress(`\ud83d\udce5 \u5f85\u83b7\u53d6: ${tasksToFetch.length} \u6761`);
   
   const cacheToSave: Array<{ link: string; data: TpsDetailResult }> = [];
   let completed = 0;
-  let detailsWithAge = 0;
-  let detailsWithoutAge = 0;
-
+  
   if (tasksToFetch.length > 0 && !stoppedDueToCredits) {
-    // 并发控制实现
     const concurrencyPool = new Set<Promise<any>>();
     for (const task of tasksToFetch) {
-        // 检查是否因积分不足而停止
-        if (stoppedDueToCredits) {
-          break;
-        }
-        
-        // 如果有 creditTracker，检查积分是否足够
-        if (creditTracker) {
-          const canAfford = await creditTracker.canAffordDetailPage();
-          if (!canAfford) {
-            stoppedDueToCredits = true;
-            onProgress(`⚠️ 积分不足，停止获取详情`);
-            break;
-          }
-        }
-        
-        if (concurrencyPool.size >= concurrency) {
-            await Promise.race(concurrencyPool);
-        }
-
-        let promiseRef: Promise<void> | null = null;
-        const promise = (async () => {
-            const link = task.searchResult.detailLink;
-            const detailUrl = link.startsWith('http') ? link : `${baseUrl}${link}`;
-            try {
-                const html = await fetchWithScrapedo(detailUrl, token);
-                detailPageRequests++;
-                
-                // 实时扣除详情页费用
-                if (creditTracker) {
-                  const deductResult = await creditTracker.deductDetailPage();
-                  if (!deductResult.success) {
-                    stoppedDueToCredits = true;
-                  }
-                }
-                const details = parseDetailPage(html, task.searchResult);
-                
-                // 调试日志：统计解析结果中的年龄信息
-                for (const detail of details) {
-                    if (detail.age !== undefined) {
-                      detailsWithAge++;
-                    } else {
-                      detailsWithoutAge++;
-                    }
-                    if (detail.phone && detail.phone.length >= 10) {
-                        cacheToSave.push({ link, data: detail });
-                    }
-                }
-                // 标记新获取的数据不是来自缓存
-                const detailsWithFlag = details.map(d => ({ ...d, fromCache: false }));
-                const filtered = detailsWithFlag.filter(r => shouldIncludeResult(r, filters));
-                filteredOut += details.length - filtered.length;
-                const linkTasks = tasksByLink.get(link) || [task];
-                for (const t of linkTasks) {
-                    results.push({ task: t, details: filtered });
-                }
-            } catch (error: any) {
-                onProgress(`获取详情失败: ${link} - ${error.message || error}`);
-            } finally {
-                completed++;
-                if (completed % 10 === 0 || completed === tasksToFetch.length) {
-                    const percent = Math.round((completed / tasksToFetch.length) * 100);
-                    onProgress(`📥 详情进度: ${completed}/${tasksToFetch.length} (${percent}%)`);
-                }
-                if (promiseRef) concurrencyPool.delete(promiseRef);
+      if (stoppedDueToCredits) break;
+      if (concurrencyPool.size >= concurrency) {
+        await Promise.race(concurrencyPool);
+      }
+      let promiseRef: Promise<void> | null = null;
+      const promise = (async () => {
+        const link = task.searchResult.detailLink;
+        const detailUrl = link.startsWith('http') ? link : `${baseUrl}${link}`;
+        try {
+          const html = await fetchWithScrapedo(detailUrl, token, 0);
+          detailPageRequests++;
+          const details = parseDetailPage(html, task.searchResult);
+          for (const detail of details) {
+            if (detail.phone && detail.phone.length >= 10) {
+              cacheToSave.push({ link, data: detail });
             }
-        })();
-        promiseRef = promise;
-        concurrencyPool.add(promise);
+          }
+          const detailsWithFlag = details.map(d => ({ ...d, fromCache: false }));
+          const filtered = detailsWithFlag.filter(r => shouldIncludeResult(r, filters));
+          filteredOut += details.length - filtered.length;
+          const linkTasks2 = tasksByLink.get(link) || [task];
+          for (const t of linkTasks2) {
+            results.push({ task: t, details: filtered });
+          }
+        } catch (error: any) {
+          onProgress(`\u83b7\u53d6\u8be6\u60c5\u5931\u8d25: ${link} - ${error.message || error}`);
+        } finally {
+          completed++;
+          if (completed % 10 === 0 || completed === tasksToFetch.length) {
+            const percent = Math.round((completed / tasksToFetch.length) * 100);
+            onProgress(`\ud83d\udce5 \u8be6\u60c5\u8fdb\u5ea6: ${completed}/${tasksToFetch.length} (${percent}%)`);
+          }
+          if (promiseRef) concurrencyPool.delete(promiseRef);
+        }
+      })();
+      promiseRef = promise;
+      concurrencyPool.add(promise);
     }
     await Promise.all(Array.from(concurrencyPool));
   }
   
-  // 调试日志：输出年龄解析统计
-  if (tasksToFetch.length > 0) {
-    onProgress(`📊 年龄解析统计: 有年龄 ${detailsWithAge} 条, 无年龄 ${detailsWithoutAge} 条`);  
-  }
-  
   if (cacheToSave.length > 0) {
-    onProgress(`保存缓存: ${cacheToSave.length} 条...`);
+    onProgress(`\u4fdd\u5b58\u7f13\u5b58: ${cacheToSave.length} \u6761...`);
     await setCachedDetails(cacheToSave);
   }
   
-  onProgress(`详情获取完成: ${results.length} 条结果，缓存命中 ${cacheHits}，新获取 ${detailPageRequests}`);
-  
   return {
     results,
-    stats: {
-      detailPageRequests,
-      cacheHits,
-      filteredOut,
-    },
+    stats: { detailPageRequests, cacheHits, filteredOut },
   };
 }

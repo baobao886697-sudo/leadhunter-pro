@@ -1,15 +1,11 @@
 /**
- * TPS 智能并发池执行器 v6.0 (容错升级版)
+ * TPS 智能并发池执行器 v7.0 (全局弹性并发版)
  * 
  * 核心特性:
  * - 集成 TpsSmartConcurrencyPool 实现智能动态并发
- * - 4 线程 × 10 并发 = 最大 40 并发
- * - 任务规模评估，动态调整并发配置
+ * - v7.0: 所有HTTP请求统一通过全局弹性信号量控制
+ * - v7.0: 新增 onDetailProgress 回调，实时推送详情获取进度
  * - 实时积分扣除，积分不足时优雅停止
- * 
- * v6.0 容错升级:
- * - 502 指数退避重试 (2s → 4s → 6s)
- * - 429/502 延后重试队列 (借鉴 EXE 版 2+2 机制)
  * 
  * 独立模块: 仅用于 TPS 搜索功能
  */
@@ -22,7 +18,6 @@ import {
   PoolResult,
   PoolStats,
 } from './smartConcurrencyPool';
-import { getTpsRuntimeConfig } from './runtimeConfig';
 import {
   TpsDetailResult,
   TpsSearchResult,
@@ -30,9 +25,9 @@ import {
   DetailTaskWithIndex,
   parseDetailPage,
   shouldIncludeResult,
+  fetchWithScrapedo,  // v7.0: 使用scraper.ts中统一的全局信号量版本
 } from './scraper';
 import { TpsRealtimeCreditTracker } from './realtimeCredits';
-import { fetchWithScrapeClient } from './scrapeClient';
 
 // ============================================================================
 // 类型定义
@@ -61,36 +56,17 @@ export interface SmartPoolFetchResult {
   };
 }
 
-// ============================================================================
-// Scrape.do API 请求配置
-// ============================================================================
-
-// 默认配置（会被运行时配置覆盖）
-let SCRAPE_TIMEOUT_MS = 5000;
-let SCRAPE_MAX_RETRIES = 1;
-
 /**
- * 使用共享的 scrapeClient 获取页面
+ * v7.0: 详情进度回调类型
  * 
- * 详情获取阶段使用此函数，并发由智能并发池控制
- * 
- * v6.0 容错升级:
- * - 502 指数退避重试 (2s → 4s → 6s)，最多 3 次
- * - 429 即时重试 2 次（间隔 1s），仍失败则抛出 ScrapeRateLimitError
+ * 用于在每条详情获取完成后，实时向外部（router.ts）报告进度，
+ * 使得 router.ts 可以更新数据库和推送 WebSocket 消息。
  */
-async function fetchWithScrapedo(url: string, token: string): Promise<string> {
-  return await fetchWithScrapeClient(url, token, {
-    timeoutMs: SCRAPE_TIMEOUT_MS,
-    maxRetries: SCRAPE_MAX_RETRIES,
-    retryDelayMs: 1000,  // 超时/网络错误重试前等待 1 秒
-    enableLogging: false,  // 详情阶段不输出日志（避免日志过多）
-    // 502 容错升级: 指数退避 2s → 4s → 6s
-    maxRetries502: 3,
-    retryBaseDelay502Ms: 2000,
-    // 429 即时重试: 2 次，间隔 1s
-    maxRetries429: 2,
-    retryDelay429Ms: 1000,
-  });
+export interface DetailProgressInfo {
+  completedDetails: number;
+  totalDetails: number;
+  percent: number;
+  phase: 'fetching' | 'retrying';
 }
 
 // ============================================================================
@@ -100,10 +76,10 @@ async function fetchWithScrapedo(url: string, token: string): Promise<string> {
 /**
  * 使用智能并发池获取详情
  * 
- * 特点:
- * 1. 根据任务数量动态调整并发配置
- * 2. 实时积分扣除，积分不足时优雅停止
- * 3. 负载均衡，任务均匀分配到各线程
+ * v7.0 升级:
+ * 1. 所有HTTP请求通过 scraper.ts 的 fetchWithScrapedo (带全局弹性信号量)
+ * 2. 新增 onDetailProgress 回调，每完成一条详情就通知外部
+ * 3. userId 参数传递给全局信号量
  */
 export async function fetchDetailsWithSmartPool(
   tasks: DetailTaskWithIndex[],
@@ -111,13 +87,10 @@ export async function fetchDetailsWithSmartPool(
   filters: TpsFilters,
   onProgress: (message: string) => void,
   setCachedDetails: (items: Array<{ link: string; data: TpsDetailResult }>) => Promise<void>,
-  creditTracker: TpsRealtimeCreditTracker
+  creditTracker: TpsRealtimeCreditTracker,
+  userId: number,
+  onDetailProgress?: (info: DetailProgressInfo) => void
 ): Promise<SmartPoolFetchResult> {
-  // 从数据库加载运行时配置
-  const runtimeConfig = await getTpsRuntimeConfig();
-  SCRAPE_TIMEOUT_MS = runtimeConfig.timeoutMs;
-  SCRAPE_MAX_RETRIES = runtimeConfig.maxRetries;
-  
   const results: Array<{ task: DetailTaskWithIndex; details: TpsDetailResult[] }> = [];
   let detailPageRequests = 0;
   let filteredOut = 0;
@@ -155,7 +128,9 @@ export async function fetchDetailsWithSmartPool(
     stoppedDueToCredits = true;
   }
   
-  // 不再显示技术性的线程并发配置信息
+  // v7.0: 追踪详情完成数，用于进度回调
+  let completedDetailCount = 0;
+  const totalDetailCount = linksToFetch.length;
   
   // 构建并发池任务
   const poolTasks: PoolTask<DetailFetchTask, DetailFetchResult>[] = [];
@@ -177,7 +152,8 @@ export async function fetchDetailsWithSmartPool(
       },
       execute: async (data: DetailFetchTask): Promise<DetailFetchResult> => {
         const detailUrl = data.link.startsWith('http') ? data.link : `${baseUrl}${data.link}`;
-        const html = await fetchWithScrapedo(detailUrl, token);
+        // v7.0: 使用全局弹性信号量版本的 fetchWithScrapedo
+        const html = await fetchWithScrapedo(detailUrl, token, userId);
         const details = parseDetailPage(html, data.searchResult);
         return {
           link: data.link,
@@ -237,6 +213,18 @@ export async function fetchDetailsWithSmartPool(
     const linkTasks = tasksByLink.get(link) || [];
     for (const task of linkTasks) {
       results.push({ task, details: filtered });
+    }
+    
+    // v7.0: 触发详情进度回调
+    completedDetailCount++;
+    if (onDetailProgress) {
+      const percent = Math.round((completedDetailCount / totalDetailCount) * 100);
+      onDetailProgress({
+        completedDetails: completedDetailCount,
+        totalDetails: totalDetailCount,
+        percent,
+        phase: 'fetching',
+      });
     }
   }
   
