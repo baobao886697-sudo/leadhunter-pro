@@ -152,6 +152,10 @@ import { fetchWithScrapeClient, ScrapeRateLimitError, ScrapeServerError } from '
 const SCRAPE_TIMEOUT_MS = 20000;  // 20 秒超时，与详情阶段一致
 const SCRAPE_MAX_RETRIES = 1;    // 超时/网络错误最多重试 1 次
 
+// v7.3: 请求速率控制 - 每个请求完成后的强制冷却延迟
+// 目的：即使并发槽空闲，也不会立即发起下一个请求，避免压垂scrape.do
+const REQUEST_COOLDOWN_MS = 800;  // 每个请求完成后等待800ms再释放并发槽
+
 /**
  * 使用 Scrape.do API 获取页面（带全局弹性信号量控制）
  * 
@@ -182,6 +186,9 @@ export async function fetchWithScrapedo(url: string, token: string, userId: numb
       retryDelay429Ms: 1000,
     });
   } finally {
+    // v7.3: 强制冷却延迟，控制请求速率
+    // 在释放信号量之前等待，确保每个并发槽不会立即被复用
+    await new Promise(resolve => setTimeout(resolve, REQUEST_COOLDOWN_MS));
     // 确保释放全局并发许可
     globalSemaphore.release(userId);
   }
