@@ -165,12 +165,26 @@ export async function fetchDetailsWithSmartPool(
   }
   
   // 创建智能并发池
+  // v7.2 修复: 将 onDetailProgress 回调移到 pool 的 onStats 回调中
+  // 这样每完成一个任务就能立即触发进度推送，而不是等所有任务完成后才触发
   const pool = new TpsSmartConcurrencyPool<DetailFetchTask, DetailFetchResult>(
     poolTasks.length,
     (stats: PoolStats) => {
       const percent = Math.round((stats.completedTasks / stats.totalTasks) * 100);
       if (stats.completedTasks % 10 === 0 || stats.completedTasks === stats.totalTasks) {
         onProgress(`📥 详情进度: ${stats.completedTasks}/${stats.totalTasks} (${percent}%)`);
+      }
+      
+      // v7.2: 实时触发详情进度回调（每完成一个任务就推送）
+      if (onDetailProgress) {
+        const isRetrying = stats.delayedRetryCount !== undefined && stats.delayedRetryCount > 0 
+          && stats.completedTasks > (totalDetailCount - (stats.delayedRetryCount || 0));
+        onDetailProgress({
+          completedDetails: stats.completedTasks,
+          totalDetails: stats.totalTasks,
+          percent,
+          phase: isRetrying ? 'retrying' : 'fetching',
+        });
       }
     }
   );
@@ -215,17 +229,8 @@ export async function fetchDetailsWithSmartPool(
       results.push({ task, details: filtered });
     }
     
-    // v7.0: 触发详情进度回调
+    // v7.2: onDetailProgress 已移到 pool 的 onStats 回调中实时触发
     completedDetailCount++;
-    if (onDetailProgress) {
-      const percent = Math.round((completedDetailCount / totalDetailCount) * 100);
-      onDetailProgress({
-        completedDetails: completedDetailCount,
-        totalDetails: totalDetailCount,
-        percent,
-        phase: 'fetching',
-      });
-    }
   }
   
   // 保存缓存

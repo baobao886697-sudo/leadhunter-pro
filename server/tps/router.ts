@@ -663,7 +663,7 @@ async function executeTpsSearchRealtimeDeduction(
       
       // v7.0: 详情进度回调 — 每完成一批就更新数据库和推送WS
       let lastDetailProgressPush = 0; // 防止推送过于频繁
-      const onDetailProgress = async (info: DetailProgressInfo) => {
+      const onDetailProgress = (info: DetailProgressInfo) => {
         const now = Date.now();
         // 每2秒最多推送一次，或者是最后一条
         if (now - lastDetailProgressPush < 2000 && info.completedDetails < info.totalDetails) return;
@@ -673,12 +673,16 @@ async function executeTpsSearchRealtimeDeduction(
         const detailProgress = 30 + Math.round(info.percent * 0.65);
         const phase = info.phase === 'retrying' ? '重试中' : '获取详情';
         
-        await updateTpsSearchTaskProgress(taskDbId, {
+        // v7.2: 使用 fire-and-forget 模式，避免阻塞并发池的 onStats 回调
+        // 数据库更新和WS推送异步执行，失败不影响主流程
+        updateTpsSearchTaskProgress(taskDbId, {
           progress: detailProgress,
           searchPageRequests: totalSearchPages,
           creditsUsed: creditTracker.getTotalDeducted(),
           logs,
-        });
+        }).catch(err => console.error('[TPS] 详情进度更新DB失败:', err));
+        
+        // WS推送是同步的，不会抛异常
         emitTaskProgress(userId, taskId, "tps", {
           progress: detailProgress,
           phase,
